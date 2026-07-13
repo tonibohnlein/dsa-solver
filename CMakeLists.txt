@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.3.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.4.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -60,6 +60,77 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa-bench PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 elseif(MSVC)
   target_compile_options(dsa-bench PRIVATE /W4 /permissive-)
+endif()
+
+option(DSA_ENABLE_MINIMALLOC_BASELINE
+  "Build dsa-suite with the pinned Google MiniMalloc exact baseline"
+  ON
+)
+
+if(DSA_ENABLE_MINIMALLOC_BASELINE)
+  set(DSA_MINIMALLOC_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/minimalloc"
+  )
+  if(NOT EXISTS "${DSA_MINIMALLOC_SOURCE_DIR}/src/solver.cc")
+    message(FATAL_ERROR
+      "MiniMalloc submodule is missing; run: git submodule update --init --recursive third_party/minimalloc"
+    )
+  endif()
+
+  set(ABSL_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
+  add_subdirectory(
+    "${DSA_MINIMALLOC_SOURCE_DIR}/external/abseil-cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/third_party/abseil-cpp"
+    EXCLUDE_FROM_ALL
+  )
+
+  add_library(dsa_minimalloc_baseline STATIC
+    third_party/minimalloc/src/converter.cc
+    third_party/minimalloc/src/minimalloc.cc
+    third_party/minimalloc/src/solver.cc
+    third_party/minimalloc/src/sweeper.cc
+    third_party/minimalloc/src/validator.cc
+  )
+  set_target_properties(dsa_minimalloc_baseline PROPERTIES
+    CXX_EXTENSIONS OFF
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED YES
+    POSITION_INDEPENDENT_CODE ON
+  )
+  target_include_directories(dsa_minimalloc_baseline PUBLIC
+    "${DSA_MINIMALLOC_SOURCE_DIR}/src"
+  )
+  target_link_libraries(dsa_minimalloc_baseline PUBLIC
+    absl::flags
+    absl::statusor
+  )
+endif()
+
+add_executable(dsa-suite tools/dsa_suite.cpp)
+target_link_libraries(dsa-suite PRIVATE dsa::solver)
+target_include_directories(dsa-suite PRIVATE ${DSA_NLOHMANN_JSON_INCLUDE_DIR})
+if(DSA_ENABLE_MINIMALLOC_BASELINE)
+  target_compile_definitions(dsa-suite PRIVATE DSA_HAVE_MINIMALLOC=1)
+  target_include_directories(dsa-suite SYSTEM PRIVATE
+    "${DSA_MINIMALLOC_SOURCE_DIR}/src"
+    "${DSA_MINIMALLOC_SOURCE_DIR}/external/abseil-cpp"
+  )
+  target_link_libraries(dsa-suite PRIVATE
+    dsa_minimalloc_baseline
+    absl::log
+    absl::time
+  )
+endif()
+set_target_properties(dsa-suite PROPERTIES
+  CXX_EXTENSIONS OFF
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED YES
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(dsa-suite PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+elseif(MSVC)
+  target_compile_options(dsa-suite PRIVATE /W4 /permissive-)
 endif()
 
 if(BUILD_TESTING)
@@ -152,9 +223,24 @@ if(BUILD_TESTING)
       --solver first-fit
       --target-total-peak 100
   )
+  add_test(
+    NAME dsa-suite-smoke
+    COMMAND dsa-suite
+      --standard ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example.csv
+      --pypto ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
+      --output-dir ${CMAKE_CURRENT_BINARY_DIR}/suite-smoke
+      --standard-capacity 12
+      --seeds 7
+      --iterations 100
+      --restarts 2
+      --minimalloc-timeout-ms 5000
+  )
+  set_tests_properties(dsa-suite-smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION "wrote .*report.md"
+  )
 endif()
 
-install(TARGETS dsa_solver dsa-bench
+install(TARGETS dsa_solver dsa-bench dsa-suite
   EXPORT dsa-solver-targets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -165,6 +251,27 @@ install(
   FILES schemas/dsa-problem-v1.schema.json
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/schemas
 )
+install(
+  FILES LICENSE NOTICE THIRD_PARTY_NOTICES.md
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver
+)
+install(
+  FILES third_party/json/LICENSE.MIT
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver
+  RENAME LICENSE.nlohmann-json
+)
+if(DSA_ENABLE_MINIMALLOC_BASELINE)
+  install(
+    FILES third_party/minimalloc/LICENSE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver
+    RENAME LICENSE.minimalloc
+  )
+  install(
+    FILES third_party/minimalloc/external/abseil-cpp/LICENSE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver
+    RENAME LICENSE.abseil-cpp
+  )
+endif()
 
 configure_package_config_file(
   cmake/dsa-solver-config.cmake.in

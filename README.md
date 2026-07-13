@@ -6,10 +6,11 @@ memory offsets while minimizing peak usage and respecting compiler constraints.
 The project has two roles:
 
 1. provide reproducible solver benchmarks against the public Google MiniMalloc corpus and exact solver;
-2. become the solver library used by PyPTO's memory-planning adapter once the API stabilizes.
+2. provide a stable problem, validator, and ablation framework from which a winning heuristic can be
+   ported into PyPTO without moving compiler-specific adapter logic out of PyPTO.
 
-The repository is initially private. No redistribution license has been selected yet; choose one before
-making it public.
+The project is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) and
+[third-party notices](THIRD_PARTY_NOTICES.md) for algorithm and submodule provenance.
 
 ## Current contents
 
@@ -23,6 +24,8 @@ making it public.
 - A named reimplementation of Apache TVM USMP's graph-guided hill-climb policy.
 - Native MiniMalloc input/output CSV support (`id,lower,upper,size[,offset]`).
 - A `dsa-bench` CLI with JSON results and reference-solution comparison.
+- A native `dsa-suite` runner that executes repeated heuristic and exact MiniMalloc runs, independently
+  validates solutions, and writes raw JSONL, aggregated CSV, and Markdown tables.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
 - A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by all built-in solvers in CTest.
 - Explicit standard, PyPTO-structured, and sound core-relaxation benchmark profiles.
@@ -37,12 +40,16 @@ interface.
 ## Build and test
 
 ```bash
-git clone --recurse-submodules git@github.com:tonibohnlein/dsa-solver.git
+git clone --recurse-submodules https://github.com/tonibohnlein/dsa-solver.git
 cd dsa-solver
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
 ```
+
+The exact MiniMalloc baseline is enabled by default and compiles its unmodified core from the pinned
+submodule. Configure with `-DDSA_ENABLE_MINIMALLOC_BASELINE=OFF` to build the suite/report machinery
+without that baseline.
 
 ## Run a MiniMalloc instance
 
@@ -100,32 +107,40 @@ Run the explicitly relaxed standard-DSA lower bound for one source pool:
 The relaxation strips compiler constraints and records each removed feature in the result. It is a lower
 bound, not a valid PyPTO placement. See [the schema-v1 contract](docs/structured_problem_schema_v1.md).
 
-## Compare with MiniMalloc
+## Run reproducible benchmark suites
 
-Build the pinned exact solver, generate a solution, then pass that output to this runner:
+`dsa-suite` accepts repeatable files or directories. This command runs the official MiniMalloc A–K
+corpus, the checked-in PyPTO exporter corpus, three seeds for stochastic methods, and the exact
+MiniMalloc solver with a per-instance timeout:
 
 ```bash
-cmake -S third_party/minimalloc -B third_party/minimalloc/build -DCMAKE_BUILD_TYPE=Release
-cmake --build third_party/minimalloc/build --parallel 2 --target minimalloc
-
-third_party/minimalloc/build/minimalloc \
-  --capacity=12 \
-  --input=third_party/minimalloc/benchmarks/examples/input.12.csv \
-  --output=minimalloc.csv
-
-./build/dsa-bench \
-  --input third_party/minimalloc/benchmarks/examples/input.12.csv \
-  --solver local-search \
-  --reference-output minimalloc.csv
+./build/dsa-suite \
+  --standard third_party/minimalloc/benchmarks/challenging \
+  --pypto benchmarks/pypto \
+  --output-dir benchmark-results \
+  --run-label local-a-k \
+  --standard-capacity 1048576 \
+  --seeds 0,1,2 \
+  --iterations 2000 \
+  --restarts 4 \
+  --minimalloc-timeout-ms 60000
 ```
 
-MiniMalloc is a capacity-feasibility solver. Finding a certified minimum height requires repeated exact
-solves over capacity; suite-level capacity search and timeout accounting are planned benchmark-runner
-work rather than silently treating a feasible reference capacity as optimal.
+The output directory contains:
 
-The challenging corpus is available at `third_party/minimalloc/benchmarks/challenging/` as A–K. The
-current CLI operates on one instance per invocation and emits machine-readable JSON, making shell or CI
-orchestration straightforward while the native suite runner is developed.
+- `results.jsonl`: one immutable record per instance, method, and seed;
+- `summary.csv`: long-form per-method aggregation with best objective and median runtime;
+- `report.md`: separate standard-DSA and PyPTO-structured comparison tables.
+
+Raw records distinguish `placement_valid` from `solution_valid`. The former validates address geometry
+while ignoring capacity only for a `best_effort_no_fit` diagnostic placement; the latter always validates
+the original problem, including pool capacities.
+
+The runner invokes MiniMalloc's capacity-minimization mode. A completed run is marked `optimal`; a
+budget exhaustion is marked `timeout` or `timeout_with_upper_bound` and is never used as a certified
+optimality gap. On PyPTO inputs, MiniMalloc runs only on generated per-pool core relaxations. Those
+results are reported as lower bounds only when the relaxation optimum is certified, never as valid
+structured placements. See the checked-in [baseline snapshot](benchmarks/results/baseline/report.md).
 
 ## Model boundary
 
@@ -160,10 +175,10 @@ structural baseline, while a search solver rejects metrics it cannot use for can
 
 ## Next benchmark milestones
 
-1. Add suite-level repeated runs, exact-capacity search, timeouts, and JSONL/CSV aggregation.
-2. Grow the exported PyPTO corpus across models, memory pools, control flow, and pipeline shapes.
+1. Grow the exported PyPTO corpus across models, memory pools, control flow, and pipeline shapes.
+2. Record public `pypto-lib` instances with source revisions, target, pool, and content hashes.
 3. Model capacity-driven pipeline-depth choices rather than only fixed pairwise separations.
-4. Add idealloc and additional heuristic baselines.
+4. Add idealloc and additional heuristic baselines through the same result contract.
 5. Implement placement-aware large-neighborhood search with reproducible ablations against the TVM policy.
 
 See [the TVM hill-climb study](docs/tvm_hill_climb.md) for the exact search state, neighborhood,

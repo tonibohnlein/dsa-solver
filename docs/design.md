@@ -6,9 +6,10 @@
 PyPTO IR or MiniMalloc types. `SolverCapabilities` prevents a client from assuming unsupported structure
 was honored.
 
-The dependency direction is intentionally one-way: PyPTO may link this library, but this repository never
-links PyPTO. The PyPTO adapter owns IR analysis and write-back; schema-v1 structured JSON makes the exact
-adapter output replayable without either compiler.
+The dependency direction is intentionally one-way: this repository never links PyPTO. PyPTO may link a
+stable solver API during experimentation or port a selected heuristic into the compiler. In either case,
+the PyPTO adapter owns IR analysis and write-back; schema-v1 structured JSON makes the exact adapter
+output replayable without either compiler.
 
 The portable core is:
 
@@ -53,6 +54,23 @@ Objectives are lexicographic vectors in schema v1. Supported raw components are 
 and maximum peak, reuse cost, and bank cost. Keeping components separate avoids assigning arbitrary
 weights between bytes and compiler performance proxies. A future weighted or Pareto mode requires an
 explicit schema evolution.
+
+## Suite and report contract
+
+`dsa-suite` executes first-fit once and seeded search methods repeatedly. It records one JSONL object per
+run, then derives long-form CSV and Markdown from those records. Runtime aggregation uses the median;
+solution selection uses the instance's lexicographic objective. Every returned placement is validated and
+its objective is recomputed independently of the solver.
+
+Raw validity has two levels. `placement_valid` checks address geometry, relaxing capacity only for an
+explicit best-effort diagnostic placement. `solution_valid` checks every original hard constraint,
+including pool capacity.
+
+The pinned MiniMalloc core is an optional in-process exact baseline. Standard instances compare directly.
+For `pypto_structured`, the runner first invokes the schema-defined per-pool relaxation and labels exact
+results `core_lower_bound`. Exact runs that exhaust their budget remain timeouts even when they produced a
+feasible upper bound, so an incomplete search can never create a false optimality-gap or lower-bound
+claim.
 
 ## First-fit baseline
 

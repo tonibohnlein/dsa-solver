@@ -1,3 +1,9 @@
+// Copyright 2026 dsa-solver contributors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Behavioral reimplementation of Apache TVM USMP's hill-climb policy. See
+// NOTICE and docs/tvm_hill_climb.md for provenance and deliberate differences.
+
 #include "dsa/tvm_hill_climb_solver.h"
 
 #include <algorithm>

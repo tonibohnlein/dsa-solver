@@ -1,0 +1,11 @@
+dsa-solver
+Copyright 2026 dsa-solver contributors
+
+This product includes a behavioral reimplementation of the Apache TVM
+Unified Static Memory Planning hill-climb algorithm.
+
+Apache TVM
+Copyright 2019-2023 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
