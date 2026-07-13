@@ -171,6 +171,13 @@ std::vector<std::string> ValidateProblem(const DsaProblem& problem) {
       errors.push_back("separation contradicts colocation for buffers " +
                        PairName(constraint.first, constraint.second));
     }
+    std::set<SeparationReason> reasons;
+    for (SeparationReason reason : constraint.reasons) {
+      if (!reasons.insert(reason).second) {
+        errors.push_back("separation repeats reason '" + std::string(ToString(reason)) +
+                         "' for buffers " + PairName(constraint.first, constraint.second));
+      }
+    }
   }
   for (const TemporalExclusion& exclusion : problem.temporal_exclusions) {
     if (buffer_ids.count(exclusion.first) == 0 || buffer_ids.count(exclusion.second) == 0) {
@@ -223,6 +230,85 @@ std::vector<std::string> ValidateProblem(const DsaProblem& problem) {
       if (buffer_ids.count(penalty.first) == 0 || buffer_ids.count(penalty.second) == 0) {
         errors.push_back("reuse penalty references an unknown buffer: " +
                          PairName(penalty.first, penalty.second));
+      }
+    }
+  }
+
+  if (problem.pypto_structure) {
+    std::set<BufferId> alias_buffers;
+    for (const PyptoAliasClass& alias_class : problem.pypto_structure->alias_classes) {
+      if (buffer_ids.count(alias_class.buffer) == 0) {
+        errors.push_back("PyPTO alias class references unknown buffer " +
+                         std::to_string(alias_class.buffer));
+      }
+      if (!alias_buffers.insert(alias_class.buffer).second) {
+        errors.push_back("PyPTO alias structure repeats buffer " +
+                         std::to_string(alias_class.buffer));
+      }
+      if (alias_class.members.empty()) {
+        errors.push_back("PyPTO alias class for buffer " + std::to_string(alias_class.buffer) +
+                         " has no members");
+      }
+    }
+
+    std::set<std::pair<PoolId, std::int32_t>> pipeline_group_ids;
+    for (const PyptoPipelineGroup& group : problem.pypto_structure->pipeline_groups) {
+      const std::string group_name =
+          std::to_string(group.group) + " in pool " + std::to_string(group.pool);
+      if (group.group < 0) errors.push_back("PyPTO pipeline group id must be non-negative");
+      if (!pipeline_group_ids.emplace(group.pool, group.group).second) {
+        errors.push_back("duplicate PyPTO pipeline group " + group_name);
+      }
+      if (problem.FindPool(group.pool) == nullptr) {
+        errors.push_back("PyPTO pipeline group " + group_name + " references an unknown pool");
+      }
+      if (group.slot_size == 0) {
+        errors.push_back("PyPTO pipeline group " + group_name + " has zero slot size");
+      }
+      if (group.depth == 0) {
+        errors.push_back("PyPTO pipeline group " + group_name + " has zero depth");
+      }
+      if (group.effective_depth == 0 || group.effective_depth > group.depth) {
+        errors.push_back("PyPTO pipeline group " + group_name + " has invalid effective depth");
+      }
+      if (group.members.empty()) {
+        errors.push_back("PyPTO pipeline group " + group_name + " has no members");
+      }
+
+      std::set<std::pair<BufferId, std::int32_t>> pipeline_members;
+      std::map<std::int32_t, std::uint32_t> residue_by_stage;
+      for (const PyptoPipelineMember& member : group.members) {
+        const Buffer* buffer = problem.FindBuffer(member.buffer);
+        if (buffer == nullptr) {
+          errors.push_back("PyPTO pipeline group " + group_name + " references unknown buffer " +
+                           std::to_string(member.buffer));
+        } else {
+          if (!PoolAllowed(*buffer, group.pool)) {
+            errors.push_back("PyPTO pipeline member " + std::to_string(member.buffer) +
+                             " does not allow group pool " + std::to_string(group.pool));
+          }
+          if (buffer->size > group.slot_size) {
+            errors.push_back("PyPTO pipeline member " + std::to_string(member.buffer) +
+                             " exceeds group slot size");
+          }
+        }
+        if (member.stage < 0) {
+          errors.push_back("PyPTO pipeline member has a negative stage");
+        }
+        if (member.residue >= group.effective_depth) {
+          errors.push_back("PyPTO pipeline member residue exceeds effective depth");
+        }
+        if (!pipeline_members.emplace(member.buffer, member.stage).second) {
+          errors.push_back("PyPTO pipeline group " + group_name + " repeats a buffer/stage member");
+        }
+        const auto [stage, inserted] = residue_by_stage.emplace(member.stage, member.residue);
+        if (!inserted && stage->second != member.residue) {
+          errors.push_back("PyPTO pipeline stage maps to multiple residues");
+        }
+      }
+      if (residue_by_stage.size() != group.depth) {
+        errors.push_back("PyPTO pipeline group " + group_name +
+                         " depth does not match its distinct stages");
       }
     }
   }

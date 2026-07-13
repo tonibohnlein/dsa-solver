@@ -20,6 +20,7 @@
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
 #include "dsa/structured_problem.h"
+#include "dsa/tvm_hill_climb_solver.h"
 #include "dsa/validator.h"
 
 namespace {
@@ -39,6 +40,7 @@ struct Options {
   std::optional<dsa::PoolId> core_relaxation_pool;
   std::optional<ObjectiveOverride> objective_override;
   dsa::LocalSearchOptions local_search;
+  dsa::TvmHillClimbOptions tvm_hill_climb;
 };
 
 [[noreturn]] void UsageError(const std::string& message) {
@@ -57,16 +59,19 @@ std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
 void PrintHelp() {
   std::cout << "Usage: dsa-bench --input INSTANCE.{csv,json} [options]\n\n"
             << "Options:\n"
-            << "  --solver first-fit|local-search   Solver to run (default: first-fit)\n"
+            << "  --solver first-fit|local-search|tvm-hill-climb\n"
+            << "                                   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
             << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
             << "  --reference-output FILE.csv      Compare with a MiniMalloc solution CSV\n"
             << "  --json-output FILE.json          Also write the JSON result to a file\n"
             << "  --core-relaxation-pool ID        Run a sound standard relaxation of one pool\n"
-            << "  --seed N                         Local-search random seed (default: 0)\n"
-            << "  --iterations N                   Local-search evaluations budget\n"
+            << "  --seed N                         Search random seed (default: 0)\n"
+            << "  --iterations N                   Search evaluations/attempts budget\n"
             << "  --restarts N                     Local-search restart count\n"
             << "  --stagnation N                   Iterations before perturbation\n"
+            << "  --target-total-peak BYTES        TVM-style early-stop target\n"
+            << "  --worse-move-scale PERCENT       TVM-style annealing scale (default: 50)\n"
             << "  --objective peak|fit-cost        Override the document objective\n"
             << "  --help                           Show this help\n";
 }
@@ -103,13 +108,23 @@ Options ParseOptions(int argc, char** argv) {
       }
       options.core_relaxation_pool = static_cast<dsa::PoolId>(value);
     } else if (option == "--seed") {
-      options.local_search.seed = ParseUnsigned(next(&i, option), option);
+      const std::uint64_t seed = ParseUnsigned(next(&i, option), option);
+      options.local_search.seed = seed;
+      options.tvm_hill_climb.seed = seed;
     } else if (option == "--iterations") {
-      options.local_search.max_iterations = ParseUnsigned(next(&i, option), option);
+      const std::uint64_t iterations = ParseUnsigned(next(&i, option), option);
+      options.local_search.max_iterations = iterations;
+      options.tvm_hill_climb.max_attempts = iterations;
     } else if (option == "--restarts") {
       options.local_search.restarts = ParseUnsigned(next(&i, option), option);
     } else if (option == "--stagnation") {
       options.local_search.stagnation_limit = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--target-total-peak") {
+      options.tvm_hill_climb.target_total_peak = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--worse-move-scale") {
+      const std::uint64_t scale = ParseUnsigned(next(&i, option), option);
+      if (scale > 100) UsageError(option + " must be between 0 and 100");
+      options.tvm_hill_climb.worse_move_scale_percent = static_cast<std::uint32_t>(scale);
     } else if (option == "--objective") {
       const std::string value(next(&i, option));
       if (value == "peak") {
@@ -124,7 +139,8 @@ Options ParseOptions(int argc, char** argv) {
     }
   }
   if (options.input.empty()) UsageError("--input is required");
-  if (options.solver != "first-fit" && options.solver != "local-search") {
+  if (options.solver != "first-fit" && options.solver != "local-search" &&
+      options.solver != "tvm-hill-climb") {
     UsageError("unknown solver '" + options.solver + "'");
   }
   return options;
@@ -288,6 +304,17 @@ std::string BuildJson(const Options& options, const dsa::StructuredProblemDocume
     output << ",\"relaxed_features\":";
     AppendStringArray(&output, document.relaxed_features);
   }
+  if (options.solver == "local-search") {
+    output << ",\"search_budget\":" << options.local_search.max_iterations
+           << ",\"restarts\":" << options.local_search.restarts
+           << ",\"stagnation_limit\":" << options.local_search.stagnation_limit;
+  } else if (options.solver == "tvm-hill-climb") {
+    output << ",\"search_budget\":" << options.tvm_hill_climb.max_attempts
+           << ",\"worse_move_scale_percent\":" << options.tvm_hill_climb.worse_move_scale_percent;
+    if (options.tvm_hill_climb.target_total_peak) {
+      output << ",\"target_total_peak\":" << *options.tvm_hill_climb.target_total_peak;
+    }
+  }
   if (reference_peak) {
     const long double gap = static_cast<long double>(result.objective.max_peak) -
                             static_cast<long double>(*reference_peak);
@@ -310,6 +337,8 @@ int main(int argc, char** argv) {
     std::unique_ptr<dsa::DsaSolver> solver;
     if (options.solver == "local-search") {
       solver = std::make_unique<dsa::LocalSearchSolver>(options.local_search);
+    } else if (options.solver == "tvm-hill-climb") {
+      solver = std::make_unique<dsa::TvmHillClimbSolver>(options.tvm_hill_climb);
     } else {
       solver = std::make_unique<dsa::FirstFitSolver>();
     }

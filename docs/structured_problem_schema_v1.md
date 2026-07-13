@@ -30,7 +30,8 @@ Fields:
 - `schema_version`: exactly `1` for this document.
 - `profile`: one of `standard_dsa`, `pypto_structured`, or `pypto_core_relaxation`.
 - `instance`: stable benchmark-instance name.
-- `metadata`: optional string-to-string provenance. It does not affect feasibility.
+- `metadata`: optional string-to-string provenance, including an adapter's configured `target`. It does not
+  affect feasibility.
 - `relaxed_from`: required for `pypto_core_relaxation`, forbidden for the other profiles.
 - `relaxed_features`: structure deliberately removed by a core relaxation.
 - `problem`: the solver-independent DSA problem.
@@ -71,8 +72,10 @@ Fields:
 }
 ```
 
-All intervals and address ranges are half-open. Unsigned byte quantities must be JSON integers; floating
-point and negative representations are rejected.
+All intervals and address ranges are half-open. Every buffer has one fixed `size` and one or more
+`live_intervals`; a solver jointly chooses byte offsets and may subdivide an expired address region among
+smaller later buffers. Schema v1 does not represent lifetime-dependent resizing or sliced allocations.
+Unsigned byte quantities must be JSON integers; floating point and negative representations are rejected.
 
 `allowed_pools` with one entry is a fixed placement space. Multiple entries represent flexible pool
 assignment, which is part of the portable model but currently unsupported by the built-in solvers.
@@ -80,7 +83,9 @@ assignment, which is part of the portable model but currently unsupported by the
 ### Hard constraints
 
 - `colocations`: `{first, second}` pairs that must receive exactly the same pool and offset.
-- `separations`: pairs whose byte ranges must not overlap even if their lifetimes are disjoint.
+- `separations`: pairs whose byte ranges must not overlap even if their lifetimes are disjoint. The optional
+  `reasons` array preserves `generic`, `pipeline_stage`, `target_hazard`, or `semantic_no_alias` provenance;
+  every solver enforces the same pair regardless of its reason.
 - `temporal_exclusions`: pairs proven unable to coexist on one control-flow path despite overlapping
   conservative intervals.
 - `pinned_allocations`: `{buffer, pool, offset, exclusive_for_all_time}` records.
@@ -104,6 +109,37 @@ The optional cost model currently carries pairwise reuse penalties:
 
 Reasons are `generic`, `cross_pipe`, `cross_core`, and `event_budget`. They preserve provenance for
 analysis; the numeric `cost` is what the current objective evaluator consumes.
+
+### Normalized PyPTO structure
+
+A `pypto_structured` document may carry compiler relationships in addition to their portable translation:
+
+```json
+{
+  "pypto_structure": {
+    "alias_classes": [
+      {"buffer": 7, "members": ["tile", "slice", "reshape"]}
+    ],
+    "pipeline_groups": [
+      {
+        "group": 4,
+        "pool": 3,
+        "slot_size": 32768,
+        "depth": 3,
+        "effective_depth": 2,
+        "members": [
+          {"buffer": 7, "stage": 0, "residue": 0}
+        ]
+      }
+    ]
+  }
+}
+```
+
+Alias classes name the IR values already collapsed into one fixed-size buffer. Pipeline groups retain the
+source depth and the capacity-gated physical residue count. This block is normalized provenance for
+PyPTO-aware search moves and benchmark analysis; it does not add hidden feasibility semantics. The portable
+buffers, separations, and cost model remain authoritative, so generic solvers can consume the same document.
 
 ## Objectives
 
@@ -130,14 +166,14 @@ Directly comparable with MiniMalloc:
 - exactly one pool;
 - one interval and one fixed pool per buffer;
 - alignment one;
-- no reserved ranges, banks, compiler constraints, pins, or cost overlay;
+- no reserved ranges, banks, compiler constraints, pins, cost overlay, or PyPTO structure;
 - only capacity and peak objective terms.
 
 MiniMalloc CSV input is wrapped in this profile internally.
 
 ### `pypto_structured`
 
-Carries the full portable structure emitted by a future PyPTO adapter. A result is valid only when the
+Carries the full portable structure emitted by the PyPTO adapter. A result is valid only when the
 selected solver structurally supports every feature and the independent validator accepts the placement.
 
 ### `pypto_core_relaxation`
@@ -145,7 +181,7 @@ selected solver structurally supports every feature and the independent validato
 A standard-DSA lower-bound problem derived from one fixed pool of a structured document. The library:
 
 - partitions fixed pools into independent documents;
-- removes alignment, reservations, banks, pins, colocations, separations, and costs;
+- removes alignment, reservations, banks, pins, colocations, separations, costs, and PyPTO provenance;
 - splits a multi-interval buffer into independent standard rows;
 - resets the objective to peak minimization;
 - records every removed feature and source pool in the envelope.

@@ -15,6 +15,7 @@
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
 #include "dsa/structured_problem.h"
+#include "dsa/tvm_hill_climb_solver.h"
 #include "dsa/validator.h"
 
 namespace {
@@ -97,6 +98,12 @@ void TestMiniMallocCsv() {
   standard.problem.separations.push_back({0, 1});
   Require(!dsa::ValidateStructuredProblemDocument(standard).empty(),
           "standard profile silently accepted a compiler-only constraint");
+  standard.problem.separations.clear();
+  dsa::PyptoStructure structure;
+  structure.alias_classes.push_back({0, {"b1"}});
+  standard.problem.pypto_structure = std::move(structure);
+  Require(!dsa::ValidateStructuredProblemDocument(standard).empty(),
+          "standard profile silently accepted PyPTO provenance");
 }
 
 void TestFirstFitSubdividesFreedRegion() {
@@ -116,6 +123,20 @@ void TestFirstFitSubdividesFreedRegion() {
   const std::uint64_t second = OffsetOf(result, 2);
   Require((first == 0 && second == 32 * kKiB) || (second == 0 && first == 32 * kKiB),
           "consumers did not subdivide the freed producer region");
+}
+
+void TestStandardFreedRegionSubdivisionCorpus() {
+  const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
+                                     "standard" / "freed_region_subdivision_v1.json";
+  const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
+  Require(document.profile == dsa::BenchmarkProfile::kStandardDsa,
+          "subdivision corpus case must use the standard profile");
+  Require(document.problem.buffers.size() == 3, "subdivision corpus buffer count changed");
+
+  const dsa::DsaResult result = SolveAndValidate(document.problem, dsa::FirstFitSolver());
+  Require(result.objective.max_peak == 100, "A100 -> B60+C40 did not fit at height 100");
+  Require(OffsetOf(result, 0) == 0 && OffsetOf(result, 1) == 0 && OffsetOf(result, 2) == 60,
+          "A100 -> B60+C40 did not subdivide the freed address interval");
 }
 
 void TestMultiIntervalLiveness() {
@@ -239,6 +260,29 @@ void TestLocalSearchClosesOrderingGap() {
           "local search is not deterministic for a fixed seed");
 }
 
+void TestTvmHillClimbClosesOrderingGap() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{5, 7}}, 5), MakeBuffer(1, {{0, 7}}, 2), MakeBuffer(2, {{4, 10}}, 2),
+      MakeBuffer(3, {{4, 6}}, 2), MakeBuffer(4, {{2, 4}}, 6),
+  };
+  const dsa::DsaResult baseline = SolveAndValidate(problem, dsa::FirstFitSolver());
+  Require(baseline.objective.max_peak == 12,
+          "TVM hill-climb witness no longer exposes an ordering gap");
+
+  dsa::TvmHillClimbOptions options;
+  options.seed = 7;
+  options.max_attempts = 500;
+  options.worse_move_scale_percent = 50;
+  const dsa::TvmHillClimbSolver solver(options);
+  const dsa::DsaResult first = SolveAndValidate(problem, solver);
+  const dsa::DsaResult second = SolveAndValidate(problem, solver);
+  Require(first.objective.max_peak == 11,
+          "TVM-style graph-guided search did not close the ordering gap");
+  Require(SolutionOrThrow(first).placements == SolutionOrThrow(second).placements,
+          "TVM-style hill climb is not deterministic for a fixed seed");
+}
+
 dsa::StructuredProblemDocument MakeStructuredDocument() {
   dsa::StructuredProblemDocument document;
   document.profile = dsa::BenchmarkProfile::kPyptoStructured;
@@ -259,11 +303,21 @@ dsa::StructuredProblemDocument MakeStructuredDocument() {
   document.problem.buffers[1].allowed_pools = {3};
   document.problem.buffers[2].alignment = 16;
   document.problem.buffers[2].allowed_pools = {4};
-  document.problem.separations.push_back({0, 1});
+  document.problem.separations.push_back({0, 1, {dsa::SeparationReason::kPipelineStage}});
   document.problem.pinned_allocations.push_back({2, 4, 0, false});
   dsa::CostModel cost_model;
   cost_model.reuse_penalties.push_back({0, 1, 25, dsa::ReusePenaltyReason::kCrossPipe});
   document.problem.cost_model = std::move(cost_model);
+  dsa::PyptoStructure structure;
+  structure.alias_classes = {
+      {0, {"tile_a", "tile_a_view"}},
+      {1, {"tile_b"}},
+      {2, {"tile_c"}},
+  };
+  structure.pipeline_groups = {
+      {7, 3, 32, 2, 2, {{0, 0, 0}, {1, 1, 1}}},
+  };
+  document.problem.pypto_structure = std::move(structure);
   document.problem.objective = dsa::FitThenMinimizeReuseCostObjective();
   return document;
 }
@@ -287,11 +341,23 @@ void TestStructuredJsonRoundTripAndProfiles() {
           "multi-interval liveness did not round-trip");
   Require(parsed.problem.separations.size() == 1 && parsed.problem.pinned_allocations.size() == 1,
           "structured constraints did not round-trip");
+  Require(parsed.problem.separations.front().reasons ==
+              std::vector<dsa::SeparationReason>{dsa::SeparationReason::kPipelineStage},
+          "separation provenance did not round-trip");
+  Require(parsed.problem.pypto_structure &&
+              parsed.problem.pypto_structure->alias_classes.front().members.size() == 2 &&
+              parsed.problem.pypto_structure->pipeline_groups.front().effective_depth == 2,
+          "normalized PyPTO structure did not round-trip");
   Require(
       parsed.problem.cost_model && parsed.problem.cost_model->reuse_penalties.front().cost == 25,
       "structured cost model did not round-trip");
   Require(parsed.problem.objective.terms == dsa::FitThenMinimizeReuseCostObjective().terms,
           "structured objective did not round-trip");
+
+  dsa::StructuredProblemDocument invalid_structure = original;
+  invalid_structure.problem.pypto_structure->pipeline_groups.front().effective_depth = 3;
+  Require(!dsa::ValidateStructuredProblemDocument(invalid_structure).empty(),
+          "invalid PyPTO pipeline depth was silently accepted");
 
   std::string unknown_field = output.str();
   unknown_field.insert(unknown_field.find('{') + 1, "\n  \"unexpected\": true,");
@@ -311,12 +377,16 @@ void TestPyptoExportedCorpus() {
     const char* instance;
     std::size_t buffers;
     std::size_t separations;
+    std::size_t pipeline_groups;
+    std::size_t reuse_penalties;
     std::uint64_t expected_peak;
   };
   const std::vector<CorpusCase> cases = {
-      {"chain_read_before_write_v1.json", "read_before_write_chain", 3, 0, 16'384},
-      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 65'536},
-      {"pipeline_stage_separation_v1.json", "pipeline_stage_separation", 2, 1, 32'768},
+      {"chain_read_before_write_v1.json", "read_before_write_chain", 3, 0, 0, 0, 16'384},
+      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 0, 0, 65'536},
+      {"pipeline_stage_separation_v1.json", "pipeline_stage_separation", 2, 1, 1, 0, 32'768},
+      {"target_hazard_v1.json", "target_hazard", 3, 1, 0, 0, 8'192},
+      {"capacity_gated_pipeline_cost_v1.json", "capacity_gated_pipeline_cost", 3, 0, 1, 2, 245'760},
   };
 
   dsa::LocalSearchOptions local_options;
@@ -324,6 +394,9 @@ void TestPyptoExportedCorpus() {
   local_options.max_iterations = 200;
   local_options.restarts = 2;
   local_options.stagnation_limit = 50;
+  dsa::TvmHillClimbOptions tvm_options;
+  tvm_options.seed = 7;
+  tvm_options.max_attempts = 200;
 
   for (const CorpusCase& corpus_case : cases) {
     const std::filesystem::path path =
@@ -337,9 +410,19 @@ void TestPyptoExportedCorpus() {
             "exported corpus document has the wrong buffer count");
     Require(document.problem.separations.size() == corpus_case.separations,
             "exported corpus document has the wrong separation count");
+    Require(
+        document.problem.pypto_structure &&
+            document.problem.pypto_structure->alias_classes.size() == corpus_case.buffers &&
+            document.problem.pypto_structure->pipeline_groups.size() == corpus_case.pipeline_groups,
+        "exported corpus document lost normalized PyPTO structure");
+    const std::size_t reuse_penalties =
+        document.problem.cost_model ? document.problem.cost_model->reuse_penalties.size() : 0;
+    Require(reuse_penalties == corpus_case.reuse_penalties,
+            "exported corpus document has the wrong reuse-cost edge count");
     Require(document.metadata.at("producer") == "pypto" &&
                 document.metadata.at("solver_input") == "pre_memory_reuse" &&
-                document.metadata.at("lifetime_ordering") == "pypto_read_before_write",
+                document.metadata.at("lifetime_ordering") == "pypto_read_before_write" &&
+                !document.metadata.at("target").empty(),
             "exported corpus document lost PyPTO provenance");
     const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(document);
     Require(errors.empty(), errors.empty() ? "" : errors.front());
@@ -351,6 +434,10 @@ void TestPyptoExportedCorpus() {
         SolveAndValidate(document.problem, dsa::LocalSearchSolver(local_options));
     Require(local_search.objective.max_peak == corpus_case.expected_peak,
             "local-search peak changed for exported corpus document");
+    const dsa::DsaResult tvm_hill_climb =
+        SolveAndValidate(document.problem, dsa::TvmHillClimbSolver(tvm_options));
+    Require(tvm_hill_climb.objective.max_peak == corpus_case.expected_peak,
+            "TVM-style hill-climb peak changed for exported corpus document");
   }
 }
 
@@ -370,7 +457,8 @@ void TestCoreRelaxationProfiles() {
           "multi-interval buffer was not split into independent standard rows");
   Require(Contains(l1->relaxed_features, "multi_interval_identity") &&
               Contains(l1->relaxed_features, "reserved_ranges") &&
-              Contains(l1->relaxed_features, "separations"),
+              Contains(l1->relaxed_features, "separations") &&
+              Contains(l1->relaxed_features, "pypto_structure"),
           "core relaxation did not disclose removed structure");
   Require(dsa::ValidateStructuredProblemDocument(*l1).empty(),
           "generated core relaxation is not standard-profile compatible");
@@ -416,6 +504,13 @@ void TestSolverCapabilityMatching() {
   Require(local_search.Solve(document.problem).status == dsa::SolveStatus::kFeasible,
           "compatible local search did not run");
 
+  const dsa::TvmHillClimbSolver tvm_hill_climb;
+  const dsa::SolverCompatibility tvm_match =
+      dsa::CheckSolverCompatibility(document.problem, tvm_hill_climb.Capabilities());
+  Require(tvm_match.Compatible(), "TVM-style hill climb should match the structured fixture");
+  Require(tvm_hill_climb.Solve(document.problem).status == dsa::SolveStatus::kFeasible,
+          "compatible TVM-style hill climb did not run");
+
   dsa::DsaProblem bank_objective = document.problem;
   bank_objective.objective.terms = {dsa::ObjectiveMetric::kBankCost};
   const dsa::SolverCompatibility bank_match =
@@ -453,6 +548,7 @@ int main() {
   const std::vector<std::pair<std::string, void (*)()>> tests = {
       {"MiniMalloc CSV", TestMiniMallocCsv},
       {"first-fit #1908", TestFirstFitSubdividesFreedRegion},
+      {"standard subdivision corpus", TestStandardFreedRegionSubdivisionCorpus},
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},
       {"colocation", TestColocation},
@@ -460,6 +556,7 @@ int main() {
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"local search", TestLocalSearchClosesOrderingGap},
+      {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},
       {"structured JSON", TestStructuredJsonRoundTripAndProfiles},
       {"PyPTO exported corpus", TestPyptoExportedCorpus},
       {"core relaxation", TestCoreRelaxationProfiles},

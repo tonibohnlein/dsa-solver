@@ -39,6 +39,20 @@ const char* ToString(SolveStatus status) noexcept {
   return "unknown";
 }
 
+const char* ToString(SeparationReason reason) noexcept {
+  switch (reason) {
+    case SeparationReason::kGeneric:
+      return "generic";
+    case SeparationReason::kPipelineStage:
+      return "pipeline_stage";
+    case SeparationReason::kTargetHazard:
+      return "target_hazard";
+    case SeparationReason::kSemanticNoAlias:
+      return "semantic_no_alias";
+  }
+  return "unknown";
+}
+
 const char* ToString(ObjectiveMetric metric) noexcept {
   switch (metric) {
     case ObjectiveMetric::kCapacityOverflow:

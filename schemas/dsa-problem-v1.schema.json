@@ -108,6 +108,35 @@
         }
       }
     },
+    "separation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "first",
+        "second"
+      ],
+      "properties": {
+        "first": {
+          "$ref": "#/$defs/uint32"
+        },
+        "second": {
+          "$ref": "#/$defs/uint32"
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "generic",
+              "pipeline_stage",
+              "target_hazard",
+              "semantic_no_alias"
+            ]
+          }
+        }
+      }
+    },
     "interval": {
       "type": "object",
       "additionalProperties": false,
@@ -274,7 +303,7 @@
         "separations": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/pair"
+            "$ref": "#/$defs/separation"
           }
         },
         "temporal_exclusions": {
@@ -335,6 +364,113 @@
         }
       }
     },
+    "pypto_alias_class": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buffer",
+        "members"
+      ],
+      "properties": {
+        "buffer": {
+          "$ref": "#/$defs/uint32"
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pypto_pipeline_member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buffer",
+        "stage",
+        "residue"
+      ],
+      "properties": {
+        "buffer": {
+          "$ref": "#/$defs/uint32"
+        },
+        "stage": {
+          "$ref": "#/$defs/uint32"
+        },
+        "residue": {
+          "$ref": "#/$defs/uint32"
+        }
+      }
+    },
+    "pypto_pipeline_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group",
+        "pool",
+        "slot_size",
+        "depth",
+        "effective_depth",
+        "members"
+      ],
+      "properties": {
+        "group": {
+          "$ref": "#/$defs/uint32"
+        },
+        "pool": {
+          "$ref": "#/$defs/uint32"
+        },
+        "slot_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "effective_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pypto_pipeline_member"
+          }
+        }
+      }
+    },
+    "pypto_structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias_classes",
+        "pipeline_groups"
+      ],
+      "properties": {
+        "alias_classes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pypto_alias_class"
+          }
+        },
+        "pipeline_groups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pypto_pipeline_group"
+          }
+        }
+      }
+    },
     "objective": {
       "type": "object",
       "additionalProperties": false,
@@ -391,6 +527,9 @@
         },
         "cost_model": {
           "$ref": "#/$defs/cost_model"
+        },
+        "pypto_structure": {
+          "$ref": "#/$defs/pypto_structure"
         },
         "objective": {
           "$ref": "#/$defs/objective"

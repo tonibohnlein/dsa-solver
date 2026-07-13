@@ -65,9 +65,25 @@ struct Colocation {
   BufferId second = 0;
 };
 
+// Separations remain portable hard keep-apart constraints. Reasons are
+// optional provenance: solvers enforce the pair independently of which
+// compiler rule produced it.
+enum class SeparationReason : std::uint8_t {
+  kGeneric,
+  kPipelineStage,
+  kTargetHazard,
+  kSemanticNoAlias,
+};
+
 struct Separation {
   BufferId first = 0;
   BufferId second = 0;
+  std::vector<SeparationReason> reasons;
+
+  Separation() = default;
+  Separation(BufferId first_buffer, BufferId second_buffer,
+             std::vector<SeparationReason> provenance = {})
+      : first(first_buffer), second(second_buffer), reasons(std::move(provenance)) {}
 };
 
 // A compiler proof that two buffers cannot be live on the same control-flow
@@ -106,6 +122,34 @@ struct CostModel {
   std::vector<ReusePenalty> reuse_penalties;
 };
 
+// Normalized PyPTO provenance. The portable buffers, hard constraints, and
+// cost model above remain authoritative; this structure preserves the compiler
+// relationships needed by PyPTO-specific search moves and benchmark analysis.
+struct PyptoAliasClass {
+  BufferId buffer = 0;
+  std::vector<std::string> members;
+};
+
+struct PyptoPipelineMember {
+  BufferId buffer = 0;
+  std::int32_t stage = 0;
+  std::uint32_t residue = 0;
+};
+
+struct PyptoPipelineGroup {
+  std::int32_t group = 0;
+  PoolId pool = kDefaultPool;
+  std::uint64_t slot_size = 0;
+  std::uint32_t depth = 0;
+  std::uint32_t effective_depth = 0;
+  std::vector<PyptoPipelineMember> members;
+};
+
+struct PyptoStructure {
+  std::vector<PyptoAliasClass> alias_classes;
+  std::vector<PyptoPipelineGroup> pipeline_groups;
+};
+
 // Objective components are recorded separately rather than prematurely
 // scalarized. A solver evaluates them in the listed order.
 enum class ObjectiveMetric : std::uint8_t {
@@ -140,6 +184,7 @@ struct DsaProblem {
   std::vector<TemporalExclusion> temporal_exclusions;
   std::vector<PinnedAllocation> pinned_allocations;
   std::optional<CostModel> cost_model;
+  std::optional<PyptoStructure> pypto_structure;
   ObjectiveSpec objective;
 
   [[nodiscard]] const Buffer* FindBuffer(BufferId id) const noexcept;
@@ -187,6 +232,7 @@ struct DsaResult {
 };
 
 [[nodiscard]] const char* ToString(SolveStatus status) noexcept;
+[[nodiscard]] const char* ToString(SeparationReason reason) noexcept;
 [[nodiscard]] const char* ToString(ObjectiveMetric metric) noexcept;
 [[nodiscard]] const char* ToString(ObjectiveAggregation aggregation) noexcept;
 

@@ -69,6 +69,15 @@ std::int64_t ReadSigned(const Json& value, const std::string& path) {
   throw std::runtime_error(path + " must be an integer");
 }
 
+std::int32_t ReadInt32(const Json& value, const std::string& path) {
+  const std::int64_t parsed = ReadSigned(value, path);
+  if (parsed < std::numeric_limits<std::int32_t>::min() ||
+      parsed > std::numeric_limits<std::int32_t>::max()) {
+    throw std::runtime_error(path + " exceeds int32 range");
+  }
+  return static_cast<std::int32_t>(parsed);
+}
+
 const Json& RequireField(const Json& object, const char* field, std::string_view path) {
   if (!object.is_object()) throw std::runtime_error(std::string(path) + " must be an object");
   const auto found = object.find(field);
@@ -129,6 +138,15 @@ ReusePenaltyReason ReadPenaltyReason(const Json& value, const std::string& path)
   throw std::runtime_error(path + " has unknown reuse-penalty reason '" + name + "'");
 }
 
+SeparationReason ReadSeparationReason(const Json& value, const std::string& path) {
+  const std::string name = ReadString(value, path);
+  if (name == "generic") return SeparationReason::kGeneric;
+  if (name == "pipeline_stage") return SeparationReason::kPipelineStage;
+  if (name == "target_hazard") return SeparationReason::kTargetHazard;
+  if (name == "semantic_no_alias") return SeparationReason::kSemanticNoAlias;
+  throw std::runtime_error(path + " has unknown separation reason '" + name + "'");
+}
+
 const char* PenaltyReasonName(ReusePenaltyReason reason) {
   switch (reason) {
     case ReusePenaltyReason::kGeneric:
@@ -162,6 +180,31 @@ std::vector<PairType> ReadPairs(const Json& array, const std::string& path) {
   return result;
 }
 
+std::vector<Separation> ReadSeparations(const Json& array, const std::string& path) {
+  if (!array.is_array()) throw std::runtime_error(path + " must be an array");
+  std::vector<Separation> result;
+  result.reserve(array.size());
+  for (std::size_t i = 0; i < array.size(); ++i) {
+    const Json& item = array[i];
+    const std::string item_path = path + "[" + std::to_string(i) + "]";
+    CheckFields(item, {"first", "second", "reasons"}, item_path);
+    Separation separation;
+    separation.first =
+        ReadUnsigned<BufferId>(RequireField(item, "first", item_path), item_path + ".first");
+    separation.second =
+        ReadUnsigned<BufferId>(RequireField(item, "second", item_path), item_path + ".second");
+    if (const auto found = item.find("reasons"); found != item.end()) {
+      if (!found->is_array()) throw std::runtime_error(item_path + ".reasons must be an array");
+      for (std::size_t j = 0; j < found->size(); ++j) {
+        separation.reasons.push_back(
+            ReadSeparationReason((*found)[j], item_path + ".reasons[" + std::to_string(j) + "]"));
+      }
+    }
+    result.push_back(std::move(separation));
+  }
+  return result;
+}
+
 Json WritePairs(const std::vector<Colocation>& pairs) {
   Json result = Json::array();
   for (const Colocation& pair : pairs) {
@@ -173,7 +216,12 @@ Json WritePairs(const std::vector<Colocation>& pairs) {
 Json WritePairs(const std::vector<Separation>& pairs) {
   Json result = Json::array();
   for (const Separation& pair : pairs) {
-    result.push_back({{"first", pair.first}, {"second", pair.second}});
+    Json value{{"first", pair.first}, {"second", pair.second}};
+    if (!pair.reasons.empty()) {
+      value["reasons"] = Json::array();
+      for (SeparationReason reason : pair.reasons) value["reasons"].push_back(ToString(reason));
+    }
+    result.push_back(std::move(value));
   }
   return result;
 }
@@ -224,7 +272,8 @@ StructuredProblemDocument ParseDocument(const Json& root) {
   }
 
   const Json& problem = RequireField(root, "problem", "root");
-  CheckFields(problem, {"pools", "buffers", "constraints", "cost_model", "objective"},
+  CheckFields(problem,
+              {"pools", "buffers", "constraints", "cost_model", "pypto_structure", "objective"},
               "root.problem");
   const Json& pools = RequireArray(problem, "pools", "root.problem");
   document.problem.pools.clear();
@@ -300,8 +349,8 @@ StructuredProblemDocument ParseDocument(const Json& root) {
       ReadPairs<Colocation>(RequireArray(constraints, "colocations", "root.problem.constraints"),
                             "root.problem.constraints.colocations");
   document.problem.separations =
-      ReadPairs<Separation>(RequireArray(constraints, "separations", "root.problem.constraints"),
-                            "root.problem.constraints.separations");
+      ReadSeparations(RequireArray(constraints, "separations", "root.problem.constraints"),
+                      "root.problem.constraints.separations");
   document.problem.temporal_exclusions = ReadPairs<TemporalExclusion>(
       RequireArray(constraints, "temporal_exclusions", "root.problem.constraints"),
       "root.problem.constraints.temporal_exclusions");
@@ -317,6 +366,63 @@ StructuredProblemDocument ParseDocument(const Json& root) {
          ReadUnsigned<std::uint64_t>(RequireField(value, "offset", path), path + ".offset"),
          ReadBool(RequireField(value, "exclusive_for_all_time", path),
                   path + ".exclusive_for_all_time")});
+  }
+
+  if (const auto found = problem.find("pypto_structure"); found != problem.end()) {
+    if (found->is_null()) throw std::runtime_error("root.problem.pypto_structure cannot be null");
+    CheckFields(*found, {"alias_classes", "pipeline_groups"}, "root.problem.pypto_structure");
+    PyptoStructure structure;
+
+    const Json& alias_classes =
+        RequireArray(*found, "alias_classes", "root.problem.pypto_structure");
+    for (std::size_t i = 0; i < alias_classes.size(); ++i) {
+      const Json& value = alias_classes[i];
+      const std::string path =
+          "root.problem.pypto_structure.alias_classes[" + std::to_string(i) + "]";
+      CheckFields(value, {"buffer", "members"}, path);
+      PyptoAliasClass alias_class;
+      alias_class.buffer =
+          ReadUnsigned<BufferId>(RequireField(value, "buffer", path), path + ".buffer");
+      const Json& members = RequireArray(value, "members", path);
+      for (std::size_t j = 0; j < members.size(); ++j) {
+        alias_class.members.push_back(
+            ReadString(members[j], path + ".members[" + std::to_string(j) + "]"));
+      }
+      structure.alias_classes.push_back(std::move(alias_class));
+    }
+
+    const Json& pipeline_groups =
+        RequireArray(*found, "pipeline_groups", "root.problem.pypto_structure");
+    for (std::size_t i = 0; i < pipeline_groups.size(); ++i) {
+      const Json& value = pipeline_groups[i];
+      const std::string path =
+          "root.problem.pypto_structure.pipeline_groups[" + std::to_string(i) + "]";
+      CheckFields(value, {"group", "pool", "slot_size", "depth", "effective_depth", "members"},
+                  path);
+      PyptoPipelineGroup group;
+      group.group = ReadInt32(RequireField(value, "group", path), path + ".group");
+      group.pool = ReadUnsigned<PoolId>(RequireField(value, "pool", path), path + ".pool");
+      group.slot_size =
+          ReadUnsigned<std::uint64_t>(RequireField(value, "slot_size", path), path + ".slot_size");
+      group.depth =
+          ReadUnsigned<std::uint32_t>(RequireField(value, "depth", path), path + ".depth");
+      group.effective_depth = ReadUnsigned<std::uint32_t>(
+          RequireField(value, "effective_depth", path), path + ".effective_depth");
+      const Json& members = RequireArray(value, "members", path);
+      for (std::size_t j = 0; j < members.size(); ++j) {
+        const Json& member = members[j];
+        const std::string member_path = path + ".members[" + std::to_string(j) + "]";
+        CheckFields(member, {"buffer", "stage", "residue"}, member_path);
+        group.members.push_back(
+            {ReadUnsigned<BufferId>(RequireField(member, "buffer", member_path),
+                                    member_path + ".buffer"),
+             ReadInt32(RequireField(member, "stage", member_path), member_path + ".stage"),
+             ReadUnsigned<std::uint32_t>(RequireField(member, "residue", member_path),
+                                         member_path + ".residue")});
+      }
+      structure.pipeline_groups.push_back(std::move(group));
+    }
+    document.problem.pypto_structure = std::move(structure);
   }
 
   if (const auto found = problem.find("cost_model"); found != problem.end()) {
@@ -413,6 +519,28 @@ Json SerializeDocument(const StructuredProblemDocument& document) {
          {"exclusive_for_all_time", pinned.exclusive_for_all_time}});
   }
   problem["constraints"] = std::move(constraints);
+
+  if (document.problem.pypto_structure) {
+    Json structure{{"alias_classes", Json::array()}, {"pipeline_groups", Json::array()}};
+    for (const PyptoAliasClass& alias_class : document.problem.pypto_structure->alias_classes) {
+      structure["alias_classes"].push_back(
+          {{"buffer", alias_class.buffer}, {"members", alias_class.members}});
+    }
+    for (const PyptoPipelineGroup& group : document.problem.pypto_structure->pipeline_groups) {
+      Json value{{"group", group.group},
+                 {"pool", group.pool},
+                 {"slot_size", group.slot_size},
+                 {"depth", group.depth},
+                 {"effective_depth", group.effective_depth},
+                 {"members", Json::array()}};
+      for (const PyptoPipelineMember& member : group.members) {
+        value["members"].push_back(
+            {{"buffer", member.buffer}, {"stage", member.stage}, {"residue", member.residue}});
+      }
+      structure["pipeline_groups"].push_back(std::move(value));
+    }
+    problem["pypto_structure"] = std::move(structure);
+  }
 
   if (document.problem.cost_model) {
     Json penalties = Json::array();

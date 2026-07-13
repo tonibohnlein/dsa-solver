@@ -1,11 +1,11 @@
 {
-  "instance": "read_before_write_chain",
+  "instance": "target_hazard",
   "metadata": {
     "lifetime_ordering": "pypto_read_before_write",
     "memory_space_ids": "pypto_memory_space_enum_v1",
     "producer": "pypto",
     "solver_input": "pre_memory_reuse",
-    "target": "Ascend950"
+    "target": "Ascend910B"
   },
   "problem": {
     "buffers": [
@@ -18,11 +18,11 @@
         "live_intervals": [
           {
             "lower": 7,
-            "upper": 9
+            "upper": 11
           }
         ],
-        "name": "mem_vec_2",
-        "size": 16384
+        "name": "mem_vec_0",
+        "size": 4096
       },
       {
         "alignment": 32,
@@ -36,8 +36,8 @@
             "upper": 11
           }
         ],
-        "name": "mem_vec_3",
-        "size": 16384
+        "name": "mem_vec_1",
+        "size": 4096
       },
       {
         "alignment": 32,
@@ -51,14 +51,22 @@
             "upper": 13
           }
         ],
-        "name": "mem_vec_4",
-        "size": 16384
+        "name": "mem_vec_2",
+        "size": 4096
       }
     ],
     "constraints": {
       "colocations": [],
       "pinned_allocations": [],
-      "separations": [],
+      "separations": [
+        {
+          "first": 0,
+          "reasons": [
+            "target_hazard"
+          ],
+          "second": 2
+        }
+      ],
       "temporal_exclusions": []
     },
     "objective": {
@@ -70,7 +78,7 @@
     },
     "pools": [
       {
-        "capacity": 245760,
+        "capacity": 188416,
         "id": 1,
         "name": "Vec",
         "reserved_ranges": []
@@ -81,19 +89,19 @@
         {
           "buffer": 0,
           "members": [
-            "tile_a"
+            "down_prev"
           ]
         },
         {
           "buffer": 1,
           "members": [
-            "tile_b"
+            "pipe_chunk"
           ]
         },
         {
           "buffer": 2,
           "members": [
-            "tile_c"
+            "down_next"
           ]
         }
       ],

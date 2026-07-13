@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "profile": "standard_dsa",
+  "instance": "freed_region_subdivision",
+  "metadata": {
+    "regression": "A100_to_B60_plus_C40",
+    "source": "synthetic_standard_dsa"
+  },
+  "problem": {
+    "pools": [
+      {
+        "id": 0,
+        "name": "default",
+        "capacity": 100,
+        "reserved_ranges": []
+      }
+    ],
+    "buffers": [
+      {
+        "id": 0,
+        "name": "A100",
+        "size": 100,
+        "alignment": 1,
+        "live_intervals": [
+          {
+            "lower": 0,
+            "upper": 3
+          }
+        ],
+        "allowed_pools": [
+          0
+        ]
+      },
+      {
+        "id": 1,
+        "name": "B60",
+        "size": 60,
+        "alignment": 1,
+        "live_intervals": [
+          {
+            "lower": 3,
+            "upper": 6
+          }
+        ],
+        "allowed_pools": [
+          0
+        ]
+      },
+      {
+        "id": 2,
+        "name": "C40",
+        "size": 40,
+        "alignment": 1,
+        "live_intervals": [
+          {
+            "lower": 3,
+            "upper": 6
+          }
+        ],
+        "allowed_pools": [
+          0
+        ]
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "separations": [],
+      "temporal_exclusions": [],
+      "pinned_allocations": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    }
+  }
+}

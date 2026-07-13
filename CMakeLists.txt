@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.2.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.3.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -24,6 +24,7 @@ add_library(dsa_solver
   src/solver.cpp
   src/structured_json.cpp
   src/structured_problem.cpp
+  src/tvm_hill_climb_solver.cpp
   src/validator.cpp
 )
 add_library(dsa::solver ALIAS dsa_solver)
@@ -96,6 +97,19 @@ if(BUILD_TESTING)
       --reference-output ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example_solution.csv
   )
   add_test(
+    NAME dsa-cli-tvm-hill-climb
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example.csv
+      --solver tvm-hill-climb
+      --capacity 12
+      --seed 7
+      --iterations 500
+      --target-total-peak 12
+  )
+  set_tests_properties(dsa-cli-tvm-hill-climb PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"search_budget\":500.*\"target_total_peak\":12"
+  )
+  add_test(
     NAME dsa-cli-structured
     COMMAND dsa-bench
       --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
@@ -103,6 +117,14 @@ if(BUILD_TESTING)
       --seed 7
       --iterations 200
       --restarts 2
+  )
+  add_test(
+    NAME dsa-cli-tvm-structured
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
+      --solver tvm-hill-climb
+      --seed 7
+      --iterations 200
   )
   add_test(
     NAME dsa-cli-core-relaxation
@@ -122,6 +144,13 @@ if(BUILD_TESTING)
     COMMAND dsa-bench
       --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/issue_1908_fragmentation_v1.json
       --solver first-fit
+  )
+  add_test(
+    NAME dsa-cli-standard-subdivision
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/standard/freed_region_subdivision_v1.json
+      --solver first-fit
+      --target-total-peak 100
   )
 endif()
 

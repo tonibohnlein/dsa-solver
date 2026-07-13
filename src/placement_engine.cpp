@@ -253,6 +253,42 @@ std::vector<BufferId> DefaultPlacementOrder(const DsaProblem& problem) {
   return result;
 }
 
+PlacementSearchSpace BuildPlacementSearchSpace(const DsaProblem& problem) {
+  const PreparedProblem prepared = Prepare(problem);
+  PlacementSearchSpace search_space;
+  search_space.errors = prepared.errors;
+  search_space.flexible_pools = prepared.flexible_pools;
+  if (!search_space.errors.empty() || search_space.flexible_pools) return search_space;
+
+  search_space.nodes.reserve(prepared.supers.size());
+  for (const SuperBuffer& super : prepared.supers) {
+    PlacementSearchNode node;
+    node.representative = super.representative;
+    if (const Buffer* representative = problem.FindBuffer(super.representative)) {
+      node.name = representative->name;
+    }
+    node.size = super.size;
+    node.pool = super.pinned ? super.pinned->pool : super.allowed_pools.front();
+    node.pinned = super.pinned.has_value();
+    search_space.nodes.push_back(std::move(node));
+  }
+
+  for (std::size_t first = 0; first < prepared.supers.size(); ++first) {
+    for (std::size_t second = first + 1; second < prepared.supers.size(); ++second) {
+      const SuperBuffer& first_super = prepared.supers[first];
+      const SuperBuffer& second_super = prepared.supers[second];
+      if (search_space.nodes[first].pool != search_space.nodes[second].pool) continue;
+      const bool blocks = SuperBuffersConflict(problem, first_super, second_super) ||
+                          Separated(prepared, first, second) || first_super.pinned_exclusive ||
+                          second_super.pinned_exclusive;
+      if (!blocks) continue;
+      search_space.nodes[first].conflicts.push_back(second_super.representative);
+      search_space.nodes[second].conflicts.push_back(first_super.representative);
+    }
+  }
+  return search_space;
+}
+
 DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>& priority) {
   DsaResult result;
   PreparedProblem prepared = Prepare(problem);

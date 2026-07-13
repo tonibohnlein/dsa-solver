@@ -16,14 +16,15 @@ making it public.
 - A portable problem model with half-open, multi-interval lifetimes.
 - Multiple fixed memory pools, capacities, reserved address ranges, and alignment.
 - Must-alias colocations, keep-apart separations, control-flow temporal exclusions, and pins.
-- Optional reuse penalties for PyPTO's reuse-to-synchronization cost overlay.
+- Optional reuse penalties plus normalized PyPTO alias and pipeline-group provenance.
 - An independent problem/solution validator and objective recomputation.
 - A deterministic decreasing-size first-fit baseline with lifetime-aware hole reuse.
 - A seeded iterated local-search baseline over first-fit placement orderings.
+- A named reimplementation of Apache TVM USMP's graph-guided hill-climb policy.
 - Native MiniMalloc input/output CSV support (`id,lower,upper,size[,offset]`).
 - A `dsa-bench` CLI with JSON results and reference-solution comparison.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
-- A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by both solvers in CTest.
+- A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by all built-in solvers in CTest.
 - Explicit standard, PyPTO-structured, and sound core-relaxation benchmark profiles.
 - Central solver capability matching for hard features and requested objective terms.
 - Google MiniMalloc pinned as a submodule, including the official A–K corpus and exact C++ solver.
@@ -59,16 +60,25 @@ ctest --test-dir build --output-on-failure
   --iterations 20000 \
   --restarts 8 \
   --output local-search.csv
+
+./build/dsa-bench \
+  --input tests/data/minimalloc_example.csv \
+  --solver tvm-hill-climb \
+  --capacity 12 \
+  --seed 7 \
+  --iterations 500 \
+  --target-total-peak 12
 ```
 
-The CLI writes one JSON record to stdout. Important fields are `peak`, `runtime_us`, `status`, and—when a
-reference output is supplied—`reference_peak`, `gap_bytes`, and `gap_percent`. Results also identify the
-benchmark profile, objective vector, required features, and any capability mismatch.
+The CLI writes one JSON record to stdout. Important fields are `peak`, `runtime_us`, `status`, the search
+budget/options, and—when a reference output is supplied—`reference_peak`, `gap_bytes`, and `gap_percent`.
+Results also identify the benchmark profile, objective vector, required features, and any capability
+mismatch.
 
 ## Run a structured compiler instance
 
 Schema-v1 JSON carries the full portable problem, including pools, multi-interval liveness, hard
-constraints, pins, cost overlays, and a lexicographic objective:
+constraints, pins, cost overlays, normalized PyPTO structure, and a lexicographic objective:
 
 ```bash
 ./build/dsa-bench \
@@ -127,18 +137,22 @@ input/result reuse without changing the portable half-open model.
 
 The core model intentionally carries more structure than MiniMalloc CSV can encode:
 
-| Structure | Representation | First-fit | Local search |
-| --- | --- | --- | --- |
-| Multi-interval liveness | `Buffer::live_intervals` | yes | yes |
-| Fixed multi-pool planning | `Pool`, `Buffer::allowed_pools` | yes | yes |
-| Flexible pool assignment | multiple allowed pools | no | no |
-| Must-alias | `Colocation` | yes | yes |
-| Pipeline/hazard separation | `Separation` | yes | yes |
-| Branch/phi exclusivity | `TemporalExclusion` | yes | yes |
-| Pinned allocation | `PinnedAllocation` | yes | yes |
-| Reserved address holes | `Pool::reserved_ranges` | yes | yes |
-| Reuse/synchronization cost | `CostModel::reuse_penalties` | reported baseline | optimized when requested |
-| Bank geometry/cost | `Pool::bank_geometry` | represented only | represented only |
+| Structure | Representation | First-fit | Local search | TVM hill climb |
+| --- | --- | --- | --- | --- |
+| Multi-interval liveness | `Buffer::live_intervals` | yes | yes | yes |
+| Fixed multi-pool planning | `Pool`, `Buffer::allowed_pools` | yes | yes | yes |
+| Flexible pool assignment | multiple allowed pools | no | no | no |
+| Must-alias | `Colocation` | yes | yes | yes |
+| Pipeline/hazard separation | `Separation` | yes | yes | yes |
+| Branch/phi exclusivity | `TemporalExclusion` | yes | yes | yes |
+| Pinned allocation | `PinnedAllocation` | yes | yes | yes |
+| Reserved address holes | `Pool::reserved_ranges` | yes | yes | yes |
+| Reuse/synchronization cost | `CostModel::reuse_penalties` | reported baseline | optimized | optimized |
+| Bank geometry/cost | `Pool::bank_geometry` | represented only | represented only | represented only |
+
+Separation reasons and `PyptoStructure` are provenance: solvers enforce the translated generic constraints
+and costs. They are retained so the planned `pypto-structured-search` can introduce alias-class and
+pipeline-group neighborhoods without changing the portable core.
 
 Every solver advertises capabilities. Unsupported hard structure produces `kUnsupported`; it is not
 silently dropped. Objective-only mismatches are reported separately: first-fit can remain a disclosed
@@ -149,5 +163,8 @@ structural baseline, while a search solver rejects metrics it cannot use for can
 1. Add suite-level repeated runs, exact-capacity search, timeouts, and JSONL/CSV aggregation.
 2. Grow the exported PyPTO corpus across models, memory pools, control flow, and pipeline shapes.
 3. Model capacity-driven pipeline-depth choices rather than only fixed pairwise separations.
-4. Add lower-bound and additional heuristic baselines.
-5. Implement placement-aware large-neighborhood search with reproducible ablations.
+4. Add idealloc and additional heuristic baselines.
+5. Implement placement-aware large-neighborhood search with reproducible ablations against the TVM policy.
+
+See [the TVM hill-climb study](docs/tvm_hill_climb.md) for the exact search state, neighborhood,
+deliberate compatibility fixes, and the PyPTO refinement path.

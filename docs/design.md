@@ -25,6 +25,10 @@ Compiler extensions are explicit constraints or costs:
 - reuse penalties estimate synchronization induced when lifetime-disjoint buffers share an address;
 - bank geometry reserves a future offset-dependent cost model.
 
+The optional `PyptoStructure` retains normalized alias-class members and capacity-gated pipeline
+group/stage/residue membership. It is provenance for structured neighborhoods, not an implicit constraint:
+the generic fields above remain the complete feasibility and objective contract.
+
 ## Benchmark profiles
 
 One runner serves three claims that must remain distinct:
@@ -78,17 +82,36 @@ This version searches orderings, similar in scope to existing compiler hill-clim
 is a placement-aware large-neighborhood search that can move address regions directly, repair conflicts,
 and backtrack locally rather than expressing every candidate through a global ordering.
 
+## TVM hill-climb baseline
+
+`TvmHillClimbSolver` preserves Apache TVM USMP's recognizable search policy as a distinct literature
+baseline. It starts from decreasing size/conflict degree and repeatedly swaps earlier first- or
+second-level conflict neighbors of a buffer touching a pool's high-water mark. A rapidly decaying
+acceptance rule permits occasional worse-peak moves.
+
+The policy uses the same generalized placement engine as the other built-in solvers. Its search graph
+therefore collapses colocations and adds temporal conflicts, separations, and whole-program-exclusive
+pins as blocking edges. The decoder continues to honor fixed pools, multi-interval liveness, alignment,
+reserved ranges, and pinned offsets; candidate comparison uses the requested lexicographic objective.
+This makes standard-profile runs comparable with TVM's algorithmic idea while allowing the identical
+policy to run as an explicit ablation on `pypto_structured` instances.
+
+This is a behavioral reimplementation, not bit-for-bit compatibility: it uses a portable seeded random
+engine, preserves the best solution seen, uses the current buffer's alignment through the shared decoder,
+and can navigate complete over-capacity placements. See [the detailed study](tvm_hill_climb.md).
+
 ## PyPTO adapter boundary
 
-The future adapter should:
+The adapter now:
 
 1. materialize semantic aliases before collection;
 2. emit original, unmerged allocations as buffers;
 3. convert inclusive PyPTO lifetime endpoints to half-open endpoints;
-4. emit pipeline, hazard, and operation-semantic separations;
+4. emit pipeline, hazard, and operation-semantic separations with typed provenance;
 5. emit exact per-space capacity, reserved ranges, and alignment;
 6. preserve view-relative offsets during write-back;
-7. validate every solver result independently before applying it.
+7. retain normalized alias and pipeline groups plus sparse adjacent cross-stage reuse costs;
+8. validate every solver result independently before applying it.
 
 Capacity-driven pipeline-depth shedding remains an adapter/solver coordination problem. It must be
 represented explicitly rather than hidden in a pre-solver greedy merge.

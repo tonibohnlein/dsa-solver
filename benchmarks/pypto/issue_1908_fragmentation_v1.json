@@ -4,7 +4,8 @@
     "lifetime_ordering": "pypto_read_before_write",
     "memory_space_ids": "pypto_memory_space_enum_v1",
     "producer": "pypto",
-    "solver_input": "pre_memory_reuse"
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend950"
   },
   "problem": {
     "buffers": [
@@ -89,7 +90,36 @@
         "name": "Vec",
         "reserved_ranges": []
       }
-    ]
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "producer"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "left"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "right"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "combined"
+          ]
+        }
+      ],
+      "pipeline_groups": []
+    }
   },
   "profile": "pypto_structured",
   "schema_version": 1

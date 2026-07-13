@@ -64,6 +64,9 @@ std::vector<std::string> ValidateStandardProblem(const DsaProblem& problem) {
   if (problem.cost_model) {
     errors.push_back("standard DSA profile cannot encode a cost model");
   }
+  if (problem.pypto_structure) {
+    errors.push_back("standard DSA profile cannot encode PyPTO structure");
+  }
   if (!UsesOnlyStandardObjectiveMetrics(problem.objective)) {
     errors.push_back("standard DSA profile uses a structured objective metric");
   }
@@ -190,6 +193,7 @@ std::vector<StructuredProblemDocument> BuildCoreRelaxations(
     if (!ObjectiveIsMinimizePeak(source.problem.objective)) {
       relaxed_features.insert("structured_objective");
     }
+    if (source.problem.pypto_structure) relaxed_features.insert("pypto_structure");
 
     std::uint64_t next_id = 0;
     for (const Buffer* source_buffer : selected_buffers) {
