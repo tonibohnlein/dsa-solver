@@ -1,0 +1,257 @@
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "dsa/first_fit_solver.h"
+#include "dsa/local_search_solver.h"
+#include "dsa/minimalloc_csv.h"
+#include "dsa/validator.h"
+
+namespace {
+
+struct Options {
+  std::filesystem::path input;
+  std::string solver = "first-fit";
+  std::optional<std::uint64_t> capacity;
+  std::optional<std::filesystem::path> output;
+  std::optional<std::filesystem::path> json_output;
+  std::optional<std::filesystem::path> reference_output;
+  dsa::LocalSearchOptions local_search;
+};
+
+[[noreturn]] void UsageError(const std::string& message) {
+  throw std::invalid_argument(message + "\nRun dsa-bench --help for usage information.");
+}
+
+std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
+  if (text.empty()) UsageError(option + " requires a value");
+  if (text.front() == '-') UsageError(option + " requires a non-negative value");
+  std::size_t consumed = 0;
+  const std::uint64_t value = std::stoull(std::string(text), &consumed);
+  if (consumed != text.size()) UsageError(option + " has an invalid integer value");
+  return value;
+}
+
+void PrintHelp() {
+  std::cout << "Usage: dsa-bench --input INSTANCE.csv [options]\n\n"
+            << "Options:\n"
+            << "  --solver first-fit|local-search   Solver to run (default: first-fit)\n"
+            << "  --capacity BYTES                 Set the default pool capacity\n"
+            << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
+            << "  --reference-output FILE.csv      Compare with a MiniMalloc solution CSV\n"
+            << "  --json-output FILE.json          Also write the JSON result to a file\n"
+            << "  --seed N                         Local-search random seed (default: 0)\n"
+            << "  --iterations N                   Local-search evaluations budget\n"
+            << "  --restarts N                     Local-search restart count\n"
+            << "  --stagnation N                   Iterations before perturbation\n"
+            << "  --objective peak|fit-cost        Local-search objective mode\n"
+            << "  --help                           Show this help\n";
+}
+
+Options ParseOptions(int argc, char** argv) {
+  Options options;
+  auto next = [&](int* index, const std::string& option) -> std::string_view {
+    if (*index + 1 >= argc) UsageError(option + " requires a value");
+    ++*index;
+    return argv[*index];
+  };
+
+  for (int i = 1; i < argc; ++i) {
+    const std::string option = argv[i];
+    if (option == "--help") {
+      PrintHelp();
+      std::exit(0);
+    } else if (option == "--input") {
+      options.input = next(&i, option);
+    } else if (option == "--solver") {
+      options.solver = next(&i, option);
+    } else if (option == "--capacity") {
+      options.capacity = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--output") {
+      options.output = std::filesystem::path(next(&i, option));
+    } else if (option == "--json-output") {
+      options.json_output = std::filesystem::path(next(&i, option));
+    } else if (option == "--reference-output") {
+      options.reference_output = std::filesystem::path(next(&i, option));
+    } else if (option == "--seed") {
+      options.local_search.seed = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--iterations") {
+      options.local_search.max_iterations = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--restarts") {
+      options.local_search.restarts = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--stagnation") {
+      options.local_search.stagnation_limit = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--objective") {
+      const std::string value(next(&i, option));
+      if (value == "peak") {
+        options.local_search.objective = dsa::LocalSearchObjective::kMinimizePeak;
+      } else if (value == "fit-cost") {
+        options.local_search.objective = dsa::LocalSearchObjective::kFitThenMinimizeReuseCost;
+      } else {
+        UsageError("unknown objective '" + value + "'");
+      }
+    } else {
+      UsageError("unknown option '" + option + "'");
+    }
+  }
+  if (options.input.empty()) UsageError("--input is required");
+  if (options.solver != "first-fit" && options.solver != "local-search") {
+    UsageError("unknown solver '" + options.solver + "'");
+  }
+  return options;
+}
+
+std::string JsonEscape(std::string_view value) {
+  std::ostringstream output;
+  for (const unsigned char character : value) {
+    switch (character) {
+      case '"':
+        output << "\\\"";
+        break;
+      case '\\':
+        output << "\\\\";
+        break;
+      case '\n':
+        output << "\\n";
+        break;
+      case '\r':
+        output << "\\r";
+        break;
+      case '\t':
+        output << "\\t";
+        break;
+      default:
+        if (character < 0x20) {
+          output << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+                 << static_cast<unsigned int>(character) << std::dec;
+        } else {
+          output << static_cast<char>(character);
+        }
+    }
+  }
+  return output.str();
+}
+
+std::optional<std::uint64_t> ReferencePeak(const Options& options,
+                                           const dsa::DsaProblem& instance) {
+  if (!options.reference_output) return std::nullopt;
+  dsa::MiniMallocDocument reference = dsa::ReadMiniMallocCsvFile(*options.reference_output);
+  if (reference.problem.buffers.size() != instance.buffers.size()) {
+    throw std::runtime_error("reference CSV describes a different number of buffers");
+  }
+  for (std::size_t i = 0; i < instance.buffers.size(); ++i) {
+    const dsa::Buffer& expected = instance.buffers[i];
+    const dsa::Buffer& actual = reference.problem.buffers[i];
+    if (expected.name != actual.name || expected.size != actual.size ||
+        expected.live_intervals.size() != 1 || actual.live_intervals.size() != 1 ||
+        expected.live_intervals.front().lower != actual.live_intervals.front().lower ||
+        expected.live_intervals.front().upper != actual.live_intervals.front().upper) {
+      throw std::runtime_error("reference CSV does not describe the input instance at row " +
+                               std::to_string(i + 2));
+    }
+  }
+  if (!reference.solution) {
+    throw std::runtime_error("reference CSV has no offset column");
+  }
+  const dsa::DsaSolution reference_solution =
+      std::move(reference.solution).value_or(dsa::DsaSolution{});
+  const std::vector<std::string> errors =
+      dsa::ValidateSolution(reference.problem, reference_solution);
+  if (!errors.empty()) {
+    throw std::runtime_error("reference solution is invalid: " + errors.front());
+  }
+  return dsa::EvaluateObjective(reference.problem, reference_solution).max_peak;
+}
+
+std::string BuildJson(const Options& options, const dsa::DsaProblem& problem,
+                      const dsa::DsaResult& result, std::uint64_t runtime_microseconds,
+                      std::optional<std::uint64_t> reference_peak) {
+  std::ostringstream output;
+  output << '{' << "\"instance\":\"" << JsonEscape(options.input.filename().string()) << "\","
+         << "\"solver\":\"" << JsonEscape(options.solver) << "\","
+         << "\"status\":\"" << dsa::ToString(result.status) << "\","
+         << "\"buffers\":" << problem.buffers.size() << ','
+         << "\"peak\":" << result.objective.max_peak << ','
+         << "\"total_peak\":" << result.objective.total_peak << ','
+         << "\"reuse_cost\":" << result.objective.reuse_cost << ','
+         << "\"runtime_us\":" << runtime_microseconds << ','
+         << "\"seed\":" << options.local_search.seed;
+  if (reference_peak) {
+    const long double gap = static_cast<long double>(result.objective.max_peak) -
+                            static_cast<long double>(*reference_peak);
+    const long double gap_percent = *reference_peak == 0 ? 0 : 100.0L * gap / *reference_peak;
+    output << ",\"reference_peak\":" << *reference_peak << ",\"gap_bytes\":" << std::fixed
+           << std::setprecision(0) << gap << ",\"gap_percent\":" << std::setprecision(6)
+           << gap_percent;
+  }
+  output << '}';
+  return output.str();
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  try {
+    const Options options = ParseOptions(argc, argv);
+    dsa::MiniMallocDocument document = dsa::ReadMiniMallocCsvFile(options.input);
+    if (options.capacity) document.problem.pools.front().capacity = options.capacity;
+
+    std::unique_ptr<dsa::DsaSolver> solver;
+    if (options.solver == "local-search") {
+      solver = std::make_unique<dsa::LocalSearchSolver>(options.local_search);
+    } else {
+      solver = std::make_unique<dsa::FirstFitSolver>();
+    }
+
+    const auto started = std::chrono::steady_clock::now();
+    const dsa::DsaResult result = solver->Solve(document.problem);
+    const auto stopped = std::chrono::steady_clock::now();
+    const auto runtime = std::chrono::duration_cast<std::chrono::microseconds>(stopped - started);
+
+    if (result.solution) {
+      const dsa::DsaProblem validation_problem = [&] {
+        dsa::DsaProblem copy = document.problem;
+        if (result.status == dsa::SolveStatus::kBestEffortNoFit) {
+          for (dsa::Pool& pool : copy.pools) pool.capacity.reset();
+        }
+        return copy;
+      }();
+      const std::vector<std::string> validation =
+          dsa::ValidateSolution(validation_problem, *result.solution);
+      if (!validation.empty()) {
+        throw std::runtime_error("solver returned an invalid solution: " + validation.front());
+      }
+      if (options.output) {
+        dsa::WriteMiniMallocCsvFile(*options.output, document.problem, &*result.solution);
+      }
+    }
+
+    const std::string json =
+        BuildJson(options, document.problem, result, static_cast<std::uint64_t>(runtime.count()),
+                  ReferencePeak(options, document.problem));
+    std::cout << json << '\n';
+    if (options.json_output) {
+      std::ofstream output(*options.json_output);
+      if (!output)
+        throw std::runtime_error("cannot open JSON output: " + options.json_output->string());
+      output << json << '\n';
+    }
+    return result.status == dsa::SolveStatus::kFeasible ? 0 : 2;
+  } catch (const std::exception& error) {
+    std::cerr << "dsa-bench: " << error.what() << '\n';
+    return 1;
+  }
+}
