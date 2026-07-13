@@ -57,8 +57,9 @@ void WriteStructuredProblemJsonFile(const std::filesystem::path& path,
 // Produce one sound standard-DSA lower-bound document per fixed pool. Hard
 // compiler constraints, alignment, reserved ranges, cost overlays, and
 // cross-interval identity are relaxed explicitly and listed in
-// relaxed_features. Temporal exclusions and flexible pool assignment cannot be
-// projected soundly by schema v1 and are rejected.
+// relaxed_features. Temporal exclusions, colocations, overlapping intervals of
+// one buffer, and flexible pool assignment cannot be projected soundly by
+// schema v1 and are rejected.
 [[nodiscard]] std::vector<StructuredProblemDocument> BuildCoreRelaxations(
     const StructuredProblemDocument& source);
 

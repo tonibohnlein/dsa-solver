@@ -99,29 +99,50 @@ DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
   std::vector<BufferId> seed_order = detail::DefaultPlacementOrder(problem);
   DsaResult best = detail::PlaceWithOrder(problem, seed_order);
   if (best.status == SolveStatus::kInvalidProblem || best.status == SolveStatus::kUnsupported ||
-      best.status == SolveStatus::kInfeasibleProven || seed_order.size() < 2 ||
-      options_.max_iterations == 0 || options_.restarts == 0) {
+      best.status == SolveStatus::kInfeasibleProven) {
     return best;
   }
 
   std::vector<BufferId> best_order = seed_order;
   Score best_score = ResultScore(problem, best);
-  std::mt19937_64 random(options_.seed);
-  const std::size_t iterations_per_restart =
-      std::max<std::size_t>(1, options_.max_iterations / options_.restarts);
   std::size_t evaluated = 1;
+  if (seed_order.size() < 2 || options_.max_iterations <= 1 || options_.restarts == 0) {
+    best.diagnostics.push_back("local search evaluated 1 placement order with seed " +
+                               std::to_string(options_.seed));
+    return best;
+  }
 
-  for (std::size_t restart = 0; restart < options_.restarts; ++restart) {
+  std::mt19937_64 random(options_.seed);
+  auto update_best = [&](const DsaResult& result, const std::vector<BufferId>& order,
+                         const Score& score) {
+    if (score < best_score) {
+      best = result;
+      best_order = order;
+      best_score = score;
+    }
+  };
+
+  for (std::size_t restart = 0; restart < options_.restarts && evaluated < options_.max_iterations;
+       ++restart) {
+    const std::size_t remaining_restarts = options_.restarts - restart;
+    const std::size_t remaining_budget = options_.max_iterations - evaluated;
+    const std::size_t restart_budget = remaining_budget / remaining_restarts +
+                                       (remaining_budget % remaining_restarts == 0 ? 0 : 1);
+    const std::size_t restart_end = evaluated + restart_budget;
     std::vector<BufferId> current_order = restart == 0 ? seed_order : best_order;
+    DsaResult current = best;
+    Score current_score = best_score;
     if (restart != 0) {
       const std::size_t perturbations = std::max<std::size_t>(2, current_order.size() / 8);
       for (std::size_t i = 0; i < perturbations; ++i) ApplyRandomMove(&current_order, &random);
+      current = detail::PlaceWithOrder(problem, current_order);
+      ++evaluated;
+      current_score = ResultScore(problem, current);
+      update_best(current, current_order, current_score);
     }
-    DsaResult current = detail::PlaceWithOrder(problem, current_order);
-    Score current_score = ResultScore(problem, current);
     std::size_t stagnation = 0;
 
-    for (std::size_t iteration = 0; iteration < iterations_per_restart; ++iteration) {
+    while (evaluated < restart_end) {
       std::vector<BufferId> candidate_order = current_order;
       ApplyRandomMove(&candidate_order, &random);
       DsaResult candidate = detail::PlaceWithOrder(problem, candidate_order);
@@ -132,21 +153,20 @@ DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
         current_order = std::move(candidate_order);
         current_score = candidate_score;
         stagnation = 0;
-        if (current_score < best_score) {
-          best = current;
-          best_order = current_order;
-          best_score = current_score;
-        }
+        update_best(current, current_order, current_score);
       } else {
         ++stagnation;
       }
 
-      if (options_.stagnation_limit != 0 && stagnation >= options_.stagnation_limit) {
+      if (options_.stagnation_limit != 0 && stagnation >= options_.stagnation_limit &&
+          evaluated < restart_end) {
         current_order = best_order;
         const std::size_t perturbations = std::max<std::size_t>(2, current_order.size() / 10);
         for (std::size_t i = 0; i < perturbations; ++i) ApplyRandomMove(&current_order, &random);
         current = detail::PlaceWithOrder(problem, current_order);
+        ++evaluated;
         current_score = ResultScore(problem, current);
+        update_best(current, current_order, current_score);
         stagnation = 0;
       }
     }

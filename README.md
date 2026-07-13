@@ -139,8 +139,10 @@ the original problem, including pool capacities.
 The runner invokes MiniMalloc's capacity-minimization mode. A completed run is marked `optimal`; a
 budget exhaustion is marked `timeout` or `timeout_with_upper_bound` and is never used as a certified
 optimality gap. On PyPTO inputs, MiniMalloc runs only on generated per-pool core relaxations. Those
-results are reported as lower bounds only when the relaxation optimum is certified, never as valid
-structured placements. See the checked-in [baseline snapshot](benchmarks/results/baseline/report.md).
+results are reported as lower bounds only when the projection is sound and the relaxation optimum is
+certified, never as valid structured placements. Schema v1 declines the lower-bound column for temporal
+exclusions, flexible pool assignment, colocations, or overlapping intervals within one buffer. See the
+checked-in [baseline snapshot](benchmarks/results/baseline/report.md).
 
 ## Model boundary
 

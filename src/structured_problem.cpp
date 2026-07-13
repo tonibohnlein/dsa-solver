@@ -154,10 +154,23 @@ std::vector<StructuredProblemDocument> BuildCoreRelaxations(
     throw std::invalid_argument(
         "schema v1 cannot soundly project temporal exclusions to interval-only standard DSA");
   }
+  if (!source.problem.colocations.empty()) {
+    throw std::invalid_argument(
+        "schema v1 cannot soundly project colocations to independent standard DSA rows");
+  }
   for (const Buffer& buffer : source.problem.buffers) {
     if (buffer.allowed_pools.size() != 1) {
       throw std::invalid_argument(
           "schema v1 cannot soundly project flexible pool assignment to standard DSA");
+    }
+    for (std::size_t first = 0; first < buffer.live_intervals.size(); ++first) {
+      for (std::size_t second = first + 1; second < buffer.live_intervals.size(); ++second) {
+        if (buffer.live_intervals[first].Overlaps(buffer.live_intervals[second])) {
+          throw std::invalid_argument("schema v1 cannot split overlapping intervals of buffer " +
+                                      std::to_string(buffer.id) +
+                                      " into independent standard DSA rows");
+        }
+      }
     }
   }
 

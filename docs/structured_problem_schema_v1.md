@@ -186,14 +186,19 @@ A standard-DSA lower-bound problem derived from one fixed pool of a structured d
 - resets the objective to peak minimization;
 - records every removed feature and source pool in the envelope.
 
-Removing constraints and cross-interval identity enlarges the feasible set, so the resulting peak is a
-lower bound. It must never be presented as a valid PyPTO placement.
+For the accepted subset, removing constraints and non-overlapping cross-interval identity enlarges the
+feasible set, so the resulting peak is a lower bound. It must never be presented as a valid PyPTO
+placement.
 
-Schema v1 rejects two projections rather than making an unsound claim:
+Schema v1 rejects four projections rather than making an unsound claim:
 
 - flexible pool assignment, because selecting a pool before solving may strengthen the problem;
 - temporal exclusions, because arbitrary path-exclusion graphs cannot be represented faithfully by one
   interval per MiniMalloc row.
+- colocations, because turning simultaneously-live colocated buffers into independent rows can increase
+  the relaxed peak;
+- overlapping intervals belonging to one buffer, because splitting them creates multiple simultaneously
+  live allocations where the source requires only one allocation.
 
 ## Capability matching
 

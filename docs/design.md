@@ -39,9 +39,10 @@ One runner serves three claims that must remain distinct:
 - `pypto_core_relaxation`: a named, per-pool standard relaxation used only as a lower bound.
 
 The relaxation is generated rather than hand-authored. Its envelope records the source instance, source
-pool, and every removed feature. Schema v1 refuses temporal exclusions and flexible pool assignment
-because converting either to interval-only MiniMalloc rows can accidentally strengthen the problem and
-invalidate the lower-bound claim.
+pool, and every removed feature. Schema v1 refuses temporal exclusions, colocations, overlapping
+intervals within one buffer, and flexible pool assignment because converting any of them to independent
+interval-only MiniMalloc rows can accidentally strengthen the problem and invalidate the lower-bound
+claim.
 
 ## Capability and objective contracts
 
@@ -88,8 +89,10 @@ and the deterministic evaluator used by ordering-based local search.
 ## Local-search baseline
 
 The first local-search solver explores permutations using swap, insertion, and range-reversal moves. It
-uses deterministic seeded restarts and perturbation after stagnation. The best first-fit result remains
-the floor, so search cannot return a worse solution than the baseline.
+uses deterministic seeded restarts and perturbation after stagnation. Restart initialization, ordinary
+moves, and repair decodes share one global decoder-evaluation budget (including initialization), and
+every decoded placement is compared with the global best. The best first-fit result remains the floor,
+so search cannot return a worse solution than the baseline.
 
 Two lexicographic objectives are available:
 

@@ -260,6 +260,26 @@ void TestLocalSearchClosesOrderingGap() {
           "local search is not deterministic for a fixed seed");
 }
 
+void TestLocalSearchUsesGlobalEvaluationBudget() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{5, 7}}, 5), MakeBuffer(1, {{0, 7}}, 2), MakeBuffer(2, {{4, 10}}, 2),
+      MakeBuffer(3, {{4, 6}}, 2), MakeBuffer(4, {{2, 4}}, 6),
+  };
+  dsa::LocalSearchOptions options;
+  options.seed = 7;
+  options.max_iterations = 2;
+  options.restarts = 100;
+  options.stagnation_limit = 1;
+  const dsa::DsaResult result = SolveAndValidate(problem, dsa::LocalSearchSolver(options));
+  Require(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                      [](const std::string& diagnostic) {
+                        return diagnostic.find("local search evaluated 2 placement orders") !=
+                               std::string::npos;
+                      }),
+          "local search did not enforce or report its global decoder budget");
+}
+
 void TestTvmHillClimbClosesOrderingGap() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -481,6 +501,26 @@ void TestCoreRelaxationProfiles() {
     rejected = true;
   }
   Require(rejected, "unsound temporal-exclusion projection was silently accepted");
+
+  unsupported = source;
+  unsupported.problem.colocations.push_back({0, 1});
+  rejected = false;
+  try {
+    static_cast<void>(dsa::BuildCoreRelaxations(unsupported));
+  } catch (const std::invalid_argument&) {
+    rejected = true;
+  }
+  Require(rejected, "unsound colocation projection was silently accepted");
+
+  unsupported = source;
+  unsupported.problem.buffers[0].live_intervals = {{0, 3}, {2, 5}};
+  rejected = false;
+  try {
+    static_cast<void>(dsa::BuildCoreRelaxations(unsupported));
+  } catch (const std::invalid_argument&) {
+    rejected = true;
+  }
+  Require(rejected, "unsound overlapping-interval split was silently accepted");
 }
 
 void TestSolverCapabilityMatching() {
@@ -556,6 +596,7 @@ int main() {
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"local search", TestLocalSearchClosesOrderingGap},
+      {"local search budget", TestLocalSearchUsesGlobalEvaluationBudget},
       {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},
       {"structured JSON", TestStructuredJsonRoundTripAndProfiles},
       {"PyPTO exported corpus", TestPyptoExportedCorpus},

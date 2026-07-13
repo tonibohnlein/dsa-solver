@@ -10,6 +10,8 @@ namespace dsa {
 
 struct LocalSearchOptions {
   std::uint64_t seed = 0;
+  // Global placement-order decoder evaluation budget, including deterministic
+  // first-fit initialization. Zero disables search and returns that baseline.
   std::size_t max_iterations = 20'000;
   std::size_t restarts = 8;
   std::size_t stagnation_limit = 500;
@@ -17,7 +19,9 @@ struct LocalSearchOptions {
 
 // Iterated local search over placement orderings. It starts from the
 // deterministic first-fit order, explores swap/insert/reverse neighborhoods,
-// and uses seeded perturbation/restarts to escape local minima. This is a solid
+// and uses seeded perturbation/restarts to escape local minima. Restart starts
+// and stagnation repairs consume the same global candidate-evaluation budget.
+// This is a solid
 // ordering-search baseline; placement-level neighborhoods can be added behind
 // the same DsaSolver interface.
 class LocalSearchSolver final : public DsaSolver {
