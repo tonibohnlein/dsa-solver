@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -12,12 +13,17 @@
 #include "dsa/first_fit_solver.h"
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
+#include "dsa/structured_problem.h"
 #include "dsa/validator.h"
 
 namespace {
 
 void Require(bool condition, const std::string& message) {
   if (!condition) throw std::runtime_error(message);
+}
+
+bool Contains(const std::vector<std::string>& values, std::string_view expected) {
+  return std::find(values.begin(), values.end(), expected) != values.end();
 }
 
 dsa::Buffer MakeBuffer(dsa::BufferId id, std::vector<dsa::Interval> intervals, std::uint64_t size) {
@@ -80,6 +86,16 @@ void TestMiniMallocCsv() {
       ValueOrThrow(roundtrip.solution, "solution CSV round-trip lost offsets");
   Require(dsa::EvaluateObjective(roundtrip.problem, roundtrip_solution).max_peak == 12,
           "solution CSV round-trip changed height");
+
+  dsa::StructuredProblemDocument standard;
+  standard.profile = dsa::BenchmarkProfile::kStandardDsa;
+  standard.instance = "minimalloc_example";
+  standard.problem = roundtrip.problem;
+  Require(dsa::ValidateStructuredProblemDocument(standard).empty(),
+          "MiniMalloc input should satisfy the standard profile");
+  standard.problem.separations.push_back({0, 1});
+  Require(!dsa::ValidateStructuredProblemDocument(standard).empty(),
+          "standard profile silently accepted a compiler-only constraint");
 }
 
 void TestFirstFitSubdividesFreedRegion() {
@@ -188,13 +204,13 @@ void TestFitCostObjectiveAvoidsExpensiveReuse() {
   const dsa::DsaResult baseline = SolveAndValidate(problem, dsa::FirstFitSolver());
   Require(baseline.objective.max_peak == 14 && baseline.objective.reuse_cost == 100,
           "reuse-cost witness no longer exercises the expensive baseline reuse");
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
 
   dsa::LocalSearchOptions options;
   options.seed = 11;
   options.max_iterations = 2'000;
   options.restarts = 4;
   options.stagnation_limit = 100;
-  options.objective = dsa::LocalSearchObjective::kFitThenMinimizeReuseCost;
   const dsa::DsaResult result = SolveAndValidate(problem, dsa::LocalSearchSolver(options));
   Require(result.objective.max_peak <= 14 && result.objective.reuse_cost == 0,
           "fit-cost local search did not avoid the expensive reuse edge");
@@ -220,6 +236,143 @@ void TestLocalSearchClosesOrderingGap() {
   Require(first.objective.max_peak == 11, "local search did not close the first-fit ordering gap");
   Require(SolutionOrThrow(first).placements == SolutionOrThrow(second).placements,
           "local search is not deterministic for a fixed seed");
+}
+
+dsa::StructuredProblemDocument MakeStructuredDocument() {
+  dsa::StructuredProblemDocument document;
+  document.profile = dsa::BenchmarkProfile::kPyptoStructured;
+  document.instance = "pypto_fixture";
+  document.metadata = {{"kernel", "fixture"}, {"target", "ascend910b"}};
+  document.problem.pools = {
+      {3, "L1", 128, {{0, 16}}, dsa::BankGeometry{16, 8}},
+      {4, "L0B", 64, {}, std::nullopt},
+  };
+  document.problem.buffers = {
+      MakeBuffer(0, {{0, 2}, {4, 6}}, 32),
+      MakeBuffer(1, {{2, 4}}, 16),
+      MakeBuffer(2, {{0, 6}}, 16),
+  };
+  document.problem.buffers[0].alignment = 16;
+  document.problem.buffers[0].allowed_pools = {3};
+  document.problem.buffers[1].alignment = 16;
+  document.problem.buffers[1].allowed_pools = {3};
+  document.problem.buffers[2].alignment = 16;
+  document.problem.buffers[2].allowed_pools = {4};
+  document.problem.separations.push_back({0, 1});
+  document.problem.pinned_allocations.push_back({2, 4, 0, false});
+  dsa::CostModel cost_model;
+  cost_model.reuse_penalties.push_back({0, 1, 25, dsa::ReusePenaltyReason::kCrossPipe});
+  document.problem.cost_model = std::move(cost_model);
+  document.problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+  return document;
+}
+
+void TestStructuredJsonRoundTripAndProfiles() {
+  const dsa::StructuredProblemDocument original = MakeStructuredDocument();
+  Require(dsa::ValidateStructuredProblemDocument(original).empty(),
+          "structured fixture should validate");
+
+  std::ostringstream output;
+  dsa::WriteStructuredProblemJson(output, original);
+  std::istringstream input(output.str());
+  const dsa::StructuredProblemDocument parsed = dsa::ReadStructuredProblemJson(input);
+  Require(parsed.schema_version == dsa::kStructuredProblemSchemaVersion,
+          "structured schema version did not round-trip");
+  Require(parsed.profile == dsa::BenchmarkProfile::kPyptoStructured,
+          "structured profile did not round-trip");
+  Require(parsed.problem.buffers.size() == 3 && parsed.problem.pools.size() == 2,
+          "structured core did not round-trip");
+  Require(parsed.problem.buffers.front().live_intervals.size() == 2,
+          "multi-interval liveness did not round-trip");
+  Require(parsed.problem.separations.size() == 1 && parsed.problem.pinned_allocations.size() == 1,
+          "structured constraints did not round-trip");
+  Require(
+      parsed.problem.cost_model && parsed.problem.cost_model->reuse_penalties.front().cost == 25,
+      "structured cost model did not round-trip");
+  Require(parsed.problem.objective.terms == dsa::FitThenMinimizeReuseCostObjective().terms,
+          "structured objective did not round-trip");
+
+  std::string unknown_field = output.str();
+  unknown_field.insert(unknown_field.find('{') + 1, "\n  \"unexpected\": true,");
+  std::istringstream unknown_input(unknown_field);
+  bool rejected = false;
+  try {
+    static_cast<void>(dsa::ReadStructuredProblemJson(unknown_input));
+  } catch (const std::runtime_error&) {
+    rejected = true;
+  }
+  Require(rejected, "schema-v1 reader silently accepted an unknown field");
+}
+
+void TestCoreRelaxationProfiles() {
+  const dsa::StructuredProblemDocument source = MakeStructuredDocument();
+  const std::vector<dsa::StructuredProblemDocument> relaxations = dsa::BuildCoreRelaxations(source);
+  Require(relaxations.size() == 2, "one core relaxation was not produced per fixed pool");
+
+  const auto l1 = std::find_if(relaxations.begin(), relaxations.end(), [](const auto& document) {
+    return document.metadata.at("source_pool_id") == "3";
+  });
+  Require(l1 != relaxations.end(), "L1 core relaxation is missing");
+  Require(l1->profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation &&
+              l1->relaxed_from == source.instance,
+          "core-relaxation provenance is missing");
+  Require(l1->problem.buffers.size() == 3,
+          "multi-interval buffer was not split into independent standard rows");
+  Require(Contains(l1->relaxed_features, "multi_interval_identity") &&
+              Contains(l1->relaxed_features, "reserved_ranges") &&
+              Contains(l1->relaxed_features, "separations"),
+          "core relaxation did not disclose removed structure");
+  Require(dsa::ValidateStructuredProblemDocument(*l1).empty(),
+          "generated core relaxation is not standard-profile compatible");
+  std::ostringstream serialized;
+  dsa::WriteStructuredProblemJson(serialized, *l1);
+  std::istringstream serialized_input(serialized.str());
+  const dsa::StructuredProblemDocument reparsed = dsa::ReadStructuredProblemJson(serialized_input);
+  Require(reparsed.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation &&
+              reparsed.relaxed_features == l1->relaxed_features,
+          "core-relaxation provenance did not round-trip");
+  const dsa::DsaResult result = SolveAndValidate(l1->problem, dsa::FirstFitSolver());
+  Require(result.objective.max_peak > 0, "core relaxation did not execute");
+
+  dsa::StructuredProblemDocument unsupported = source;
+  unsupported.problem.temporal_exclusions.push_back({0, 1});
+  bool rejected = false;
+  try {
+    static_cast<void>(dsa::BuildCoreRelaxations(unsupported));
+  } catch (const std::invalid_argument&) {
+    rejected = true;
+  }
+  Require(rejected, "unsound temporal-exclusion projection was silently accepted");
+}
+
+void TestSolverCapabilityMatching() {
+  const dsa::StructuredProblemDocument document = MakeStructuredDocument();
+  const dsa::FirstFitSolver first_fit;
+  const dsa::SolverCompatibility first_fit_match =
+      dsa::CheckSolverCompatibility(document.problem, first_fit.Capabilities());
+  Require(first_fit_match.StructurallyCompatible(),
+          "first-fit should support the fixture's hard constraints");
+  Require(!first_fit_match.ObjectiveCompatible() &&
+              Contains(first_fit_match.unsupported_objectives, "metric:reuse_cost"),
+          "first-fit did not disclose its unsupported reuse objective");
+  const dsa::DsaResult baseline = first_fit.Solve(document.problem);
+  Require(baseline.status == dsa::SolveStatus::kFeasible && !baseline.diagnostics.empty(),
+          "first-fit did not provide a disclosed structural baseline");
+
+  const dsa::LocalSearchSolver local_search;
+  const dsa::SolverCompatibility local_match =
+      dsa::CheckSolverCompatibility(document.problem, local_search.Capabilities());
+  Require(local_match.Compatible(), "local search should match the structured fixture");
+  Require(local_search.Solve(document.problem).status == dsa::SolveStatus::kFeasible,
+          "compatible local search did not run");
+
+  dsa::DsaProblem bank_objective = document.problem;
+  bank_objective.objective.terms = {dsa::ObjectiveMetric::kBankCost};
+  const dsa::SolverCompatibility bank_match =
+      dsa::CheckSolverCompatibility(bank_objective, local_search.Capabilities());
+  Require(!bank_match.ObjectiveCompatible() &&
+              Contains(bank_match.unsupported_objectives, "metric:bank_cost"),
+          "unimplemented bank objective was silently advertised");
 }
 
 void TestInvalidProblemIsReported() {
@@ -257,6 +410,9 @@ int main() {
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"local search", TestLocalSearchClosesOrderingGap},
+      {"structured JSON", TestStructuredJsonRoundTripAndProfiles},
+      {"core relaxation", TestCoreRelaxationProfiles},
+      {"solver capabilities", TestSolverCapabilityMatching},
       {"invalid problem", TestInvalidProblemIsReported},
       {"flexible pools", TestFlexiblePoolAssignmentIsExplicitlyUnsupported},
   };

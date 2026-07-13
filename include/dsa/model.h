@@ -87,7 +87,7 @@ struct PinnedAllocation {
   bool exclusive_for_all_time = false;
 };
 
-enum class ReusePenaltyReason {
+enum class ReusePenaltyReason : std::uint8_t {
   kGeneric,
   kCrossPipe,
   kCrossCore,
@@ -103,9 +103,28 @@ struct ReusePenalty {
 
 struct CostModel {
   std::vector<ReusePenalty> reuse_penalties;
-  double reuse_weight = 1.0;
-  double bank_weight = 0.0;
-  double peak_slack_weight = 0.0;
+};
+
+// Objective components are recorded separately rather than prematurely
+// scalarized. A solver evaluates them in the listed order.
+enum class ObjectiveMetric : std::uint8_t {
+  kCapacityOverflow,
+  kTotalPeak,
+  kMaxPeak,
+  kReuseCost,
+  kBankCost,
+};
+
+enum class ObjectiveAggregation : std::uint8_t {
+  // Compare the first differing metric. This is the only aggregation supported
+  // by schema v1; future schema versions can add weighted/Pareto modes without
+  // changing the meaning of existing documents.
+  kLexicographic,
+};
+
+struct ObjectiveSpec {
+  ObjectiveAggregation aggregation = ObjectiveAggregation::kLexicographic;
+  std::vector<ObjectiveMetric> terms{ObjectiveMetric::kTotalPeak, ObjectiveMetric::kMaxPeak};
 };
 
 // Portable DSA problem plus optional compiler-specific structure. MiniMalloc
@@ -120,6 +139,7 @@ struct DsaProblem {
   std::vector<TemporalExclusion> temporal_exclusions;
   std::vector<PinnedAllocation> pinned_allocations;
   std::optional<CostModel> cost_model;
+  ObjectiveSpec objective;
 
   [[nodiscard]] const Buffer* FindBuffer(BufferId id) const noexcept;
   [[nodiscard]] const Pool* FindPool(PoolId id) const noexcept;
@@ -149,7 +169,7 @@ struct ObjectiveValue {
   std::uint64_t bank_cost = 0;
 };
 
-enum class SolveStatus {
+enum class SolveStatus : std::uint8_t {
   kFeasible,
   kInfeasibleProven,
   kBestEffortNoFit,
@@ -166,6 +186,11 @@ struct DsaResult {
 };
 
 [[nodiscard]] const char* ToString(SolveStatus status) noexcept;
+[[nodiscard]] const char* ToString(ObjectiveMetric metric) noexcept;
+[[nodiscard]] const char* ToString(ObjectiveAggregation aggregation) noexcept;
+
+[[nodiscard]] ObjectiveSpec MinimizePeakObjective();
+[[nodiscard]] ObjectiveSpec FitThenMinimizeReuseCostObjective();
 
 }  // namespace dsa
 

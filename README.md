@@ -22,6 +22,9 @@ making it public.
 - A seeded iterated local-search baseline over first-fit placement orderings.
 - Native MiniMalloc input/output CSV support (`id,lower,upper,size[,offset]`).
 - A `dsa-bench` CLI with JSON results and reference-solution comparison.
+- Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
+- Explicit standard, PyPTO-structured, and sound core-relaxation benchmark profiles.
+- Central solver capability matching for hard features and requested objective terms.
 - Google MiniMalloc pinned as a submodule, including the official A–K corpus and exact C++ solver.
 - CMake install/export support for later `find_package` or `add_subdirectory` use from PyPTO.
 
@@ -58,7 +61,33 @@ ctest --test-dir build --output-on-failure
 ```
 
 The CLI writes one JSON record to stdout. Important fields are `peak`, `runtime_us`, `status`, and—when a
-reference output is supplied—`reference_peak`, `gap_bytes`, and `gap_percent`.
+reference output is supplied—`reference_peak`, `gap_bytes`, and `gap_percent`. Results also identify the
+benchmark profile, objective vector, required features, and any capability mismatch.
+
+## Run a structured compiler instance
+
+Schema-v1 JSON carries the full portable problem, including pools, multi-interval liveness, hard
+constraints, pins, cost overlays, and a lexicographic objective:
+
+```bash
+./build/dsa-bench \
+  --input tests/data/pypto_structured_v1.json \
+  --solver local-search \
+  --seed 7 \
+  --iterations 20000
+```
+
+Run the explicitly relaxed standard-DSA lower bound for one source pool:
+
+```bash
+./build/dsa-bench \
+  --input tests/data/pypto_structured_v1.json \
+  --core-relaxation-pool 3 \
+  --solver first-fit
+```
+
+The relaxation strips compiler constraints and records each removed feature in the result. It is a lower
+bound, not a valid PyPTO placement. See [the schema-v1 contract](docs/structured_problem_schema_v1.md).
 
 ## Compare with MiniMalloc
 
@@ -104,16 +133,17 @@ The core model intentionally carries more structure than MiniMalloc CSV can enco
 | Branch/phi exclusivity | `TemporalExclusion` | yes | yes |
 | Pinned allocation | `PinnedAllocation` | yes | yes |
 | Reserved address holes | `Pool::reserved_ranges` | yes | yes |
-| Reuse/synchronization cost | `CostModel::reuse_penalties` | measured | optimized in fit-cost mode |
+| Reuse/synchronization cost | `CostModel::reuse_penalties` | reported baseline | optimized when requested |
 | Bank geometry/cost | `Pool::bank_geometry` | represented only | represented only |
 
-Every solver advertises capabilities. Unsupported structure produces `kUnsupported`; it is not silently
-dropped.
+Every solver advertises capabilities. Unsupported hard structure produces `kUnsupported`; it is not
+silently dropped. Objective-only mismatches are reported separately: first-fit can remain a disclosed
+structural baseline, while a search solver rejects metrics it cannot use for candidate ranking.
 
-## Planned benchmark milestones
+## Next benchmark milestones
 
-1. Pin MiniMalloc and ingest its `benchmarks/challenging` A–K corpus.
-2. Add suite-level repeated runs, exact-capacity search, timeouts, and JSONL/CSV aggregation.
-3. Export real PyPTO allocation problems into the same model.
+1. Add suite-level repeated runs, exact-capacity search, timeouts, and JSONL/CSV aggregation.
+2. Add a PyPTO-owned exporter/adapter for schema-v1 structured problems.
+3. Model capacity-driven pipeline-depth choices rather than only fixed pairwise separations.
 4. Add lower-bound and additional heuristic baselines.
 5. Implement placement-aware large-neighborhood search with reproducible ablations.

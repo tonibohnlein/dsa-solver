@@ -1,0 +1,175 @@
+# Structured problem schema v1
+
+The structured JSON format is the replay boundary between compiler adapters and the standalone solver
+framework. A compiler emits portable data; this repository never depends on compiler IR types.
+
+```text
+PyPTO IR -> PyPTO adapter -> schema-v1 JSON / DsaProblem -> solver + validator
+```
+
+The C++ envelope is `dsa::StructuredProblemDocument`; the machine-readable contract is
+[`schemas/dsa-problem-v1.schema.json`](../schemas/dsa-problem-v1.schema.json). JSON readers reject unknown
+schema versions so a document's semantics cannot change silently.
+
+## Top-level envelope
+
+```json
+{
+  "schema_version": 1,
+  "profile": "pypto_structured",
+  "instance": "kernel_name",
+  "metadata": {
+    "target": "ascend910b"
+  },
+  "problem": {}
+}
+```
+
+Fields:
+
+- `schema_version`: exactly `1` for this document.
+- `profile`: one of `standard_dsa`, `pypto_structured`, or `pypto_core_relaxation`.
+- `instance`: stable benchmark-instance name.
+- `metadata`: optional string-to-string provenance. It does not affect feasibility.
+- `relaxed_from`: required for `pypto_core_relaxation`, forbidden for the other profiles.
+- `relaxed_features`: structure deliberately removed by a core relaxation.
+- `problem`: the solver-independent DSA problem.
+
+## Problem core
+
+```json
+{
+  "pools": [
+    {
+      "id": 3,
+      "name": "L1",
+      "capacity": 1048576,
+      "reserved_ranges": [{"begin": 0, "end": 4096}],
+      "bank_geometry": {"bank_size": 256, "num_banks": 16}
+    }
+  ],
+  "buffers": [
+    {
+      "id": 7,
+      "name": "lhs_tile",
+      "size": 32768,
+      "alignment": 512,
+      "live_intervals": [{"lower": 10, "upper": 20}],
+      "allowed_pools": [3]
+    }
+  ],
+  "constraints": {
+    "colocations": [],
+    "separations": [],
+    "temporal_exclusions": [],
+    "pinned_allocations": []
+  },
+  "objective": {
+    "aggregation": "lexicographic",
+    "terms": ["capacity_overflow", "total_peak", "max_peak"]
+  }
+}
+```
+
+All intervals and address ranges are half-open. Unsigned byte quantities must be JSON integers; floating
+point and negative representations are rejected.
+
+`allowed_pools` with one entry is a fixed placement space. Multiple entries represent flexible pool
+assignment, which is part of the portable model but currently unsupported by the built-in solvers.
+
+### Hard constraints
+
+- `colocations`: `{first, second}` pairs that must receive exactly the same pool and offset.
+- `separations`: pairs whose byte ranges must not overlap even if their lifetimes are disjoint.
+- `temporal_exclusions`: pairs proven unable to coexist on one control-flow path despite overlapping
+  conservative intervals.
+- `pinned_allocations`: `{buffer, pool, offset, exclusive_for_all_time}` records.
+
+Reserved ranges are pool-level hard constraints. Bank geometry is descriptive until a requested objective
+and solver both support bank cost.
+
+### Cost overlay
+
+The optional cost model currently carries pairwise reuse penalties:
+
+```json
+{
+  "cost_model": {
+    "reuse_penalties": [
+      {"first": 1, "second": 2, "cost": 40, "reason": "cross_pipe"}
+    ]
+  }
+}
+```
+
+Reasons are `generic`, `cross_pipe`, `cross_core`, and `event_budget`. They preserve provenance for
+analysis; the numeric `cost` is what the current objective evaluator consumes.
+
+## Objectives
+
+Schema v1 deliberately supports only lexicographic objective vectors. It does not invent weights between
+bytes, synchronization, events, and bank effects.
+
+Available terms are:
+
+- `capacity_overflow`
+- `total_peak`
+- `max_peak`
+- `reuse_cost`
+- `bank_cost`
+
+Terms are compared in their listed order. Every raw component is also reported by `dsa-bench`. Weighted
+and Pareto objectives require a future schema version with explicit semantics.
+
+## Benchmark profiles
+
+### `standard_dsa`
+
+Directly comparable with MiniMalloc:
+
+- exactly one pool;
+- one interval and one fixed pool per buffer;
+- alignment one;
+- no reserved ranges, banks, compiler constraints, pins, or cost overlay;
+- only capacity and peak objective terms.
+
+MiniMalloc CSV input is wrapped in this profile internally.
+
+### `pypto_structured`
+
+Carries the full portable structure emitted by a future PyPTO adapter. A result is valid only when the
+selected solver structurally supports every feature and the independent validator accepts the placement.
+
+### `pypto_core_relaxation`
+
+A standard-DSA lower-bound problem derived from one fixed pool of a structured document. The library:
+
+- partitions fixed pools into independent documents;
+- removes alignment, reservations, banks, pins, colocations, separations, and costs;
+- splits a multi-interval buffer into independent standard rows;
+- resets the objective to peak minimization;
+- records every removed feature and source pool in the envelope.
+
+Removing constraints and cross-interval identity enlarges the feasible set, so the resulting peak is a
+lower bound. It must never be presented as a valid PyPTO placement.
+
+Schema v1 rejects two projections rather than making an unsound claim:
+
+- flexible pool assignment, because selecting a pool before solving may strengthen the problem;
+- temporal exclusions, because arbitrary path-exclusion graphs cannot be represented faithfully by one
+  interval per MiniMalloc row.
+
+## Capability matching
+
+`CheckSolverCompatibility` reports:
+
+- structure present in the problem;
+- hard features the solver cannot honor;
+- requested objective terms the solver does not optimize.
+
+Hard incompatibility produces `kUnsupported`. An objective-only mismatch may still be useful as a
+disclosed structural baseline: first-fit runs and reports `objective_compatible=false`. Search solvers
+whose candidate ranking depends on the requested objective reject unsupported objective terms.
+
+No feature or objective is silently removed. Relaxation is a separate, named profile with explicit
+provenance.

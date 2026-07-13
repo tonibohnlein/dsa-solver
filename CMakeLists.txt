@@ -1,10 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.1.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.2.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+set(DSA_NLOHMANN_JSON_INCLUDE_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/single_include"
+)
+if(NOT EXISTS "${DSA_NLOHMANN_JSON_INCLUDE_DIR}/nlohmann/json.hpp")
+  message(FATAL_ERROR
+    "nlohmann/json submodule is missing; run: git submodule update --init third_party/json"
+  )
+endif()
 
 add_library(dsa_solver
   src/first_fit_solver.cpp
@@ -12,6 +21,9 @@ add_library(dsa_solver
   src/minimalloc_csv.cpp
   src/model.cpp
   src/placement_engine.cpp
+  src/solver.cpp
+  src/structured_json.cpp
+  src/structured_problem.cpp
   src/validator.cpp
 )
 add_library(dsa::solver ALIAS dsa_solver)
@@ -28,6 +40,7 @@ target_include_directories(dsa_solver
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${DSA_NLOHMANN_JSON_INCLUDE_DIR}
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa_solver PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
@@ -79,6 +92,28 @@ if(BUILD_TESTING)
       --solver first-fit
       --reference-output ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example_solution.csv
   )
+  add_test(
+    NAME dsa-cli-structured
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
+      --solver local-search
+      --seed 7
+      --iterations 200
+      --restarts 2
+  )
+  add_test(
+    NAME dsa-cli-core-relaxation
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
+      --core-relaxation-pool 3
+      --solver first-fit
+  )
+  add_test(
+    NAME dsa-cli-capability-report
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
+      --solver first-fit
+  )
 endif()
 
 install(TARGETS dsa_solver dsa-bench
@@ -88,6 +123,10 @@ install(TARGETS dsa_solver dsa-bench
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+  FILES schemas/dsa-problem-v1.schema.json
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/schemas
+)
 
 configure_package_config_file(
   cmake/dsa-solver-config.cmake.in

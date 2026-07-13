@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -18,9 +19,15 @@
 #include "dsa/first_fit_solver.h"
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
+#include "dsa/structured_problem.h"
 #include "dsa/validator.h"
 
 namespace {
+
+enum class ObjectiveOverride : std::uint8_t {
+  kPeak,
+  kFitCost,
+};
 
 struct Options {
   std::filesystem::path input;
@@ -29,6 +36,8 @@ struct Options {
   std::optional<std::filesystem::path> output;
   std::optional<std::filesystem::path> json_output;
   std::optional<std::filesystem::path> reference_output;
+  std::optional<dsa::PoolId> core_relaxation_pool;
+  std::optional<ObjectiveOverride> objective_override;
   dsa::LocalSearchOptions local_search;
 };
 
@@ -46,18 +55,19 @@ std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
 }
 
 void PrintHelp() {
-  std::cout << "Usage: dsa-bench --input INSTANCE.csv [options]\n\n"
+  std::cout << "Usage: dsa-bench --input INSTANCE.{csv,json} [options]\n\n"
             << "Options:\n"
             << "  --solver first-fit|local-search   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
             << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
             << "  --reference-output FILE.csv      Compare with a MiniMalloc solution CSV\n"
             << "  --json-output FILE.json          Also write the JSON result to a file\n"
+            << "  --core-relaxation-pool ID        Run a sound standard relaxation of one pool\n"
             << "  --seed N                         Local-search random seed (default: 0)\n"
             << "  --iterations N                   Local-search evaluations budget\n"
             << "  --restarts N                     Local-search restart count\n"
             << "  --stagnation N                   Iterations before perturbation\n"
-            << "  --objective peak|fit-cost        Local-search objective mode\n"
+            << "  --objective peak|fit-cost        Override the document objective\n"
             << "  --help                           Show this help\n";
 }
 
@@ -86,6 +96,12 @@ Options ParseOptions(int argc, char** argv) {
       options.json_output = std::filesystem::path(next(&i, option));
     } else if (option == "--reference-output") {
       options.reference_output = std::filesystem::path(next(&i, option));
+    } else if (option == "--core-relaxation-pool") {
+      const std::uint64_t value = ParseUnsigned(next(&i, option), option);
+      if (value > std::numeric_limits<dsa::PoolId>::max()) {
+        UsageError(option + " exceeds PoolId range");
+      }
+      options.core_relaxation_pool = static_cast<dsa::PoolId>(value);
     } else if (option == "--seed") {
       options.local_search.seed = ParseUnsigned(next(&i, option), option);
     } else if (option == "--iterations") {
@@ -97,9 +113,9 @@ Options ParseOptions(int argc, char** argv) {
     } else if (option == "--objective") {
       const std::string value(next(&i, option));
       if (value == "peak") {
-        options.local_search.objective = dsa::LocalSearchObjective::kMinimizePeak;
+        options.objective_override = ObjectiveOverride::kPeak;
       } else if (value == "fit-cost") {
-        options.local_search.objective = dsa::LocalSearchObjective::kFitThenMinimizeReuseCost;
+        options.objective_override = ObjectiveOverride::kFitCost;
       } else {
         UsageError("unknown objective '" + value + "'");
       }
@@ -116,7 +132,8 @@ Options ParseOptions(int argc, char** argv) {
 
 std::string JsonEscape(std::string_view value) {
   std::ostringstream output;
-  for (const unsigned char character : value) {
+  for (const char raw_character : value) {
+    const auto character = static_cast<unsigned char>(raw_character);
     switch (character) {
       case '"':
         output << "\\\"";
@@ -143,6 +160,49 @@ std::string JsonEscape(std::string_view value) {
     }
   }
   return output.str();
+}
+
+dsa::StructuredProblemDocument LoadProblemDocument(const Options& options) {
+  dsa::StructuredProblemDocument document;
+  if (options.input.extension() == ".json") {
+    document = dsa::ReadStructuredProblemJsonFile(options.input);
+  } else {
+    dsa::MiniMallocDocument csv = dsa::ReadMiniMallocCsvFile(options.input);
+    document.profile = dsa::BenchmarkProfile::kStandardDsa;
+    document.instance = options.input.filename().string();
+    document.metadata["source_format"] = "minimalloc_csv";
+    document.problem = std::move(csv.problem);
+  }
+
+  if (options.core_relaxation_pool) {
+    const std::vector<dsa::StructuredProblemDocument> relaxations =
+        dsa::BuildCoreRelaxations(document);
+    const std::string requested = std::to_string(*options.core_relaxation_pool);
+    const auto found = std::find_if(
+        relaxations.begin(), relaxations.end(), [&](const dsa::StructuredProblemDocument& value) {
+          const auto pool = value.metadata.find("source_pool_id");
+          return pool != value.metadata.end() && pool->second == requested;
+        });
+    if (found == relaxations.end()) {
+      throw std::runtime_error("structured problem has no fixed pool " + requested + " to relax");
+    }
+    document = *found;
+  }
+
+  if (options.capacity) {
+    if (document.problem.pools.size() != 1) {
+      throw std::runtime_error("--capacity requires a single-pool input or core relaxation");
+    }
+    document.problem.pools.front().capacity = options.capacity;
+  }
+  if (options.objective_override == ObjectiveOverride::kPeak) {
+    document.problem.objective = dsa::MinimizePeakObjective();
+  } else if (options.objective_override == ObjectiveOverride::kFitCost) {
+    document.problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+  }
+  const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(document);
+  if (!errors.empty()) throw std::runtime_error("invalid benchmark profile: " + errors.front());
+  return document;
 }
 
 std::optional<std::uint64_t> ReferencePeak(const Options& options,
@@ -176,19 +236,58 @@ std::optional<std::uint64_t> ReferencePeak(const Options& options,
   return dsa::EvaluateObjective(reference.problem, reference_solution).max_peak;
 }
 
-std::string BuildJson(const Options& options, const dsa::DsaProblem& problem,
-                      const dsa::DsaResult& result, std::uint64_t runtime_microseconds,
+void AppendStringArray(std::ostringstream* output, const std::vector<std::string>& values) {
+  *output << '[';
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (i != 0) *output << ',';
+    *output << '"' << JsonEscape(values[i]) << '"';
+  }
+  *output << ']';
+}
+
+std::string BuildJson(const Options& options, const dsa::StructuredProblemDocument& document,
+                      const dsa::SolverCompatibility& compatibility, const dsa::DsaResult& result,
+                      std::uint64_t runtime_microseconds,
                       std::optional<std::uint64_t> reference_peak) {
+  const dsa::DsaProblem& problem = document.problem;
   std::ostringstream output;
-  output << '{' << "\"instance\":\"" << JsonEscape(options.input.filename().string()) << "\","
+  output << '{' << "\"instance\":\"" << JsonEscape(document.instance) << "\","
+         << "\"schema_version\":" << document.schema_version << ',' << "\"profile\":\""
+         << dsa::ToString(document.profile) << "\","
          << "\"solver\":\"" << JsonEscape(options.solver) << "\","
          << "\"status\":\"" << dsa::ToString(result.status) << "\","
          << "\"buffers\":" << problem.buffers.size() << ','
          << "\"peak\":" << result.objective.max_peak << ','
-         << "\"total_peak\":" << result.objective.total_peak << ','
-         << "\"reuse_cost\":" << result.objective.reuse_cost << ','
+         << "\"total_peak\":" << result.objective.total_peak << ',' << "\"capacity_overflow\":"
+         << dsa::EvaluateObjectiveMetric(problem, result.objective,
+                                         dsa::ObjectiveMetric::kCapacityOverflow)
+         << ',' << "\"reuse_cost\":" << result.objective.reuse_cost << ','
+         << "\"bank_cost\":" << result.objective.bank_cost << ','
          << "\"runtime_us\":" << runtime_microseconds << ','
-         << "\"seed\":" << options.local_search.seed;
+         << "\"seed\":" << options.local_search.seed << ',' << "\"structurally_compatible\":"
+         << (compatibility.StructurallyCompatible() ? "true" : "false") << ','
+         << "\"objective_compatible\":" << (compatibility.ObjectiveCompatible() ? "true" : "false")
+         << ',' << "\"required_features\":";
+  AppendStringArray(&output, compatibility.required_features);
+  output << ",\"unsupported_features\":";
+  AppendStringArray(&output, compatibility.unsupported_features);
+  output << ",\"unsupported_objectives\":";
+  AppendStringArray(&output, compatibility.unsupported_objectives);
+  output << ",\"diagnostics\":";
+  AppendStringArray(&output, result.diagnostics);
+  output << ",\"objective_terms\":[";
+  for (std::size_t i = 0; i < problem.objective.terms.size(); ++i) {
+    if (i != 0) output << ',';
+    output << '"' << dsa::ToString(problem.objective.terms[i]) << '"';
+  }
+  output << ']';
+  if (document.relaxed_from) {
+    output << ",\"relaxed_from\":\"" << JsonEscape(*document.relaxed_from) << '"';
+  }
+  if (!document.relaxed_features.empty()) {
+    output << ",\"relaxed_features\":";
+    AppendStringArray(&output, document.relaxed_features);
+  }
   if (reference_peak) {
     const long double gap = static_cast<long double>(result.objective.max_peak) -
                             static_cast<long double>(*reference_peak);
@@ -206,8 +305,7 @@ std::string BuildJson(const Options& options, const dsa::DsaProblem& problem,
 int main(int argc, char** argv) {
   try {
     const Options options = ParseOptions(argc, argv);
-    dsa::MiniMallocDocument document = dsa::ReadMiniMallocCsvFile(options.input);
-    if (options.capacity) document.problem.pools.front().capacity = options.capacity;
+    dsa::StructuredProblemDocument document = LoadProblemDocument(options);
 
     std::unique_ptr<dsa::DsaSolver> solver;
     if (options.solver == "local-search") {
@@ -215,6 +313,8 @@ int main(int argc, char** argv) {
     } else {
       solver = std::make_unique<dsa::FirstFitSolver>();
     }
+    const dsa::SolverCompatibility compatibility =
+        dsa::CheckSolverCompatibility(document.problem, solver->Capabilities());
 
     const auto started = std::chrono::steady_clock::now();
     const dsa::DsaResult result = solver->Solve(document.problem);
@@ -235,13 +335,21 @@ int main(int argc, char** argv) {
         throw std::runtime_error("solver returned an invalid solution: " + validation.front());
       }
       if (options.output) {
+        if (document.profile == dsa::BenchmarkProfile::kPyptoStructured) {
+          throw std::runtime_error(
+              "--output CSV is unavailable for a structured profile; use a core relaxation");
+        }
         dsa::WriteMiniMallocCsvFile(*options.output, document.problem, &*result.solution);
       }
     }
 
-    const std::string json =
-        BuildJson(options, document.problem, result, static_cast<std::uint64_t>(runtime.count()),
-                  ReferencePeak(options, document.problem));
+    if (options.reference_output && document.profile == dsa::BenchmarkProfile::kPyptoStructured) {
+      throw std::runtime_error(
+          "MiniMalloc references are only comparable with standard or core-relaxation profiles");
+    }
+    const std::string json = BuildJson(options, document, compatibility, result,
+                                       static_cast<std::uint64_t>(runtime.count()),
+                                       ReferencePeak(options, document.problem));
     std::cout << json << '\n';
     if (options.json_output) {
       std::ofstream output(*options.json_output);

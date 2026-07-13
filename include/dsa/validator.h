@@ -27,6 +27,12 @@ namespace dsa {
 [[nodiscard]] ObjectiveValue EvaluateObjective(const DsaProblem& problem,
                                                const DsaSolution& solution);
 
+// Evaluate one component of ObjectiveSpec from an already recomputed
+// ObjectiveValue. Capacity overflow is derived from the problem's pool caps.
+[[nodiscard]] std::uint64_t EvaluateObjectiveMetric(const DsaProblem& problem,
+                                                    const ObjectiveValue& objective,
+                                                    ObjectiveMetric metric) noexcept;
+
 }  // namespace dsa
 
 #endif  // DSA_VALIDATOR_H_

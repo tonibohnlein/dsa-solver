@@ -8,21 +8,11 @@
 
 namespace dsa {
 
-enum class LocalSearchObjective {
-  // Portable benchmark mode: minimize peak. Reuse cost is only a tie-break.
-  kMinimizePeak,
-
-  // Compiler-overlay mode: fit every pool first, then minimize reuse cost;
-  // below-cap peak is a final tie-break.
-  kFitThenMinimizeReuseCost,
-};
-
 struct LocalSearchOptions {
   std::uint64_t seed = 0;
   std::size_t max_iterations = 20'000;
   std::size_t restarts = 8;
   std::size_t stagnation_limit = 500;
-  LocalSearchObjective objective = LocalSearchObjective::kMinimizePeak;
 };
 
 // Iterated local search over placement orderings. It starts from the

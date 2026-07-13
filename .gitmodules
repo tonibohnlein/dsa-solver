@@ -1,3 +1,6 @@
 [submodule "third_party/minimalloc"]
 	path = third_party/minimalloc
 	url = https://github.com/google/minimalloc.git
+[submodule "third_party/json"]
+	path = third_party/json
+	url = https://github.com/nlohmann/json.git

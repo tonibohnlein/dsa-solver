@@ -5,49 +5,29 @@
 #include <cstdint>
 #include <limits>
 #include <random>
-#include <tuple>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "detail/placement_engine.h"
+#include "dsa/validator.h"
 
 namespace dsa {
 namespace {
 
-std::uint64_t SaturatingAdd(std::uint64_t first, std::uint64_t second) {
-  if (first > std::numeric_limits<std::uint64_t>::max() - second) {
-    return std::numeric_limits<std::uint64_t>::max();
-  }
-  return first + second;
-}
+using Score = std::vector<std::uint64_t>;
 
-std::uint64_t CapacityOverflow(const DsaProblem& problem, const ObjectiveValue& objective) {
-  std::uint64_t overflow = 0;
-  for (const Pool& pool : problem.pools) {
-    if (!pool.capacity) continue;
-    const auto found = objective.peak_by_pool.find(pool.id);
-    const std::uint64_t peak = found == objective.peak_by_pool.end() ? 0 : found->second;
-    if (peak > *pool.capacity) overflow = SaturatingAdd(overflow, peak - *pool.capacity);
-  }
-  return overflow;
-}
-
-using Score = std::tuple<std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t>;
-
-Score ResultScore(const DsaProblem& problem, const DsaResult& result,
-                  LocalSearchObjective objective) {
+Score ResultScore(const DsaProblem& problem, const DsaResult& result) {
   if (!result.solution ||
       (result.status != SolveStatus::kFeasible && result.status != SolveStatus::kBestEffortNoFit)) {
-    const auto maximum = std::numeric_limits<std::uint64_t>::max();
-    return {maximum, maximum, maximum, maximum};
+    return Score(problem.objective.terms.size(), std::numeric_limits<std::uint64_t>::max());
   }
-  const std::uint64_t overflow = CapacityOverflow(problem, result.objective);
-  if (objective == LocalSearchObjective::kFitThenMinimizeReuseCost) {
-    return {overflow, result.objective.reuse_cost, result.objective.total_peak,
-            result.objective.max_peak};
+  Score score;
+  score.reserve(problem.objective.terms.size());
+  for (ObjectiveMetric metric : problem.objective.terms) {
+    score.push_back(EvaluateObjectiveMetric(problem, result.objective, metric));
   }
-  return {result.objective.total_peak, result.objective.max_peak, result.objective.reuse_cost,
-          overflow};
+  return score;
 }
 
 void ApplyRandomMove(std::vector<BufferId>* order, std::mt19937_64* random) {
@@ -91,10 +71,31 @@ SolverCapabilities LocalSearchSolver::Capabilities() const noexcept {
   capabilities.pinned_allocations = true;
   capabilities.reserved_ranges = true;
   capabilities.multi_pool = true;
+  capabilities.lexicographic_objective = true;
+  capabilities.capacity_objective = true;
+  capabilities.peak_objective = true;
   return capabilities;
 }
 
 DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
+  const SolverCompatibility compatibility = CheckSolverCompatibility(problem, Capabilities());
+  if (!compatibility.Compatible()) {
+    DsaResult result;
+    const std::vector<std::string> validation = ValidateProblem(problem);
+    if (!validation.empty()) {
+      result.status = SolveStatus::kInvalidProblem;
+      result.diagnostics = validation;
+      return result;
+    }
+    result.status = SolveStatus::kUnsupported;
+    for (const std::string& feature : compatibility.unsupported_features) {
+      result.diagnostics.push_back("local_search does not support feature '" + feature + "'");
+    }
+    for (const std::string& objective : compatibility.unsupported_objectives) {
+      result.diagnostics.push_back("local_search does not support objective '" + objective + "'");
+    }
+    return result;
+  }
   std::vector<BufferId> seed_order = detail::DefaultPlacementOrder(problem);
   DsaResult best = detail::PlaceWithOrder(problem, seed_order);
   if (best.status == SolveStatus::kInvalidProblem || best.status == SolveStatus::kUnsupported ||
@@ -104,7 +105,7 @@ DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
   }
 
   std::vector<BufferId> best_order = seed_order;
-  Score best_score = ResultScore(problem, best, options_.objective);
+  Score best_score = ResultScore(problem, best);
   std::mt19937_64 random(options_.seed);
   const std::size_t iterations_per_restart =
       std::max<std::size_t>(1, options_.max_iterations / options_.restarts);
@@ -117,7 +118,7 @@ DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
       for (std::size_t i = 0; i < perturbations; ++i) ApplyRandomMove(&current_order, &random);
     }
     DsaResult current = detail::PlaceWithOrder(problem, current_order);
-    Score current_score = ResultScore(problem, current, options_.objective);
+    Score current_score = ResultScore(problem, current);
     std::size_t stagnation = 0;
 
     for (std::size_t iteration = 0; iteration < iterations_per_restart; ++iteration) {
@@ -125,7 +126,7 @@ DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
       ApplyRandomMove(&candidate_order, &random);
       DsaResult candidate = detail::PlaceWithOrder(problem, candidate_order);
       ++evaluated;
-      const Score candidate_score = ResultScore(problem, candidate, options_.objective);
+      const Score candidate_score = ResultScore(problem, candidate);
       if (candidate_score < current_score) {
         current = std::move(candidate);
         current_order = std::move(candidate_order);
@@ -145,7 +146,7 @@ DsaResult LocalSearchSolver::Solve(const DsaProblem& problem) const {
         const std::size_t perturbations = std::max<std::size_t>(2, current_order.size() / 10);
         for (std::size_t i = 0; i < perturbations; ++i) ApplyRandomMove(&current_order, &random);
         current = detail::PlaceWithOrder(problem, current_order);
-        current_score = ResultScore(problem, current, options_.objective);
+        current_score = ResultScore(problem, current);
         stagnation = 0;
       }
     }

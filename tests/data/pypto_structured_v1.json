@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "profile": "pypto_structured",
+  "instance": "pypto_fixture",
+  "metadata": {
+    "kernel": "fixture",
+    "source": "unit_test",
+    "target": "ascend910b"
+  },
+  "problem": {
+    "pools": [
+      {
+        "id": 3,
+        "name": "L1",
+        "capacity": 128,
+        "reserved_ranges": [
+          {
+            "begin": 0,
+            "end": 16
+          }
+        ],
+        "bank_geometry": {
+          "bank_size": 16,
+          "num_banks": 8
+        }
+      },
+      {
+        "id": 4,
+        "name": "L0B",
+        "capacity": 64,
+        "reserved_ranges": []
+      }
+    ],
+    "buffers": [
+      {
+        "id": 0,
+        "name": "producer",
+        "size": 32,
+        "alignment": 16,
+        "live_intervals": [
+          {
+            "lower": 0,
+            "upper": 2
+          },
+          {
+            "lower": 4,
+            "upper": 6
+          }
+        ],
+        "allowed_pools": [
+          3
+        ]
+      },
+      {
+        "id": 1,
+        "name": "consumer",
+        "size": 16,
+        "alignment": 16,
+        "live_intervals": [
+          {
+            "lower": 2,
+            "upper": 4
+          }
+        ],
+        "allowed_pools": [
+          3
+        ]
+      },
+      {
+        "id": 2,
+        "name": "pinned",
+        "size": 16,
+        "alignment": 16,
+        "live_intervals": [
+          {
+            "lower": 0,
+            "upper": 6
+          }
+        ],
+        "allowed_pools": [
+          4
+        ]
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "separations": [
+        {
+          "first": 0,
+          "second": 1
+        }
+      ],
+      "temporal_exclusions": [],
+      "pinned_allocations": [
+        {
+          "buffer": 2,
+          "pool": 4,
+          "offset": 0,
+          "exclusive_for_all_time": false
+        }
+      ]
+    },
+    "cost_model": {
+      "reuse_penalties": [
+        {
+          "first": 0,
+          "second": 1,
+          "cost": 25,
+          "reason": "cross_pipe"
+        }
+      ]
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "capacity_overflow",
+        "reuse_cost",
+        "total_peak",
+        "max_peak"
+      ]
+    }
+  }
+}

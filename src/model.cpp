@@ -39,4 +39,39 @@ const char* ToString(SolveStatus status) noexcept {
   return "unknown";
 }
 
+const char* ToString(ObjectiveMetric metric) noexcept {
+  switch (metric) {
+    case ObjectiveMetric::kCapacityOverflow:
+      return "capacity_overflow";
+    case ObjectiveMetric::kTotalPeak:
+      return "total_peak";
+    case ObjectiveMetric::kMaxPeak:
+      return "max_peak";
+    case ObjectiveMetric::kReuseCost:
+      return "reuse_cost";
+    case ObjectiveMetric::kBankCost:
+      return "bank_cost";
+  }
+  return "unknown";
+}
+
+const char* ToString(ObjectiveAggregation aggregation) noexcept {
+  switch (aggregation) {
+    case ObjectiveAggregation::kLexicographic:
+      return "lexicographic";
+  }
+  return "unknown";
+}
+
+ObjectiveSpec MinimizePeakObjective() {
+  return {ObjectiveAggregation::kLexicographic,
+          {ObjectiveMetric::kTotalPeak, ObjectiveMetric::kMaxPeak}};
+}
+
+ObjectiveSpec FitThenMinimizeReuseCostObjective() {
+  return {ObjectiveAggregation::kLexicographic,
+          {ObjectiveMetric::kCapacityOverflow, ObjectiveMetric::kReuseCost,
+           ObjectiveMetric::kTotalPeak, ObjectiveMetric::kMaxPeak}};
+}
+
 }  // namespace dsa

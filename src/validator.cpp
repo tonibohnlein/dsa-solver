@@ -226,6 +226,15 @@ std::vector<std::string> ValidateProblem(const DsaProblem& problem) {
       }
     }
   }
+  if (problem.objective.terms.empty()) {
+    errors.push_back("objective has no terms");
+  }
+  std::set<ObjectiveMetric> objective_terms;
+  for (ObjectiveMetric metric : problem.objective.terms) {
+    if (!objective_terms.insert(metric).second) {
+      errors.push_back(std::string("objective repeats metric '") + ToString(metric) + "'");
+    }
+  }
   return errors;
 }
 
@@ -383,6 +392,34 @@ ObjectiveValue EvaluateObjective(const DsaProblem& problem, const DsaSolution& s
     }
   }
   return objective;
+}
+
+std::uint64_t EvaluateObjectiveMetric(const DsaProblem& problem, const ObjectiveValue& objective,
+                                      ObjectiveMetric metric) noexcept {
+  switch (metric) {
+    case ObjectiveMetric::kCapacityOverflow: {
+      std::uint64_t overflow = 0;
+      for (const Pool& pool : problem.pools) {
+        if (!pool.capacity) continue;
+        const auto found = objective.peak_by_pool.find(pool.id);
+        const std::uint64_t peak = found == objective.peak_by_pool.end() ? 0 : found->second;
+        if (peak <= *pool.capacity) continue;
+        const std::uint64_t amount = peak - *pool.capacity;
+        overflow = AddOverflows(overflow, amount) ? std::numeric_limits<std::uint64_t>::max()
+                                                  : overflow + amount;
+      }
+      return overflow;
+    }
+    case ObjectiveMetric::kTotalPeak:
+      return objective.total_peak;
+    case ObjectiveMetric::kMaxPeak:
+      return objective.max_peak;
+    case ObjectiveMetric::kReuseCost:
+      return objective.reuse_cost;
+    case ObjectiveMetric::kBankCost:
+      return objective.bank_cost;
+  }
+  return std::numeric_limits<std::uint64_t>::max();
 }
 
 }  // namespace dsa

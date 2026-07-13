@@ -6,6 +6,10 @@
 PyPTO IR or MiniMalloc types. `SolverCapabilities` prevents a client from assuming unsupported structure
 was honored.
 
+The dependency direction is intentionally one-way: PyPTO may link this library, but this repository never
+links PyPTO. The PyPTO adapter owns IR analysis and write-back; schema-v1 structured JSON makes the exact
+adapter output replayable without either compiler.
+
 The portable core is:
 
 - buffers with sizes, alignments, fixed pools, and one or more half-open lifetime intervals;
@@ -20,6 +24,31 @@ Compiler extensions are explicit constraints or costs:
 - pins and reserved ranges encode externally owned addresses;
 - reuse penalties estimate synchronization induced when lifetime-disjoint buffers share an address;
 - bank geometry reserves a future offset-dependent cost model.
+
+## Benchmark profiles
+
+One runner serves three claims that must remain distinct:
+
+- `standard_dsa`: the MiniMalloc-compatible common subset used for direct exact-solver comparisons;
+- `pypto_structured`: full exported compiler structure, run only on structurally compatible solvers;
+- `pypto_core_relaxation`: a named, per-pool standard relaxation used only as a lower bound.
+
+The relaxation is generated rather than hand-authored. Its envelope records the source instance, source
+pool, and every removed feature. Schema v1 refuses temporal exclusions and flexible pool assignment
+because converting either to interval-only MiniMalloc rows can accidentally strengthen the problem and
+invalidate the lower-bound claim.
+
+## Capability and objective contracts
+
+Compatibility has two axes. A hard-feature mismatch means a solver cannot produce a valid solution and
+returns `kUnsupported`. An objective mismatch means the placement may remain structurally valid but the
+solver does not optimize all requested metrics. This allows first-fit to be reported honestly as a
+baseline without pretending it is reuse-cost-aware.
+
+Objectives are lexicographic vectors in schema v1. Supported raw components are capacity overflow, total
+and maximum peak, reuse cost, and bank cost. Keeping components separate avoids assigning arbitrary
+weights between bytes and compiler performance proxies. A future weighted or Pareto mode requires an
+explicit schema evolution.
 
 ## First-fit baseline
 
@@ -42,8 +71,8 @@ the floor, so search cannot return a worse solution than the baseline.
 
 Two lexicographic objectives are available:
 
-- `kMinimizePeak`: total peak, maximum per-pool peak, reuse cost;
-- `kFitThenMinimizeReuseCost`: capacity overflow, reuse cost, then peak.
+- peak: total peak, then maximum per-pool peak;
+- fit-cost: capacity overflow, reuse cost, total peak, then maximum peak.
 
 This version searches orderings, similar in scope to existing compiler hill-climbers. The research target
 is a placement-aware large-neighborhood search that can move address regions directly, repair conflicts,
@@ -63,3 +92,7 @@ The future adapter should:
 
 Capacity-driven pipeline-depth shedding remains an adapter/solver coordination problem. It must be
 represented explicitly rather than hidden in a pre-solver greedy merge.
+
+The first implementation can keep that decision in an adapter-controlled solve/shed/re-solve loop. A
+research extension can promote pipeline groups and buffering depth into solver decision variables, with
+depth loss exposed as another objective component.
