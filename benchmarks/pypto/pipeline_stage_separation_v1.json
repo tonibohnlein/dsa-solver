@@ -1,0 +1,71 @@
+{
+  "instance": "pipeline_stage_separation",
+  "metadata": {
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 5,
+            "upper": 7
+          }
+        ],
+        "name": "mem_vec_3",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 9,
+            "upper": 11
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 16384
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 0,
+          "second": 1
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 245760,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ]
+  },
+  "profile": "pypto_structured",
+  "schema_version": 1
+}

@@ -23,6 +23,7 @@ making it public.
 - Native MiniMalloc input/output CSV support (`id,lower,upper,size[,offset]`).
 - A `dsa-bench` CLI with JSON results and reference-solution comparison.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
+- A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by both solvers in CTest.
 - Explicit standard, PyPTO-structured, and sound core-relaxation benchmark profiles.
 - Central solver capability matching for hard features and requested objective terms.
 - Google MiniMalloc pinned as a submodule, including the official A–K corpus and exact C++ solver.
@@ -118,8 +119,11 @@ orchestration straightforward while the native suite runner is developed.
 
 ## Model boundary
 
-MiniMalloc CSV uses half-open lifetimes `[lower, upper)`. PyPTO currently records inclusive
-`[definition, last_use]` points, so its adapter must convert `upper = last_use + 1` with overflow checking.
+MiniMalloc CSV uses half-open lifetimes `[lower, upper)`. PyPTO records statement-level definition and
+last-use points with reads ordered before writes at one statement. Its adapter expands statement `p` into
+read event `2p` and write event `2p+1`, then exports a definition at `2*def+1` and a final-read end at
+`2*last_use+1` (or one write event for an otherwise-unused definition). This preserves safe same-statement
+input/result reuse without changing the portable half-open model.
 
 The core model intentionally carries more structure than MiniMalloc CSV can encode:
 
@@ -143,7 +147,7 @@ structural baseline, while a search solver rejects metrics it cannot use for can
 ## Next benchmark milestones
 
 1. Add suite-level repeated runs, exact-capacity search, timeouts, and JSONL/CSV aggregation.
-2. Add a PyPTO-owned exporter/adapter for schema-v1 structured problems.
+2. Grow the exported PyPTO corpus across models, memory pools, control flow, and pipeline shapes.
 3. Model capacity-driven pipeline-depth choices rather than only fixed pairwise separations.
 4. Add lower-bound and additional heuristic baselines.
 5. Implement placement-aware large-neighborhood search with reproducible ablations.

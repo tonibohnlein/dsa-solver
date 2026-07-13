@@ -64,6 +64,9 @@ endif()
 if(BUILD_TESTING)
   add_executable(dsa-tests tests/dsa_tests.cpp)
   target_link_libraries(dsa-tests PRIVATE dsa::solver)
+  target_compile_definitions(dsa-tests PRIVATE
+    DSA_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   set_target_properties(dsa-tests PROPERTIES
     CXX_EXTENSIONS OFF
     CXX_STANDARD 17
@@ -112,6 +115,12 @@ if(BUILD_TESTING)
     NAME dsa-cli-capability-report
     COMMAND dsa-bench
       --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/pypto_structured_v1.json
+      --solver first-fit
+  )
+  add_test(
+    NAME dsa-cli-pypto-exported-corpus
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/issue_1908_fragmentation_v1.json
       --solver first-fit
   )
 endif()

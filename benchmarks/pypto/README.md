@@ -1,0 +1,24 @@
+# PyPTO exported corpus
+
+These schema-v1 documents are byte-for-byte outputs of PyPTO's pre-memory-reuse
+DSA exporter. They are compiler instances, not manually reduced standard DSA
+problems.
+
+| Instance | PyPTO source | Regression guarded | First-fit peak |
+| --- | --- | --- | ---: |
+| `chain_read_before_write_v1.json` | `test_dsa_export_is_deterministic_pypto_structured` | Reads at a statement precede its result write, so a chain may reuse one slot | 16,384 B |
+| `issue_1908_fragmentation_v1.json` | `test_dsa_planner_subdivides_a_freed_larger_region` | Two live 32 KiB buffers subdivide a freed 64 KiB region | 65,536 B |
+| `pipeline_stage_separation_v1.json` | `test_dsa_export_and_solver_preserve_pipeline_stage_separation` | Disjoint pipeline stages remain separated despite non-overlapping lifetimes | 32,768 B |
+
+Run any instance directly:
+
+```bash
+./build/dsa-bench \
+  --input benchmarks/pypto/issue_1908_fragmentation_v1.json \
+  --solver first-fit
+```
+
+The source test name is the regeneration contract. Regenerate a document with
+PyPTO's `MemoryPlanner.DSA` and `dsa_export_dir`, review the schema diff, then
+replace the corresponding corpus file. CMake tests parse, validate, solve, and
+independently validate every document listed above.

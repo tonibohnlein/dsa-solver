@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -304,6 +305,55 @@ void TestStructuredJsonRoundTripAndProfiles() {
   Require(rejected, "schema-v1 reader silently accepted an unknown field");
 }
 
+void TestPyptoExportedCorpus() {
+  struct CorpusCase {
+    const char* filename;
+    const char* instance;
+    std::size_t buffers;
+    std::size_t separations;
+    std::uint64_t expected_peak;
+  };
+  const std::vector<CorpusCase> cases = {
+      {"chain_read_before_write_v1.json", "read_before_write_chain", 3, 0, 16'384},
+      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 65'536},
+      {"pipeline_stage_separation_v1.json", "pipeline_stage_separation", 2, 1, 32'768},
+  };
+
+  dsa::LocalSearchOptions local_options;
+  local_options.seed = 7;
+  local_options.max_iterations = 200;
+  local_options.restarts = 2;
+  local_options.stagnation_limit = 50;
+
+  for (const CorpusCase& corpus_case : cases) {
+    const std::filesystem::path path =
+        std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto" / corpus_case.filename;
+    const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
+    Require(document.profile == dsa::BenchmarkProfile::kPyptoStructured,
+            "exported corpus document has the wrong profile");
+    Require(document.instance == corpus_case.instance,
+            "exported corpus document has the wrong instance name");
+    Require(document.problem.buffers.size() == corpus_case.buffers,
+            "exported corpus document has the wrong buffer count");
+    Require(document.problem.separations.size() == corpus_case.separations,
+            "exported corpus document has the wrong separation count");
+    Require(document.metadata.at("producer") == "pypto" &&
+                document.metadata.at("solver_input") == "pre_memory_reuse" &&
+                document.metadata.at("lifetime_ordering") == "pypto_read_before_write",
+            "exported corpus document lost PyPTO provenance");
+    const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(document);
+    Require(errors.empty(), errors.empty() ? "" : errors.front());
+
+    const dsa::DsaResult first_fit = SolveAndValidate(document.problem, dsa::FirstFitSolver());
+    Require(first_fit.objective.max_peak == corpus_case.expected_peak,
+            "first-fit peak changed for exported corpus document");
+    const dsa::DsaResult local_search =
+        SolveAndValidate(document.problem, dsa::LocalSearchSolver(local_options));
+    Require(local_search.objective.max_peak == corpus_case.expected_peak,
+            "local-search peak changed for exported corpus document");
+  }
+}
+
 void TestCoreRelaxationProfiles() {
   const dsa::StructuredProblemDocument source = MakeStructuredDocument();
   const std::vector<dsa::StructuredProblemDocument> relaxations = dsa::BuildCoreRelaxations(source);
@@ -411,6 +461,7 @@ int main() {
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"local search", TestLocalSearchClosesOrderingGap},
       {"structured JSON", TestStructuredJsonRoundTripAndProfiles},
+      {"PyPTO exported corpus", TestPyptoExportedCorpus},
       {"core relaxation", TestCoreRelaxationProfiles},
       {"solver capabilities", TestSolverCapabilityMatching},
       {"invalid problem", TestInvalidProblemIsReported},

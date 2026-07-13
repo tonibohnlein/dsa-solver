@@ -15,9 +15,10 @@ using PoolId = std::uint32_t;
 
 constexpr PoolId kDefaultPool = 0;
 
-// Lifetimes are half-open [lower, upper), matching MiniMalloc. A compiler with
-// inclusive [definition, last-use] points (including PyPTO) converts the upper
-// endpoint to last_use + 1 at its adapter boundary.
+// Lifetimes are half-open [lower, upper), matching MiniMalloc. Compiler adapters
+// must preserve their own event ordering when converting statement-level
+// definition/use points; PyPTO, for example, expands reads and writes into
+// distinct sub-points.
 struct Interval {
   std::int64_t lower = 0;
   std::int64_t upper = 0;
