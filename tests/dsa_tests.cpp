@@ -125,6 +125,35 @@ void TestFirstFitSubdividesFreedRegion() {
           "consumers did not subdivide the freed producer region");
 }
 
+void TestPyptoWholeSlotReuseDoesNotSubdivideFreedRegion() {
+  constexpr std::uint64_t kKiB = 1024;
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 3}}, 64 * kKiB),
+      MakeBuffer(1, {{3, 6}}, 32 * kKiB),
+      MakeBuffer(2, {{3, 6}}, 32 * kKiB),
+  };
+  problem.pools.front().capacity = 96 * kKiB;
+  dsa::PyptoStructure structure;
+  structure.whole_slot_reuse = true;
+  structure.alias_classes = {{0, {"b0"}}, {1, {"b1"}}, {2, {"b2"}}};
+  problem.pypto_structure = std::move(structure);
+
+  const dsa::DsaResult result = SolveAndValidate(problem, dsa::FirstFitSolver());
+  Require(result.objective.max_peak == 96 * kKiB,
+          "PyPTO whole-slot reuse partially subdivided a freed producer slot");
+  Require((OffsetOf(result, 1) == 0 && OffsetOf(result, 2) == 64 * kKiB) ||
+              (OffsetOf(result, 2) == 0 && OffsetOf(result, 1) == 64 * kKiB),
+          "PyPTO consumers did not reuse one whole slot plus one disjoint slot");
+
+  dsa::DsaSolution partial;
+  partial.placements = {{0, {dsa::kDefaultPool, 0}},
+                        {1, {dsa::kDefaultPool, 0}},
+                        {2, {dsa::kDefaultPool, 32 * kKiB}}};
+  Require(!dsa::ValidateSolution(problem, partial).empty(),
+          "PyPTO validator accepted a partial overlap at different base addresses");
+}
+
 void TestStandardFreedRegionSubdivisionCorpus() {
   const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
                                      "standard" / "freed_region_subdivision_v1.json";
@@ -329,6 +358,7 @@ dsa::StructuredProblemDocument MakeStructuredDocument() {
   cost_model.reuse_penalties.push_back({0, 1, 25, dsa::ReusePenaltyReason::kCrossPipe});
   document.problem.cost_model = std::move(cost_model);
   dsa::PyptoStructure structure;
+  structure.whole_slot_reuse = true;
   structure.alias_classes = {
       {0, {"tile_a", "tile_a_view"}},
       {1, {"tile_b"}},
@@ -364,7 +394,7 @@ void TestStructuredJsonRoundTripAndProfiles() {
   Require(parsed.problem.separations.front().reasons ==
               std::vector<dsa::SeparationReason>{dsa::SeparationReason::kPipelineStage},
           "separation provenance did not round-trip");
-  Require(parsed.problem.pypto_structure &&
+  Require(parsed.problem.pypto_structure && parsed.problem.pypto_structure->whole_slot_reuse &&
               parsed.problem.pypto_structure->alias_classes.front().members.size() == 2 &&
               parsed.problem.pypto_structure->pipeline_groups.front().effective_depth == 2,
           "normalized PyPTO structure did not round-trip");
@@ -403,7 +433,7 @@ void TestPyptoExportedCorpus() {
   };
   const std::vector<CorpusCase> cases = {
       {"chain_read_before_write_v1.json", "read_before_write_chain", 3, 0, 0, 0, 16'384},
-      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 0, 0, 65'536},
+      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 0, 0, 98'304},
       {"pipeline_stage_separation_v1.json", "pipeline_stage_separation", 2, 1, 1, 0, 32'768},
       {"target_hazard_v1.json", "target_hazard", 3, 1, 0, 0, 8'192},
       {"capacity_gated_pipeline_cost_v1.json", "capacity_gated_pipeline_cost", 3, 0, 1, 2, 245'760},
@@ -588,6 +618,7 @@ int main() {
   const std::vector<std::pair<std::string, void (*)()>> tests = {
       {"MiniMalloc CSV", TestMiniMallocCsv},
       {"first-fit #1908", TestFirstFitSubdividesFreedRegion},
+      {"PyPTO whole-slot reuse", TestPyptoWholeSlotReuseDoesNotSubdivideFreedRegion},
       {"standard subdivision corpus", TestStandardFreedRegionSubdivisionCorpus},
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},

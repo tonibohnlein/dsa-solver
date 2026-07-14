@@ -74,7 +74,8 @@ Fields:
 
 All intervals and address ranges are half-open. Every buffer has one fixed `size` and one or more
 `live_intervals`; a solver jointly chooses byte offsets and may subdivide an expired address region among
-smaller later buffers. Schema v1 does not represent lifetime-dependent resizing or sliced allocations.
+smaller later buffers unless an explicit compiler structure requests whole-slot reuse. Schema v1 does not
+represent lifetime-dependent resizing or sliced allocations.
 Unsigned byte quantities must be JSON integers; floating point and negative representations are rejected.
 
 `allowed_pools` with one entry is a fixed placement space. Multiple entries represent flexible pool
@@ -117,6 +118,7 @@ A `pypto_structured` document may carry compiler relationships in addition to th
 ```json
 {
   "pypto_structure": {
+    "whole_slot_reuse": true,
     "alias_classes": [
       {"buffer": 7, "members": ["tile", "slice", "reshape"]}
     ],
@@ -137,9 +139,11 @@ A `pypto_structured` document may carry compiler relationships in addition to th
 ```
 
 Alias classes name the IR values already collapsed into one fixed-size buffer. Pipeline groups retain the
-source depth and the capacity-gated physical residue count. This block is normalized provenance for
-PyPTO-aware search moves and benchmark analysis; it does not add hidden feasibility semantics. The portable
-buffers, separations, and cost model remain authoritative, so generic solvers can consume the same document.
+source depth and the capacity-gated physical residue count. `whole_slot_reuse` is an explicit feasibility
+constraint: buffers may reuse an equal base address (with the slot sized to the largest member) or occupy
+disjoint address ranges, but may not partially overlap at different base addresses. It defaults to `false`
+when absent for compatibility with earlier schema-v1 documents. The remaining fields are normalized
+provenance for PyPTO-aware search moves and benchmark analysis.
 
 ## Objectives
 
@@ -175,6 +179,8 @@ MiniMalloc CSV input is wrapped in this profile internally.
 
 Carries the full portable structure emitted by the PyPTO adapter. A result is valid only when the
 selected solver structurally supports every feature and the independent validator accepts the placement.
+Current PyPTO exports set `pypto_structure.whole_slot_reuse=true`; standard and core-relaxation instances
+retain ordinary DSA freed-region subdivision.
 
 ### `pypto_core_relaxation`
 

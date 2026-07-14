@@ -405,6 +405,30 @@ std::vector<std::string> ValidateSolution(const DsaProblem& problem, const DsaSo
     }
   }
 
+  // PyPTO's downstream dependency tracking models reuse through a shared
+  // allocation base.  It does not currently make arbitrary partially
+  // overlapping address ranges safe.  Preserve the standard DSA semantics for
+  // ordinary problems, but reject such placements for the structured compiler
+  // profile. Equal offsets are whole-slot reuse and remain legal subject to the
+  // lifetime/separation checks above and below.
+  if (problem.pypto_structure && problem.pypto_structure->whole_slot_reuse) {
+    for (std::size_t i = 0; i < problem.buffers.size(); ++i) {
+      for (std::size_t j = i + 1; j < problem.buffers.size(); ++j) {
+        const Buffer& first_buffer = problem.buffers[i];
+        const Buffer& second_buffer = problem.buffers[j];
+        const Placement* first = solution.Find(first_buffer.id);
+        const Placement* second = solution.Find(second_buffer.id);
+        if (first && second && first->pool == second->pool && first->offset != second->offset &&
+            AddressRangesOverlap(first->offset, first_buffer.size, second->offset,
+                                 second_buffer.size)) {
+          errors.push_back("PyPTO whole-slot buffers " +
+                           PairName(first_buffer.id, second_buffer.id) +
+                           " partially overlap in address");
+        }
+      }
+    }
+  }
+
   for (const Separation& constraint : problem.separations) {
     const Buffer* first_buffer = problem.FindBuffer(constraint.first);
     const Buffer* second_buffer = problem.FindBuffer(constraint.second);

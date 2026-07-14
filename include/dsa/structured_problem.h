@@ -21,7 +21,8 @@ enum class BenchmarkProfile : std::uint8_t {
   kStandardDsa,
 
   // Full compiler instance, including portable hard constraints and optional
-  // cost overlays exported by a PyPTO adapter.
+  // cost overlays exported by a PyPTO adapter. Its normalized structure may
+  // explicitly request PyPTO's whole-slot address-reuse contract.
   kPyptoStructured,
 
   // A documented relaxation of one pool from a structured instance. Its result

@@ -26,24 +26,24 @@ MiniMalloc is compared directly only with standard DSA. For PyPTO instances it r
 
 | Instance | Buffers | Capacity | MiniMalloc exact | First fit | TVM hill climb | Local search |
 | --- | ---: | ---: | --- | --- | --- | --- |
-| A.1048576.csv | 154 | 1048576 | timeout | 1352704 (577 us) [best_effort_no_fit] | 1235968 (591.49 ms) [best_effort_no_fit] | 1293312 (274.68 ms) [best_effort_no_fit] |
-| B.1048576.csv | 170 | 1048576 | timeout | 1412096 (615 us) [best_effort_no_fit] | 1205248 (582.91 ms) [best_effort_no_fit] | 1310720 (307.00 ms) [best_effort_no_fit] |
-| C.1048576.csv | 203 | 1048576 | 1039360 (optimal; 66.25 ms) | 1417216 (+36.35%; 787 us) [best_effort_no_fit] | 1253376 (+20.59%; 840.03 ms) [best_effort_no_fit] | 1243136 (+19.61%; 406.37 ms) [best_effort_no_fit] |
-| D.1048576.csv | 213 | 1048576 | timeout | 1291264 (1.16 ms) [best_effort_no_fit] | 1218560 (1.37 s) [best_effort_no_fit] | 1196032 (582.42 ms) [best_effort_no_fit] |
-| E.1048576.csv | 215 | 1048576 | timeout | 1435648 (674 us) [best_effort_no_fit] | 1298432 (459.08 ms) [best_effort_no_fit] | 1334272 (342.19 ms) [best_effort_no_fit] |
-| F.1048576.csv | 296 | 1048576 | timeout | 1441792 (1.06 ms) [best_effort_no_fit] | 1243136 (575.62 ms) [best_effort_no_fit] | 1309696 (576.77 ms) [best_effort_no_fit] |
-| G.1048576.csv | 308 | 1048576 | 1048576 (optimal; 1.06 s) | 1396736 (+33.20%; 1.22 ms) [best_effort_no_fit] | 1295360 (+23.54%; 698.07 ms) [best_effort_no_fit] | 1353728 (+29.10%; 656.18 ms) [best_effort_no_fit] |
-| H.1048576.csv | 316 | 1048576 | 1048576 (optimal; 1.54 s) | 1421312 (+35.55%; 1.30 ms) [best_effort_no_fit] | 1269760 (+21.09%; 709.17 ms) [best_effort_no_fit] | 1277952 (+21.88%; 661.61 ms) [best_effort_no_fit] |
-| I.1048576.csv | 374 | 1048576 | timeout | 1478656 (2.37 ms) [best_effort_no_fit] | 1334272 (2.70 s) [best_effort_no_fit] | 1464320 (1.18 s) [best_effort_no_fit] |
-| J.1048576.csv | 409 | 1048576 | timeout | 1303552 (3.38 ms) [best_effort_no_fit] | 1182720 (4.08 s) [best_effort_no_fit] | 1240064 (2.04 s) [best_effort_no_fit] |
-| K.1048576.csv | 454 | 1048576 | 1048576 (optimal; 495.32 ms) | 1352704 (+29.00%; 2.92 ms) [best_effort_no_fit] | 1292288 (+23.24%; 1.61 s) [best_effort_no_fit] | 1316864 (+25.59%; 1.27 s) [best_effort_no_fit] |
+| A.1048576.csv | 154 | 1048576 | timeout | 1352704 (780 us) [best_effort_no_fit] | 1235968 (602.24 ms) [best_effort_no_fit] | 1293312 (276.22 ms) [best_effort_no_fit] |
+| B.1048576.csv | 170 | 1048576 | timeout | 1412096 (677 us) [best_effort_no_fit] | 1205248 (588.42 ms) [best_effort_no_fit] | 1310720 (306.16 ms) [best_effort_no_fit] |
+| C.1048576.csv | 203 | 1048576 | 1039360 (optimal; 64.88 ms) | 1417216 (+36.35%; 821 us) [best_effort_no_fit] | 1253376 (+20.59%; 774.76 ms) [best_effort_no_fit] | 1243136 (+19.61%; 382.20 ms) [best_effort_no_fit] |
+| D.1048576.csv | 213 | 1048576 | timeout | 1291264 (1.07 ms) [best_effort_no_fit] | 1218560 (1.29 s) [best_effort_no_fit] | 1196032 (557.33 ms) [best_effort_no_fit] |
+| E.1048576.csv | 215 | 1048576 | timeout | 1435648 (688 us) [best_effort_no_fit] | 1298432 (432.17 ms) [best_effort_no_fit] | 1334272 (322.98 ms) [best_effort_no_fit] |
+| F.1048576.csv | 296 | 1048576 | timeout | 1441792 (976 us) [best_effort_no_fit] | 1243136 (497.13 ms) [best_effort_no_fit] | 1318912 (472.61 ms) [best_effort_no_fit] |
+| G.1048576.csv | 308 | 1048576 | 1048576 (optimal; 869.52 ms) | 1396736 (+33.20%; 1.09 ms) [best_effort_no_fit] | 1295360 (+23.54%; 566.16 ms) [best_effort_no_fit] | 1353728 (+29.10%; 528.79 ms) [best_effort_no_fit] |
+| H.1048576.csv | 316 | 1048576 | 1048576 (optimal; 1.32 s) | 1421312 (+35.55%; 1.05 ms) [best_effort_no_fit] | 1269760 (+21.09%; 580.64 ms) [best_effort_no_fit] | 1277952 (+21.88%; 545.87 ms) [best_effort_no_fit] |
+| I.1048576.csv | 374 | 1048576 | timeout | 1478656 (1.99 ms) [best_effort_no_fit] | 1334272 (1.73 s) [best_effort_no_fit] | 1464320 (952.16 ms) [best_effort_no_fit] |
+| J.1048576.csv | 409 | 1048576 | timeout | 1303552 (3.13 ms) [best_effort_no_fit] | 1182720 (3.27 s) [best_effort_no_fit] | 1240064 (1.57 s) [best_effort_no_fit] |
+| K.1048576.csv | 454 | 1048576 | 1048576 (optimal; 455.84 ms) | 1352704 (+29.00%; 2.12 ms) [best_effort_no_fit] | 1292288 (+23.24%; 1.34 s) [best_effort_no_fit] | 1316864 (+25.59%; 1.06 s) [best_effort_no_fit] |
 
 ## PyPTO structured DSA
 
 | Instance | Target | Buffers | Structure | Exact core lower bound | First fit | TVM hill climb | Local search |
 | --- | --- | ---: | --- | --- | --- | --- | --- |
-| capacity_gated_pipeline_cost | Ascend950 | 3 | reuse_edges=2; alias_classes=3; pipeline_groups=1 | sum=245760, max=245760 (optimal relaxations) | P=245760, C=2 (feasible; 21 us) | P=245760, C=2 (feasible; 40 us) | P=245760, C=2 (feasible; 934 us) |
-| issue_1908_fragmentation | Ascend950 | 4 | alias_classes=4 | sum=65536, max=65536 (optimal relaxations) | P=65536, C=0 (feasible; 4 us) | P=65536, C=0 (feasible; 61 us) | P=65536, C=0 (feasible; 884 us) |
-| pipeline_stage_separation | Ascend950 | 2 | separations=1; alias_classes=2; pipeline_groups=1 | sum=16384, max=16384 (optimal relaxations) | P=32768, C=0 (feasible; 4 us) | P=32768, C=0 (feasible; 50 us) | P=32768, C=0 (feasible; 650 us) |
-| read_before_write_chain | Ascend950 | 3 | alias_classes=3 | sum=16384, max=16384 (optimal relaxations) | P=16384, C=0 (feasible; 2 us) | P=16384, C=0 (feasible; 39 us) | P=16384, C=0 (feasible; 720 us) |
-| target_hazard | Ascend910B | 3 | separations=1; alias_classes=3 | sum=8192, max=8192 (optimal relaxations) | P=8192, C=0 (feasible; 2 us) | P=8192, C=0 (feasible; 60 us) | P=8192, C=0 (feasible; 741 us) |
+| capacity_gated_pipeline_cost | Ascend950 | 3 | reuse_edges=2; whole_slot_reuse; alias_classes=3; pipeline_groups=1 | sum=245760, max=245760 (optimal relaxations) | P=245760, C=2 (feasible; 22 us) | P=245760, C=2 (feasible; 37 us) | P=245760, C=2 (feasible; 853 us) |
+| issue_1908_fragmentation | Ascend950 | 4 | whole_slot_reuse; alias_classes=4 | sum=65536, max=65536 (optimal relaxations) | P=98304, C=0 (feasible; 4 us) | P=98304, C=0 (feasible; 52 us) | P=98304, C=0 (feasible; 871 us) |
+| pipeline_stage_separation | Ascend950 | 2 | separations=1; whole_slot_reuse; alias_classes=2; pipeline_groups=1 | sum=16384, max=16384 (optimal relaxations) | P=32768, C=0 (feasible; 3 us) | P=32768, C=0 (feasible; 41 us) | P=32768, C=0 (feasible; 606 us) |
+| read_before_write_chain | Ascend950 | 3 | whole_slot_reuse; alias_classes=3 | sum=16384, max=16384 (optimal relaxations) | P=16384, C=0 (feasible; 3 us) | P=16384, C=0 (feasible; 40 us) | P=16384, C=0 (feasible; 656 us) |
+| target_hazard | Ascend910B | 3 | separations=1; whole_slot_reuse; alias_classes=3 | sum=8192, max=8192 (optimal relaxations) | P=8192, C=0 (feasible; 2 us) | P=8192, C=0 (feasible; 51 us) | P=8192, C=0 (feasible; 691 us) |

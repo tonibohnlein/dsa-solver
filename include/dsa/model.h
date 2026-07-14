@@ -146,6 +146,14 @@ struct PyptoPipelineGroup {
 };
 
 struct PyptoStructure {
+  // Current PyPTO/PTOAS dependency tracking recognizes whole allocation-slot
+  // reuse, not arbitrary partial overlap between temporally disjoint buffers.
+  // Consequently a pypto_structured placement may put buffers at the same base
+  // address (the slot extent is their maximum size), or in disjoint address
+  // ranges, but never partially overlap them at different base addresses.
+  // This compiler contract is intentionally absent from standard_dsa inputs,
+  // where subdividing a freed region remains legal.
+  bool whole_slot_reuse = false;
   std::vector<PyptoAliasClass> alias_classes;
   std::vector<PyptoPipelineGroup> pipeline_groups;
 };

@@ -302,6 +302,7 @@ std::vector<std::string> ProblemFeatures(const dsa::DsaProblem& problem) {
     features.push_back("reuse_edges=" + std::to_string(problem.cost_model->reuse_penalties.size()));
   }
   if (problem.pypto_structure) {
+    if (problem.pypto_structure->whole_slot_reuse) features.push_back("whole_slot_reuse");
     if (!problem.pypto_structure->alias_classes.empty()) {
       features.push_back("alias_classes=" +
                          std::to_string(problem.pypto_structure->alias_classes.size()));

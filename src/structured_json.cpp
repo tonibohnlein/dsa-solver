@@ -370,8 +370,13 @@ StructuredProblemDocument ParseDocument(const Json& root) {
 
   if (const auto found = problem.find("pypto_structure"); found != problem.end()) {
     if (found->is_null()) throw std::runtime_error("root.problem.pypto_structure cannot be null");
-    CheckFields(*found, {"alias_classes", "pipeline_groups"}, "root.problem.pypto_structure");
+    CheckFields(*found, {"whole_slot_reuse", "alias_classes", "pipeline_groups"},
+                "root.problem.pypto_structure");
     PyptoStructure structure;
+    if (const auto policy = found->find("whole_slot_reuse"); policy != found->end()) {
+      structure.whole_slot_reuse =
+          ReadBool(*policy, "root.problem.pypto_structure.whole_slot_reuse");
+    }
 
     const Json& alias_classes =
         RequireArray(*found, "alias_classes", "root.problem.pypto_structure");
@@ -521,7 +526,9 @@ Json SerializeDocument(const StructuredProblemDocument& document) {
   problem["constraints"] = std::move(constraints);
 
   if (document.problem.pypto_structure) {
-    Json structure{{"alias_classes", Json::array()}, {"pipeline_groups", Json::array()}};
+    Json structure{{"whole_slot_reuse", document.problem.pypto_structure->whole_slot_reuse},
+                   {"alias_classes", Json::array()},
+                   {"pipeline_groups", Json::array()}};
     for (const PyptoAliasClass& alias_class : document.problem.pypto_structure->alias_classes) {
       structure["alias_classes"].push_back(
           {{"buffer", alias_class.buffer}, {"members", alias_class.members}});
