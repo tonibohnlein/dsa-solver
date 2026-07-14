@@ -103,6 +103,14 @@ This version searches orderings, similar in scope to existing compiler hill-clim
 is a placement-aware large-neighborhood search that can move address regions directly, repair conflicts,
 and backtrack locally rather than expressing every candidate through a global ordering.
 
+## OpenXLA heap baseline
+
+`XlaHeapSolver` freezes OpenXLA's spatial decreasing-size/best-fit policy for
+the standard core. It sorts by size and lifetime duration, then selects the
+smallest aligned free chunk that fits. Capability matching prevents the method
+from silently consuming PyPTO-only structure; structured instances reach it
+only through named core relaxations. See [`xla_heap.md`](xla_heap.md).
+
 ## TVM hill-climb baseline
 
 `TvmHillClimbSolver` preserves Apache TVM USMP's recognizable search policy as a distinct literature
@@ -120,6 +128,20 @@ policy to run as an explicit ablation on `pypto_structured` instances.
 This is a behavioral reimplementation, not bit-for-bit compatibility: it uses a portable seeded random
 engine, preserves the best solution seen, uses the current buffer's alignment through the shared decoder,
 and can navigate complete over-capacity placements. See [the detailed study](tvm_hill_climb.md).
+
+## PyPTO-structured search
+
+`PyptoStructuredSearchSolver` uses the full compatible placement engine and
+the schema objective, but changes the neighborhood units. Half of its moves
+remain generic swap/insertion/reversal moves; the other half relocate pipeline
+groups as blocks, reprioritize multi-member semantic alias identities, or move
+endpoints of sparse reuse-penalty edges. Candidate comparison is lexicographic,
+normally capacity overflow, reuse cost, total peak, and maximum peak.
+
+This is the first explicit structured-search baseline, not the final proposed
+algorithm. Alias and pipeline metadata are provenance for moves; generic hard
+constraints remain authoritative. Future direct gap moves and bounded local
+repair should be introduced as separate ablatable neighborhoods.
 
 ## PyPTO adapter boundary
 

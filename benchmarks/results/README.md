@@ -14,6 +14,11 @@ that its machine-dependent runtimes are universally representative. Regenerate i
 root with the command recorded at the top of its report. Review changes to raw records and the generated
 tables together.
 
+`minimalloc-1mib-xla` is the longer standard-DSA comparison. It uses the
+MiniMalloc A--K one-MiB capacity, 2,000 ordering-search candidates per seed,
+and a 60-second exact-solver budget per instance. This is the long-form
+quality/runtime table; `baseline` remains the quicker CI-style snapshot.
+
 New PyPTO or `pypto-lib` corpus entries should record public source revisions, target, memory pool, schema
 version, and a content hash in structured-problem metadata. Do not publish instances derived from private
 workloads or containing machine-specific paths.

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "dsa/structured_problem.h"
+#include "dsa/validator.h"
 
 namespace {
 
@@ -41,6 +42,8 @@ struct Options {
   std::optional<fs::path> coverage_targets;
   std::string source_repo;
   std::string source_commit;
+  std::string producer_repo;
+  std::string producer_commit;
   std::string corpus_namespace;
 };
 
@@ -65,12 +68,33 @@ struct ManifestRecord {
   std::size_t buffers = 0;
   std::size_t alias_classes = 0;
   std::size_t pipeline_groups = 0;
+  std::size_t live_intervals = 0;
+  std::size_t temporal_conflicts = 0;
+  std::size_t reuse_candidates = 0;
+  bool selected = false;
+  std::string selection_reason;
 };
 
 struct RepresentativeDocument {
   std::string canonical_problem;
   std::string instance;
   fs::path relative_output;
+  bool selected = false;
+};
+
+struct ProblemStats {
+  std::size_t live_intervals = 0;
+  std::size_t temporal_conflicts = 0;
+  std::size_t reuse_candidates = 0;
+  std::size_t nontrivial_alias_classes = 0;
+  std::size_t pipeline_groups = 0;
+  std::size_t reserved_ranges = 0;
+  std::size_t reuse_penalties = 0;
+};
+
+struct Selection {
+  bool selected = false;
+  std::string reason;
 };
 
 [[noreturn]] void UsageError(const std::string& message) {
@@ -88,6 +112,9 @@ void PrintHelp() {
       << "  --source-repo TEXT              Source repository name or URL\n"
       << "  --source-commit SHA             Exact source revision\n"
       << "  --namespace TEXT                Stable benchmark identity namespace\n\n"
+      << "Optional producer provenance:\n"
+      << "  --producer-repo TEXT            Compiler/exporter repository\n"
+      << "  --producer-commit SHA           Exact compiler/exporter revision\n\n"
       << "Coverage:\n"
       << "  --coverage-targets FILE         TSV of required case IDs and source paths\n"
       << "  --help                          Show this help\n\n"
@@ -131,6 +158,10 @@ Options ParseOptions(int argc, char** argv) {
       options.source_repo = next(&index, option);
     } else if (option == "--source-commit") {
       options.source_commit = next(&index, option);
+    } else if (option == "--producer-repo") {
+      options.producer_repo = next(&index, option);
+    } else if (option == "--producer-commit") {
+      options.producer_commit = next(&index, option);
     } else if (option == "--namespace") {
       options.corpus_namespace = next(&index, option);
     } else {
@@ -141,6 +172,9 @@ Options ParseOptions(int argc, char** argv) {
   if (options.output.empty()) UsageError("--output is required");
   if (options.source_repo.empty()) UsageError("--source-repo is required");
   if (options.source_commit.empty()) UsageError("--source-commit is required");
+  if (options.producer_repo.empty() != options.producer_commit.empty()) {
+    UsageError("--producer-repo and --producer-commit must be supplied together");
+  }
   if (options.corpus_namespace.empty()) UsageError("--namespace is required");
   return options;
 }
@@ -339,6 +373,61 @@ void NormalizeNonSemanticProblemNames(dsa::StructuredProblemDocument* document) 
   }
 }
 
+bool ShareAllowedPool(const dsa::Buffer& first, const dsa::Buffer& second) {
+  for (dsa::PoolId first_pool : first.allowed_pools) {
+    if (std::find(second.allowed_pools.begin(), second.allowed_pools.end(), first_pool) !=
+        second.allowed_pools.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+ProblemStats AnalyzeProblem(const dsa::DsaProblem& problem) {
+  ProblemStats stats;
+  for (const dsa::Buffer& buffer : problem.buffers) {
+    stats.live_intervals += buffer.live_intervals.size();
+  }
+  for (std::size_t first = 0; first < problem.buffers.size(); ++first) {
+    for (std::size_t second = first + 1; second < problem.buffers.size(); ++second) {
+      if (!ShareAllowedPool(problem.buffers[first], problem.buffers[second])) continue;
+      if (dsa::HaveTemporalConflict(problem, problem.buffers[first], problem.buffers[second])) {
+        ++stats.temporal_conflicts;
+      } else {
+        ++stats.reuse_candidates;
+      }
+    }
+  }
+  for (const dsa::Pool& pool : problem.pools) {
+    stats.reserved_ranges += pool.reserved_ranges.size();
+  }
+  if (problem.cost_model) stats.reuse_penalties = problem.cost_model->reuse_penalties.size();
+  if (problem.pypto_structure) {
+    stats.pipeline_groups = problem.pypto_structure->pipeline_groups.size();
+    for (const dsa::PyptoAliasClass& alias_class : problem.pypto_structure->alias_classes) {
+      if (alias_class.members.size() > 1) ++stats.nontrivial_alias_classes;
+    }
+  }
+  return stats;
+}
+
+Selection SelectProblem(const dsa::DsaProblem& problem, const ProblemStats& stats) {
+  if (stats.pipeline_groups != 0) return {true, "pipeline_structure"};
+  if (stats.reuse_penalties != 0) return {true, "reuse_cost"};
+  if (!problem.separations.empty() || !problem.temporal_exclusions.empty() ||
+      !problem.colocations.empty() || !problem.pinned_allocations.empty() ||
+      stats.reserved_ranges != 0) {
+    return {true, "hard_constraints"};
+  }
+  if (stats.nontrivial_alias_classes != 0) return {true, "semantic_aliases"};
+  if (stats.live_intervals > problem.buffers.size()) return {true, "multi_interval"};
+  if (problem.pools.size() > 1) return {true, "multi_pool"};
+  if (problem.buffers.size() >= 4 && stats.temporal_conflicts != 0 && stats.reuse_candidates != 0) {
+    return {true, "core_reuse_search"};
+  }
+  return {false, "trivial_no_placement_choice"};
+}
+
 void RequireFreshOutputDirectory(const fs::path& output) {
   if (fs::exists(output)) {
     if (!fs::is_directory(output)) {
@@ -355,16 +444,23 @@ void WriteManifest(const fs::path& path, const Options& options,
                    const std::vector<ManifestRecord>& records) {
   std::ofstream output(path);
   if (!output) throw std::runtime_error("cannot create corpus manifest: " + path.string());
-  output << "instance\tcase_id\tsource_repo\tsource_commit\tsource_path\tfamily\tdevices"
+  output << "instance\tcase_id\tsource_repo\tsource_commit\tproducer_repo\tproducer_commit"
+            "\tsource_path\tfamily\tdevices"
             "\texport_file\tdocument_path\tsource_fingerprint_fnv1a64\tpools\tbuffers"
-            "\tproblem_fingerprint_fnv1a64\trepresentative\talias_classes\tpipeline_groups\n";
+            "\tproblem_fingerprint_fnv1a64\trepresentative\tselected\tselection_reason"
+            "\talias_classes\tpipeline_groups\tlive_intervals\ttemporal_conflicts"
+            "\treuse_candidates\n";
   for (const ManifestRecord& record : records) {
     output << record.instance << '\t' << record.case_id << '\t' << options.source_repo << '\t'
-           << options.source_commit << '\t' << record.source_path << '\t' << record.family << '\t'
+           << options.source_commit << '\t' << options.producer_repo << '\t'
+           << options.producer_commit << '\t' << record.source_path << '\t' << record.family << '\t'
            << record.devices << '\t' << record.export_file << '\t' << record.document_path << '\t'
            << record.source_fingerprint << '\t' << record.pools << '\t' << record.buffers << '\t'
            << record.problem_fingerprint << '\t' << (record.representative ? "true" : "false")
-           << '\t' << record.alias_classes << '\t' << record.pipeline_groups << '\n';
+           << '\t' << (record.selected ? "true" : "false") << '\t' << record.selection_reason
+           << '\t' << record.alias_classes << '\t' << record.pipeline_groups << '\t'
+           << record.live_intervals << '\t' << record.temporal_conflicts << '\t'
+           << record.reuse_candidates << '\n';
   }
 }
 
@@ -431,9 +527,12 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
     dsa::WriteStructuredProblemJson(canonical_output, shape);
     const std::string canonical_problem = canonical_output.str();
     const std::string problem_fingerprint = Fnv1a64(canonical_problem);
+    const ProblemStats stats = AnalyzeProblem(document.problem);
+    const Selection selection = SelectProblem(document.problem, stats);
     const std::string export_stem = SanitizeComponent(StripDsaJsonSuffix(input.path));
     const std::string original_instance = document.instance;
     bool representative = false;
+    bool selected = false;
     std::string normalized_instance;
     fs::path relative_output;
     const auto existing = representative_by_fingerprint.find(problem_fingerprint);
@@ -443,8 +542,10 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
       }
       normalized_instance = existing->second.instance;
       relative_output = existing->second.relative_output;
+      selected = existing->second.selected;
     } else {
       representative = true;
+      selected = selection.selected;
       normalized_instance =
           options.corpus_namespace + "::" + SourceIdentity(target.source_path) + "::" + export_stem;
       document.instance = normalized_instance;
@@ -459,21 +560,27 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
       document.metadata["corpus_source_fingerprint_fnv1a64"] = fingerprint;
       document.metadata["corpus_source_path"] = target.source_path.generic_string();
       document.metadata["corpus_source_repo"] = options.source_repo;
-
-      relative_output = fs::path("documents") / target.source_path;
-      relative_output.replace_extension();
-      relative_output /= export_stem + ".json";
-      ValidateRelativeSourcePath(relative_output, "normalized document path");
-      const fs::path output_path = options.output / relative_output;
-      if (!output_paths.insert(relative_output).second) {
-        throw std::runtime_error("two exports map to the same output path: " +
-                                 relative_output.generic_string());
+      if (!options.producer_repo.empty()) {
+        document.metadata["corpus_producer_repo"] = options.producer_repo;
+        document.metadata["corpus_producer_commit"] = options.producer_commit;
       }
-      fs::create_directories(output_path.parent_path());
-      dsa::WriteStructuredProblemJsonFile(output_path, document);
+
+      if (selected) {
+        relative_output = fs::path("documents") / target.source_path;
+        relative_output.replace_extension();
+        relative_output /= export_stem + ".json";
+        ValidateRelativeSourcePath(relative_output, "normalized document path");
+        const fs::path output_path = options.output / relative_output;
+        if (!output_paths.insert(relative_output).second) {
+          throw std::runtime_error("two exports map to the same output path: " +
+                                   relative_output.generic_string());
+        }
+        fs::create_directories(output_path.parent_path());
+        dsa::WriteStructuredProblemJsonFile(output_path, document);
+      }
       representative_by_fingerprint.emplace(
-          problem_fingerprint,
-          RepresentativeDocument{canonical_problem, normalized_instance, relative_output});
+          problem_fingerprint, RepresentativeDocument{canonical_problem, normalized_instance,
+                                                      relative_output, selected});
     }
 
     const std::size_t alias_classes = document.problem.pypto_structure
@@ -482,11 +589,12 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
     const std::size_t pipeline_groups =
         document.problem.pypto_structure ? document.problem.pypto_structure->pipeline_groups.size()
                                          : 0;
-    records.push_back({normalized_instance, input.case_id, target.source_path.generic_string(),
-                       target.family, target.devices, input.relative_path.generic_string(),
-                       relative_output.generic_string(), fingerprint, problem_fingerprint,
-                       representative, document.problem.pools.size(),
-                       document.problem.buffers.size(), alias_classes, pipeline_groups});
+    records.push_back(
+        {normalized_instance, input.case_id, target.source_path.generic_string(), target.family,
+         target.devices, input.relative_path.generic_string(), relative_output.generic_string(),
+         fingerprint, problem_fingerprint, representative, document.problem.pools.size(),
+         document.problem.buffers.size(), alias_classes, pipeline_groups, stats.live_intervals,
+         stats.temporal_conflicts, stats.reuse_candidates, selected, selection.reason});
     ++(*coverage_counts)[input.case_id];
   }
   std::sort(records.begin(), records.end(), [](const auto& first, const auto& second) {
@@ -522,6 +630,10 @@ int main(int argc, char** argv) {
     const Options options = ParseOptions(argc, argv);
     ValidateTsvField(options.source_repo, "--source-repo");
     ValidateTsvField(options.source_commit, "--source-commit");
+    if (!options.producer_repo.empty()) {
+      ValidateTsvField(options.producer_repo, "--producer-repo");
+      ValidateTsvField(options.producer_commit, "--producer-commit");
+    }
     ValidateTsvField(options.corpus_namespace, "--namespace");
     const std::map<std::string, CoverageTarget> targets =
         options.coverage_targets ? ReadCoverageTargets(*options.coverage_targets)
@@ -543,11 +655,16 @@ int main(int argc, char** argv) {
     WriteManifest(options.output / "manifest.tsv", options, records);
     if (!targets.empty()) WriteCoverage(options.output / "coverage.tsv", targets, coverage_counts);
     CheckCoverage(targets, coverage_counts);
-    std::cout << "dsa-corpus: imported " << records.size() << " documents from "
-              << coverage_counts.size() << " cases as "
-              << std::count_if(records.begin(), records.end(),
-                               [](const ManifestRecord& record) { return record.representative; })
-              << " unique benchmark problems into " << options.output << '\n';
+    const auto representative_count =
+        std::count_if(records.begin(), records.end(),
+                      [](const ManifestRecord& record) { return record.representative; });
+    const auto selected_count = std::count_if(
+        records.begin(), records.end(),
+        [](const ManifestRecord& record) { return record.representative && record.selected; });
+    std::cout << "dsa-corpus: imported " << records.size() << " observations from "
+              << coverage_counts.size() << " cases as " << representative_count
+              << " unique problem shapes; selected " << selected_count
+              << " meaningful benchmark problems into " << options.output << '\n';
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "dsa-corpus: " << error.what() << '\n';

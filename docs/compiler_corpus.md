@@ -18,9 +18,19 @@ instance named `kernel`. Raw artifacts stay with the device/build report.
 - the DSA `problem`, profile, and schema version are parsed and reserialized;
 - `instance` becomes `<namespace>::<source-path>::<export-stem>`;
 - `corpus_*` metadata records source repository, exact commit, entry point,
-  original instance, export path, family, and raw-byte fingerprint;
+  compiler/exporter repository and commit, original instance, export path,
+  family, and raw-byte fingerprint;
 - `manifest.tsv` indexes every source observation and its representative;
 - `coverage.tsv` compares realized documents with the requested cases.
+
+Every unique shape is classified before it is written. A representative is
+selected when it contains pipeline groups, reuse costs, hard constraints,
+multi-member semantic aliases, multiple intervals/pools, or at least four
+buffers with both temporal conflicts and reuse candidates. Shapes without an
+actual placement choice remain in `manifest.tsv` with
+`selected=false, selection_reason=trivial_no_placement_choice`; they do not
+enter aggregate solver results. This avoids both silent coverage loss and
+benchmark inflation from allocation-trivial kernels.
 
 Canonical target/problem shapes are fingerprinted after removing source-only
 metadata and normalizing non-semantic pool, buffer, alias-member, and pipeline
@@ -66,14 +76,24 @@ than exhaustive.
   --coverage-targets benchmarks/pypto/targets/pypto_lib_bf89431.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
   --source-commit bf89431fc73902caf594893888de84d06c3bf435 \
+  --producer-repo https://github.com/tonibohnlein/pypto.git \
+  --producer-commit 1890b9e2aa92ea1f2e2a335d10190cc0f5bf1ad7 \
   --namespace pypto-lib
 ```
+
+The 597 raw observations captured at PyPTO `b8802dc6` predate the sound
+allocation-lifetime fix. Preserve them with the regression report, but do not
+publish them as solver inputs: at least the affected DeepSeek-v4 `softmax_pool`
+documents contain a false reusable lifetime hole. A corpus refresh must export
+all targets from fixed commit `1890b9e2` (or a reviewed descendant) rather than
+mixing producer revisions.
 
 Review before checking in:
 
 1. `coverage.tsv` has only `covered` rows and exactly 56 cases.
 2. `manifest.tsv` covers every observation; representative instances and paths
-   are unique, and repeated shapes point to an existing representative.
+   are unique, repeated shapes point to an existing representative, and every
+   selected/skipped decision has an explicit reason.
 3. Every document retains `producer=pypto`, `solver_input=pre_memory_reuse`, a
    non-empty target, and `whole_slot_reuse=true`.
 4. `dsa-suite` reports every available heuristic feasible and

@@ -9,34 +9,40 @@ endif()
 set(INPUT_DIR "${BINARY_DIR}/corpus-import-input")
 set(OUTPUT_DIR "${BINARY_DIR}/corpus-import-output")
 file(REMOVE_RECURSE "${INPUT_DIR}" "${OUTPUT_DIR}")
-file(MAKE_DIRECTORY "${INPUT_DIR}/case_a" "${INPUT_DIR}/case_b")
+file(MAKE_DIRECTORY "${INPUT_DIR}/case_a" "${INPUT_DIR}/case_b" "${INPUT_DIR}/case_c")
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/chain_read_before_write_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_a"
 )
 file(RENAME
-  "${INPUT_DIR}/case_a/chain_read_before_write_v1.json"
-  "${INPUT_DIR}/case_a/pypto_read_before_write_chain.dsa.json"
+  "${INPUT_DIR}/case_a/pipeline_stage_separation_v1.json"
+  "${INPUT_DIR}/case_a/pypto_pipeline_stage_separation.dsa.json"
 )
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/chain_read_before_write_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_b"
 )
 file(RENAME
-  "${INPUT_DIR}/case_b/chain_read_before_write_v1.json"
+  "${INPUT_DIR}/case_b/pipeline_stage_separation_v1.json"
   "${INPUT_DIR}/case_b/pypto_duplicate_shape.dsa.json"
 )
 set(DUPLICATE_INPUT "${INPUT_DIR}/case_b/pypto_duplicate_shape.dsa.json")
 file(READ "${DUPLICATE_INPUT}" DUPLICATE_TEXT)
-string(REPLACE "mem_vec_2" "renamed_buffer_2" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
 string(REPLACE "mem_vec_3" "renamed_buffer_3" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
 string(REPLACE "mem_vec_4" "renamed_buffer_4" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
-string(REPLACE "tile_a" "renamed_alias_a" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
-string(REPLACE "tile_b" "renamed_alias_b" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
-string(REPLACE "tile_c" "renamed_alias_c" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
+string(REPLACE "stage_0" "renamed_alias_0" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
+string(REPLACE "stage_1" "renamed_alias_1" DUPLICATE_TEXT "${DUPLICATE_TEXT}")
 string(REPLACE "\"name\": \"Vec\"" "\"name\": \"RenamedVec\"" DUPLICATE_TEXT
   "${DUPLICATE_TEXT}")
 file(WRITE "${DUPLICATE_INPUT}" "${DUPLICATE_TEXT}")
+file(COPY
+  "${SOURCE_DIR}/benchmarks/pypto/chain_read_before_write_v1.json"
+  DESTINATION "${INPUT_DIR}/case_c"
+)
+file(RENAME
+  "${INPUT_DIR}/case_c/chain_read_before_write_v1.json"
+  "${INPUT_DIR}/case_c/pypto_trivial_chain.dsa.json"
+)
 
 execute_process(
   COMMAND "${DSA_CORPUS}"
@@ -45,6 +51,8 @@ execute_process(
     --coverage-targets "${SOURCE_DIR}/tests/data/corpus_targets.tsv"
     --source-repo pypto-lib
     --source-commit 0123456789abcdef
+    --producer-repo pypto
+    --producer-commit fedcba9876543210
     --namespace pypto-lib
   RESULT_VARIABLE IMPORT_RESULT
   OUTPUT_VARIABLE IMPORT_OUTPUT
@@ -57,7 +65,7 @@ if(NOT IMPORT_RESULT EQUAL 0)
 endif()
 
 set(DOCUMENT
-  "${OUTPUT_DIR}/documents/models/example/case_a/pypto_read_before_write_chain.json"
+  "${OUTPUT_DIR}/documents/models/example/case_a/pypto_pipeline_stage_separation.json"
 )
 if(NOT EXISTS "${DOCUMENT}" OR
    NOT EXISTS "${OUTPUT_DIR}/manifest.tsv" OR
@@ -67,12 +75,13 @@ endif()
 
 file(READ "${DOCUMENT}" DOCUMENT_TEXT)
 foreach(EXPECTED
-    "pypto-lib::models::example::case_a::pypto_read_before_write_chain"
+    "pypto-lib::models::example::case_a::pypto_pipeline_stage_separation"
     "corpus_source_commit"
+    "corpus_producer_commit"
     "corpus_original_instance"
     "corpus_problem_fingerprint_fnv1a64"
     "corpus_source_fingerprint_fnv1a64"
-    "mem_vec_2")
+    "mem_vec_3")
   string(FIND "${DOCUMENT_TEXT}" "${EXPECTED}" FOUND)
   if(FOUND EQUAL -1)
     message(FATAL_ERROR "normalized document is missing '${EXPECTED}'")
@@ -87,10 +96,19 @@ if(NOT NORMALIZED_DOCUMENT_COUNT EQUAL 1)
   )
 endif()
 file(READ "${OUTPUT_DIR}/manifest.tsv" MANIFEST_TEXT)
+foreach(EXPECTED
+    "selected\tselection_reason"
+    "pipeline_structure"
+    "trivial_no_placement_choice")
+  string(FIND "${MANIFEST_TEXT}" "${EXPECTED}" FOUND)
+  if(FOUND EQUAL -1)
+    message(FATAL_ERROR "corpus manifest is missing '${EXPECTED}'")
+  endif()
+endforeach()
 string(REGEX MATCHALL "\n[^\n]+" MANIFEST_ROWS "${MANIFEST_TEXT}")
 list(LENGTH MANIFEST_ROWS MANIFEST_ROW_COUNT)
-if(NOT MANIFEST_ROW_COUNT EQUAL 2)
-  message(FATAL_ERROR "dsa-corpus manifest should retain both source observations")
+if(NOT MANIFEST_ROW_COUNT EQUAL 3)
+  message(FATAL_ERROR "dsa-corpus manifest should retain all three source observations")
 endif()
 
 execute_process(

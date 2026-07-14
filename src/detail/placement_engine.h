@@ -28,6 +28,16 @@ struct PlacementSearchSpace {
   bool flexible_pools = false;
 };
 
+enum class PlacementStrategy {
+  // Decreasing size with earliest-lifetime tie-breaking, then lowest-address
+  // first fit. This is the historical dsa-solver initializer.
+  kFirstFit,
+  // OpenXLA GlobalDecreasingSizeBestFitHeap's spatial policy: decreasing size,
+  // decreasing live-range duration, stable id; choose the smallest free chunk
+  // that fits, breaking ties toward the lowest address.
+  kXlaSpatialBestFit,
+};
+
 // Returns one representative id per colocation class in deterministic
 // decreasing-size order.
 [[nodiscard]] std::vector<BufferId> DefaultPlacementOrder(const DsaProblem& problem);
@@ -41,7 +51,8 @@ struct PlacementSearchSpace {
 // Runs the shared first-fit placement engine using the supplied class priority.
 // Missing classes are appended in deterministic default order.
 [[nodiscard]] DsaResult PlaceWithOrder(const DsaProblem& problem,
-                                       const std::vector<BufferId>& priority);
+                                       const std::vector<BufferId>& priority,
+                                       PlacementStrategy strategy = PlacementStrategy::kFirstFit);
 
 }  // namespace dsa::detail
 

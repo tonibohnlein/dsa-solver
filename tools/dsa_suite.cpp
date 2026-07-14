@@ -27,9 +27,11 @@
 #include "dsa/first_fit_solver.h"
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
+#include "dsa/pypto_structured_search_solver.h"
 #include "dsa/structured_problem.h"
 #include "dsa/tvm_hill_climb_solver.h"
 #include "dsa/validator.h"
+#include "dsa/xla_heap_solver.h"
 
 #ifdef DSA_HAVE_MINIMALLOC
 #include "absl/status/status.h"
@@ -44,8 +46,10 @@ namespace fs = std::filesystem;
 using Json = nlohmann::ordered_json;
 
 constexpr std::string_view kFirstFit = "first_fit";
+constexpr std::string_view kXlaHeap = "xla_heap";
 constexpr std::string_view kTvmHillClimb = "tvm_hill_climb";
 constexpr std::string_view kLocalSearch = "local_search";
+constexpr std::string_view kPyptoStructuredSearch = "pypto_structured_search";
 constexpr std::string_view kMiniMalloc = "minimalloc_exact";
 
 struct Options {
@@ -481,6 +485,8 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   std::unique_ptr<dsa::DsaSolver> solver;
   if (method == kFirstFit) {
     solver = std::make_unique<dsa::FirstFitSolver>();
+  } else if (method == kXlaHeap) {
+    solver = std::make_unique<dsa::XlaHeapSolver>();
   } else if (method == kTvmHillClimb) {
     dsa::TvmHillClimbOptions solver_options;
     solver_options.seed = seed.value_or(0);
@@ -493,6 +499,13 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
     solver_options.restarts = options.restarts;
     solver_options.stagnation_limit = options.stagnation_limit;
     solver = std::make_unique<dsa::LocalSearchSolver>(solver_options);
+  } else if (method == kPyptoStructuredSearch) {
+    dsa::PyptoStructuredSearchOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver_options.max_iterations = options.iterations;
+    solver_options.restarts = options.restarts;
+    solver_options.stagnation_limit = options.stagnation_limit;
+    solver = std::make_unique<dsa::PyptoStructuredSearchSolver>(solver_options);
   } else {
     throw std::logic_error("unknown in-process heuristic");
   }
@@ -656,9 +669,13 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
     std::cout << "[suite] " << instance.document.instance << " ["
               << dsa::ToString(instance.document.profile) << "]" << std::endl;
     records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
+    records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
     for (std::uint64_t seed : options.seeds) {
       records.push_back(RunHeuristic(instance, kTvmHillClimb, seed, options));
       records.push_back(RunHeuristic(instance, kLocalSearch, seed, options));
+      if (instance.document.profile == dsa::BenchmarkProfile::kPyptoStructured) {
+        records.push_back(RunHeuristic(instance, kPyptoStructuredSearch, seed, options));
+      }
     }
     if (instance.document.profile != dsa::BenchmarkProfile::kPyptoStructured) {
       records.push_back(RunMiniMalloc(instance, options));
@@ -1004,16 +1021,15 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
   append_option("minimalloc-timeout-ms", std::to_string(options.minimalloc_timeout_ms));
   if (!options.run_minimalloc) output << " \\" << '\n' << "  --no-minimalloc";
   if (!options.build_core_relaxations) output << " \\" << '\n' << "  --no-core-relaxations";
-  output
-      << "\n```\n\n"
-      << "MiniMalloc is compared directly only with standard DSA. For PyPTO instances it runs "
-         "only on explicitly recorded core relaxations, so those numbers are lower bounds—not "
-         "valid structured placements. Only certified relaxation optima are shown as bounds; a "
-         "timeout is never reported as a certified optimum.\n\n"
-      << "## MiniMalloc standard DSA\n\n"
-      << "| Instance | Buffers | Capacity | MiniMalloc exact | First fit | TVM hill climb | Local "
-         "search |\n"
-      << "| --- | ---: | ---: | --- | --- | --- | --- |\n";
+  output << "\n```\n\n"
+         << "MiniMalloc is compared directly only with standard DSA. For PyPTO instances it runs "
+            "only on explicitly recorded core relaxations, so those numbers are lower bounds—not "
+            "valid structured placements. Only certified relaxation optima are shown as bounds; a "
+            "timeout is never reported as a certified optimum.\n\n"
+         << "## MiniMalloc standard DSA\n\n"
+         << "| Instance | Buffers | Capacity | MiniMalloc exact | First fit | XLA heap | TVM hill "
+            "climb | Local search |\n"
+         << "| --- | ---: | ---: | --- | --- | --- | --- | --- |\n";
 
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
@@ -1031,6 +1047,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), exact,
                             false)
            << " | "
+           << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), exact,
+                            false)
+           << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kTvmHillClimb),
                             exact, false)
            << " | "
@@ -1043,8 +1062,8 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
       << "\n## PyPTO structured DSA\n\n"
       << "| Instance | Family | Source | Target | Buffers | Structure | Exact core lower bound | "
          "First fit | TVM hill "
-         "climb | Local search |\n"
-      << "| --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- |\n";
+         "climb | Local search | PyPTO structured search |\n"
+      << "| --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- |\n";
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
     if (document.profile != dsa::BenchmarkProfile::kPyptoStructured) continue;
@@ -1064,6 +1083,10 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kLocalSearch),
                             nullptr, true)
+           << " | "
+           << HeuristicCell(
+                  FindSummary(summaries, document.instance, profile, kPyptoStructuredSearch),
+                  nullptr, true)
            << " |\n";
   }
 }

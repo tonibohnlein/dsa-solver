@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <string>
@@ -81,6 +82,15 @@ bool AddOverflows(std::uint64_t first, std::uint64_t second) {
   return first > std::numeric_limits<std::uint64_t>::max() - second;
 }
 
+std::optional<std::uint64_t> LeastCommonMultiple(std::uint64_t first, std::uint64_t second) {
+  const std::uint64_t divisor = std::gcd(first, second);
+  const std::uint64_t reduced = first / divisor;
+  if (reduced > std::numeric_limits<std::uint64_t>::max() / second) {
+    return std::nullopt;
+  }
+  return reduced * second;
+}
+
 std::optional<std::uint64_t> AlignUp(std::uint64_t value, std::uint64_t alignment) {
   if (alignment <= 1) return value;
   const std::uint64_t remainder = value % alignment;
@@ -146,7 +156,13 @@ PreparedProblem Prepare(const DsaProblem& problem) {
     super.members.push_back(i);
     super.representative = std::min(super.representative, buffer.id);
     super.size = std::max(super.size, buffer.size);
-    super.alignment = std::max(super.alignment, buffer.alignment);
+    const std::optional<std::uint64_t> merged_alignment =
+        LeastCommonMultiple(super.alignment, buffer.alignment);
+    if (!merged_alignment) {
+      prepared.errors.push_back("colocation class alignment overflows uint64");
+    } else {
+      super.alignment = *merged_alignment;
+    }
     super.live_intervals.insert(super.live_intervals.end(), buffer.live_intervals.begin(),
                                 buffer.live_intervals.end());
     if (!inserted) {
@@ -216,9 +232,60 @@ std::optional<std::uint64_t> FindFirstFit(FitRequest request,
   return candidate;
 }
 
+std::optional<std::uint64_t> FindBestFit(FitRequest request,
+                                         std::vector<AddressRange> blocked_ranges) {
+  std::sort(blocked_ranges.begin(), blocked_ranges.end(),
+            [](const AddressRange& first, const AddressRange& second) {
+              return std::tie(first.begin, first.end) < std::tie(second.begin, second.end);
+            });
+
+  std::optional<std::uint64_t> best_offset;
+  std::uint64_t best_chunk_size = std::numeric_limits<std::uint64_t>::max();
+  std::uint64_t free_begin = 0;
+  for (const AddressRange& blocked : blocked_ranges) {
+    if (blocked.end <= free_begin) continue;
+    if (blocked.begin > free_begin) {
+      const std::optional<std::uint64_t> candidate = AlignUp(free_begin, request.alignment);
+      if (!candidate) return std::nullopt;
+      if (*candidate <= blocked.begin && request.size <= blocked.begin - *candidate) {
+        const std::uint64_t chunk_size = blocked.begin - *candidate;
+        if (!best_offset || chunk_size < best_chunk_size ||
+            (chunk_size == best_chunk_size && *candidate < *best_offset)) {
+          best_offset = candidate;
+          best_chunk_size = chunk_size;
+        }
+      }
+    }
+    free_begin = std::max(free_begin, blocked.end);
+  }
+
+  // The final free chunk is unbounded, so every finite fitting chunk wins over
+  // it. Otherwise place at the aligned start of the unbounded chunk.
+  if (best_offset) return best_offset;
+  const std::optional<std::uint64_t> candidate = AlignUp(free_begin, request.alignment);
+  if (!candidate || AddOverflows(*candidate, request.size)) return std::nullopt;
+  return candidate;
+}
+
+std::pair<std::int64_t, std::int64_t> LifetimeHull(const SuperBuffer& buffer) {
+  std::int64_t lower = std::numeric_limits<std::int64_t>::max();
+  std::int64_t upper = std::numeric_limits<std::int64_t>::min();
+  for (const Interval& interval : buffer.live_intervals) {
+    lower = std::min(lower, interval.lower);
+    upper = std::max(upper, interval.upper);
+  }
+  return {lower, upper};
+}
+
+std::uint64_t LifetimeDuration(const SuperBuffer& buffer) {
+  const auto [lower, upper] = LifetimeHull(buffer);
+  return static_cast<std::uint64_t>(upper) - static_cast<std::uint64_t>(lower);
+}
+
 std::vector<std::size_t> SortedSuperOrder(const DsaProblem& problem,
                                           const PreparedProblem& prepared,
-                                          const std::vector<BufferId>& priority) {
+                                          const std::vector<BufferId>& priority,
+                                          PlacementStrategy strategy) {
   std::unordered_map<std::size_t, std::size_t> rank;
   for (std::size_t i = 0; i < priority.size(); ++i) {
     const auto found = prepared.id_to_super.find(priority[i]);
@@ -239,6 +306,12 @@ std::vector<std::size_t> SortedSuperOrder(const DsaProblem& problem,
     const SuperBuffer& first_super = prepared.supers[first];
     const SuperBuffer& second_super = prepared.supers[second];
     if (first_super.size != second_super.size) return first_super.size > second_super.size;
+    if (strategy == PlacementStrategy::kXlaSpatialBestFit) {
+      const std::uint64_t first_duration = LifetimeDuration(first_super);
+      const std::uint64_t second_duration = LifetimeDuration(second_super);
+      if (first_duration != second_duration) return first_duration > second_duration;
+      return first_super.representative < second_super.representative;
+    }
     const auto first_lower =
         std::min_element(first_super.live_intervals.begin(), first_super.live_intervals.end(),
                          [](const Interval& a, const Interval& b) { return a.lower < b.lower; });
@@ -257,7 +330,8 @@ std::vector<std::size_t> SortedSuperOrder(const DsaProblem& problem,
 std::vector<BufferId> DefaultPlacementOrder(const DsaProblem& problem) {
   const PreparedProblem prepared = Prepare(problem);
   if (!prepared.errors.empty() || prepared.flexible_pools) return {};
-  const std::vector<std::size_t> order = SortedSuperOrder(problem, prepared, {});
+  const std::vector<std::size_t> order =
+      SortedSuperOrder(problem, prepared, {}, PlacementStrategy::kFirstFit);
   std::vector<BufferId> result;
   result.reserve(order.size());
   for (std::size_t index : order) result.push_back(prepared.supers[index].representative);
@@ -300,7 +374,8 @@ PlacementSearchSpace BuildPlacementSearchSpace(const DsaProblem& problem) {
   return search_space;
 }
 
-DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>& priority) {
+DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>& priority,
+                         PlacementStrategy strategy) {
   DsaResult result;
   PreparedProblem prepared = Prepare(problem);
   if (!prepared.errors.empty()) {
@@ -314,7 +389,7 @@ DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>&
     return result;
   }
 
-  std::vector<std::size_t> order = SortedSuperOrder(problem, prepared, priority);
+  std::vector<std::size_t> order = SortedSuperOrder(problem, prepared, priority, strategy);
   std::stable_partition(order.begin(), order.end(), [&](std::size_t index) {
     return prepared.supers[index].pinned.has_value();
   });
@@ -466,7 +541,9 @@ DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>&
         }
       }
       const std::optional<std::uint64_t> offset =
-          FindFirstFit({current.size, current.alignment}, std::move(blocked));
+          strategy == PlacementStrategy::kXlaSpatialBestFit
+              ? FindBestFit({current.size, current.alignment}, std::move(blocked))
+              : FindFirstFit({current.size, current.alignment}, std::move(blocked));
       if (!offset) {
         result.status = SolveStatus::kBestEffortNoFit;
         result.diagnostics.push_back("address arithmetic overflow while placing buffer class");

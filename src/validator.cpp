@@ -12,8 +12,6 @@
 namespace dsa {
 namespace {
 
-bool IsPowerOfTwo(std::uint64_t value) { return value != 0 && (value & (value - 1)) == 0; }
-
 bool AddOverflows(std::uint64_t first, std::uint64_t second) {
   return first > std::numeric_limits<std::uint64_t>::max() - second;
 }
@@ -122,8 +120,8 @@ std::vector<std::string> ValidateProblem(const DsaProblem& problem) {
     if (buffer.size == 0) {
       errors.push_back("buffer " + std::to_string(buffer.id) + " has zero size");
     }
-    if (!IsPowerOfTwo(buffer.alignment)) {
-      errors.push_back("buffer " + std::to_string(buffer.id) + " alignment is not a power of two");
+    if (buffer.alignment == 0) {
+      errors.push_back("buffer " + std::to_string(buffer.id) + " alignment is zero");
     }
     if (buffer.live_intervals.empty()) {
       errors.push_back("buffer " + std::to_string(buffer.id) + " has no lifetime intervals");

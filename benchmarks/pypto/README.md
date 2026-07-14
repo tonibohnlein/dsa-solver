@@ -55,3 +55,23 @@ independent evidence.
 
 Run `dsa-suite --pypto <normalized-corpus>/documents ...` for solver reports.
 See `docs/compiler_corpus.md` for ingestion and review rules.
+
+## Checked-in real instances
+
+`real/deepseek-v4-lifetime-hull-8438a916/` contains two structurally distinct
+DeepSeek-v4 `softmax_pool` instances captured while proving the unsafe lifetime
+hole fixed by the conservative-hull diagnostic revision. They are useful
+benchmarks rather than merely failure artifacts: the instances contain 31 and
+35 buffers, respectively, with hundreds of legal reuse candidates and
+mandatory whole-slot alias structure. Both corrected instances retain the same
+peak as the original PyPTO placement.
+
+The workload sources are pinned to PyPTO-Lib `bf89431f`; `producer_commit`
+records the exact diagnostic PyPTO exporter revision `8438a916`. That producer
+commit is provenance for these artifacts, not a public PyPTO release. The
+equivalent production fix is present on the draft PyPTO DSA branch and is
+device-verified separately.
+
+The known-unsafe pre-fix exports are deliberately not benchmark inputs. A
+solver accepting their under-approximated lifetimes would only demonstrate
+conformance to a bad problem statement.

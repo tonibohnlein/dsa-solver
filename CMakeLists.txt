@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.5.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.6.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -21,11 +21,13 @@ add_library(dsa_solver
   src/minimalloc_csv.cpp
   src/model.cpp
   src/placement_engine.cpp
+  src/pypto_structured_search_solver.cpp
   src/solver.cpp
   src/structured_json.cpp
   src/structured_problem.cpp
   src/tvm_hill_climb_solver.cpp
   src/validator.cpp
+  src/xla_heap_solver.cpp
 )
 add_library(dsa::solver ALIAS dsa_solver)
 set_target_properties(dsa_solver PROPERTIES
@@ -235,6 +237,22 @@ if(BUILD_TESTING)
       --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/standard/freed_region_subdivision_v1.json
       --solver first-fit
       --target-total-peak 100
+  )
+  add_test(
+    NAME dsa-cli-xla-heap
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example.csv
+      --solver xla-heap
+      --target-total-peak 12
+  )
+  add_test(
+    NAME dsa-cli-pypto-structured-search
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json
+      --solver pypto-structured-search
+      --seed 7
+      --iterations 100
+      --restarts 2
   )
   add_test(
     NAME dsa-suite-smoke

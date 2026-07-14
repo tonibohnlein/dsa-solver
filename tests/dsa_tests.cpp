@@ -3,6 +3,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -15,9 +16,11 @@
 #include "dsa/first_fit_solver.h"
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
+#include "dsa/pypto_structured_search_solver.h"
 #include "dsa/structured_problem.h"
 #include "dsa/tvm_hill_climb_solver.h"
 #include "dsa/validator.h"
+#include "dsa/xla_heap_solver.h"
 
 namespace {
 
@@ -58,7 +61,10 @@ std::uint64_t OffsetOf(const dsa::DsaResult& result, dsa::BufferId id) {
 
 dsa::DsaResult SolveAndValidate(const dsa::DsaProblem& problem, const dsa::DsaSolver& solver) {
   dsa::DsaResult result = solver.Solve(problem);
-  Require(result.status == dsa::SolveStatus::kFeasible, "solver did not find a feasible solution");
+  std::string status_message =
+      std::string("solver did not find a feasible solution: ") + dsa::ToString(result.status);
+  if (!result.diagnostics.empty()) status_message += " (" + result.diagnostics.front() + ")";
+  Require(result.status == dsa::SolveStatus::kFeasible, status_message);
   const std::vector<std::string> errors = dsa::ValidateSolution(problem, SolutionOrThrow(result));
   Require(errors.empty(), errors.empty() ? "" : errors.front());
   return result;
@@ -516,8 +522,7 @@ void TestEveryPyptoCorpusDocumentIsReplayable() {
                 document.metadata.at("producer") == "pypto" &&
                 document.metadata.count("solver_input") != 0 &&
                 document.metadata.at("solver_input") == "pre_memory_reuse" &&
-                document.metadata.count("target") != 0 &&
-                !document.metadata.at("target").empty(),
+                document.metadata.count("target") != 0 && !document.metadata.at("target").empty(),
             "PyPTO corpus document lost exporter provenance: " + path.string());
     Require(document.problem.pypto_structure.has_value() &&
                 document.problem.pypto_structure->whole_slot_reuse,
@@ -616,6 +621,22 @@ void TestSolverCapabilityMatching() {
   Require(tvm_hill_climb.Solve(document.problem).status == dsa::SolveStatus::kFeasible,
           "compatible TVM-style hill climb did not run");
 
+  const dsa::PyptoStructuredSearchSolver pypto_structured_search;
+  const dsa::SolverCompatibility pypto_match =
+      dsa::CheckSolverCompatibility(document.problem, pypto_structured_search.Capabilities());
+  Require(pypto_match.Compatible(), "PyPTO structured search should match the fixture");
+  Require(pypto_structured_search.Solve(document.problem).status == dsa::SolveStatus::kFeasible,
+          "compatible PyPTO structured search did not run");
+
+  const dsa::XlaHeapSolver xla_heap;
+  const dsa::SolverCompatibility xla_match =
+      dsa::CheckSolverCompatibility(document.problem, xla_heap.Capabilities());
+  Require(!xla_match.StructurallyCompatible() &&
+              Contains(xla_match.unsupported_features, "whole_slot_reuse"),
+          "XLA heap silently accepted PyPTO-only structure");
+  Require(xla_heap.Solve(document.problem).status == dsa::SolveStatus::kUnsupported,
+          "XLA heap did not reject a structured PyPTO problem");
+
   dsa::DsaProblem bank_objective = document.problem;
   bank_objective.objective.terms = {dsa::ObjectiveMetric::kBankCost};
   const dsa::SolverCompatibility bank_match =
@@ -632,6 +653,111 @@ void TestInvalidProblemIsReported() {
   Require(result.status == dsa::SolveStatus::kInvalidProblem,
           "empty half-open lifetime was not rejected");
   Require(!result.diagnostics.empty(), "invalid problem has no diagnostic");
+}
+
+void TestXlaSpatialBestFitConformance() {
+  const dsa::XlaHeapSolver solver;
+
+  dsa::DsaProblem decreasing_size;
+  decreasing_size.buffers = {
+      MakeBuffer(0, {{0, 4}}, 10),
+      MakeBuffer(1, {{1, 5}}, 30),
+      MakeBuffer(2, {{2, 6}}, 20),
+      MakeBuffer(3, {{3, 7}}, 40),
+  };
+  dsa::DsaResult result = SolveAndValidate(decreasing_size, solver);
+  Require(result.objective.max_peak == 100, "XLA decreasing-size peak changed");
+  Require(OffsetOf(result, 0) == 90 && OffsetOf(result, 1) == 40 && OffsetOf(result, 2) == 70 &&
+              OffsetOf(result, 3) == 0,
+          "XLA decreasing-size placement differs from OpenXLA conformance case");
+
+  dsa::DsaProblem best_fit;
+  best_fit.buffers = {
+      MakeBuffer(0, {{0, 3}}, 10), MakeBuffer(1, {{1, 6}}, 20), MakeBuffer(2, {{2, 7}}, 40),
+      MakeBuffer(3, {{4, 8}}, 30), MakeBuffer(4, {{5, 9}}, 50),
+  };
+  result = SolveAndValidate(best_fit, solver);
+  Require(result.objective.max_peak == 140, "XLA best-fit peak changed");
+  Require(OffsetOf(result, 0) == 90 && OffsetOf(result, 1) == 120 && OffsetOf(result, 2) == 50 &&
+              OffsetOf(result, 3) == 90 && OffsetOf(result, 4) == 0,
+          "XLA best-fit placement differs from OpenXLA conformance case");
+
+  dsa::DsaProblem aligned;
+  aligned.buffers = {
+      MakeBuffer(0, {{0, 3}}, 10),
+      MakeBuffer(1, {{1, 5}}, 20),
+      MakeBuffer(2, {{2, 6}}, 50),
+      MakeBuffer(3, {{4, 7}}, 40),
+  };
+  for (dsa::Buffer& buffer : aligned.buffers) buffer.alignment = 20;
+  result = SolveAndValidate(aligned, solver);
+  Require(result.objective.max_peak == 120, "XLA aligned peak changed");
+  Require(OffsetOf(result, 0) == 60 && OffsetOf(result, 1) == 100 && OffsetOf(result, 2) == 0 &&
+              OffsetOf(result, 3) == 60,
+          "XLA aligned placement differs from OpenXLA conformance case");
+
+  dsa::DsaProblem colocated_alignment;
+  colocated_alignment.buffers = {
+      MakeBuffer(0, {{0, 2}}, 10),
+      MakeBuffer(1, {{2, 4}}, 10),
+      MakeBuffer(2, {{0, 4}}, 1),
+  };
+  colocated_alignment.buffers[0].alignment = 6;
+  colocated_alignment.buffers[1].alignment = 8;
+  colocated_alignment.colocations.push_back({0, 1});
+  result = SolveAndValidate(colocated_alignment, solver);
+  Require(OffsetOf(result, 0) == OffsetOf(result, 1),
+          "XLA colocation members do not share an offset");
+  Require(OffsetOf(result, 0) % 24 == 0,
+          "colocation class did not use the least common multiple alignment");
+
+  dsa::DsaProblem overflowing_alignment = colocated_alignment;
+  overflowing_alignment.buffers[0].alignment = std::numeric_limits<std::uint64_t>::max();
+  overflowing_alignment.buffers[1].alignment = 2;
+  Require(solver.Solve(overflowing_alignment).status == dsa::SolveStatus::kInvalidProblem,
+          "overflowing colocation alignment was not rejected");
+}
+
+void TestPyptoStructuredSearchUsesStructureAndObjective() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{2, 9}}, 5), MakeBuffer(1, {{4, 8}}, 3), MakeBuffer(2, {{7, 10}}, 3),
+      MakeBuffer(3, {{8, 9}}, 2), MakeBuffer(4, {{0, 6}}, 6),
+  };
+  problem.pools.front().capacity = 14;
+  dsa::CostModel cost_model;
+  cost_model.reuse_penalties.push_back({3, 4, 100, dsa::ReusePenaltyReason::kCrossPipe});
+  problem.cost_model = std::move(cost_model);
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+  dsa::PyptoStructure structure;
+  for (const dsa::Buffer& buffer : problem.buffers) {
+    structure.alias_classes.push_back({buffer.id, {buffer.name}});
+  }
+  problem.pypto_structure = std::move(structure);
+
+  dsa::PyptoStructuredSearchOptions options;
+  options.seed = 11;
+  options.max_iterations = 2'000;
+  options.restarts = 4;
+  options.stagnation_limit = 100;
+  const dsa::PyptoStructuredSearchSolver solver(options);
+  const dsa::DsaResult first = SolveAndValidate(problem, solver);
+  const dsa::DsaResult second = SolveAndValidate(problem, solver);
+  Require(first.objective.max_peak <= 14 && first.objective.reuse_cost == 0,
+          "PyPTO structured search did not honor the fit/reuse-cost objective");
+  Require(SolutionOrThrow(first).placements == SolutionOrThrow(second).placements,
+          "PyPTO structured search is not deterministic for a fixed seed");
+  Require(std::any_of(first.diagnostics.begin(), first.diagnostics.end(),
+                      [](const std::string& diagnostic) {
+                        return diagnostic.find("PyPTO structured search evaluated") !=
+                               std::string::npos;
+                      }),
+          "PyPTO structured search did not report its evaluation budget");
+
+  dsa::DsaProblem standard = problem;
+  standard.pypto_structure.reset();
+  Require(solver.Solve(standard).status == dsa::SolveStatus::kUnsupported,
+          "PyPTO structured search silently accepted an unstructured problem");
 }
 
 void TestFlexiblePoolAssignmentIsExplicitlyUnsupported() {
@@ -669,6 +795,8 @@ int main() {
       {"PyPTO recursive corpus", TestEveryPyptoCorpusDocumentIsReplayable},
       {"core relaxation", TestCoreRelaxationProfiles},
       {"solver capabilities", TestSolverCapabilityMatching},
+      {"XLA spatial best fit", TestXlaSpatialBestFitConformance},
+      {"PyPTO structured search", TestPyptoStructuredSearchUsesStructureAndObjective},
       {"invalid problem", TestInvalidProblemIsReported},
       {"flexible pools", TestFlexiblePoolAssignmentIsExplicitlyUnsupported},
   };

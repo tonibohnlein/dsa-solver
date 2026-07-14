@@ -19,9 +19,11 @@
 #include "dsa/first_fit_solver.h"
 #include "dsa/local_search_solver.h"
 #include "dsa/minimalloc_csv.h"
+#include "dsa/pypto_structured_search_solver.h"
 #include "dsa/structured_problem.h"
 #include "dsa/tvm_hill_climb_solver.h"
 #include "dsa/validator.h"
+#include "dsa/xla_heap_solver.h"
 
 namespace {
 
@@ -40,6 +42,7 @@ struct Options {
   std::optional<dsa::PoolId> core_relaxation_pool;
   std::optional<ObjectiveOverride> objective_override;
   dsa::LocalSearchOptions local_search;
+  dsa::PyptoStructuredSearchOptions pypto_structured_search;
   dsa::TvmHillClimbOptions tvm_hill_climb;
 };
 
@@ -59,7 +62,8 @@ std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
 void PrintHelp() {
   std::cout << "Usage: dsa-bench --input INSTANCE.{csv,json} [options]\n\n"
             << "Options:\n"
-            << "  --solver first-fit|local-search|tvm-hill-climb\n"
+            << "  --solver first-fit|xla-heap|local-search|pypto-structured-search|"
+               "tvm-hill-climb\n"
             << "                                   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
             << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
@@ -110,15 +114,19 @@ Options ParseOptions(int argc, char** argv) {
     } else if (option == "--seed") {
       const std::uint64_t seed = ParseUnsigned(next(&i, option), option);
       options.local_search.seed = seed;
+      options.pypto_structured_search.seed = seed;
       options.tvm_hill_climb.seed = seed;
     } else if (option == "--iterations") {
       const std::uint64_t iterations = ParseUnsigned(next(&i, option), option);
       options.local_search.max_iterations = iterations;
+      options.pypto_structured_search.max_iterations = iterations;
       options.tvm_hill_climb.max_attempts = iterations;
     } else if (option == "--restarts") {
       options.local_search.restarts = ParseUnsigned(next(&i, option), option);
+      options.pypto_structured_search.restarts = options.local_search.restarts;
     } else if (option == "--stagnation") {
       options.local_search.stagnation_limit = ParseUnsigned(next(&i, option), option);
+      options.pypto_structured_search.stagnation_limit = options.local_search.stagnation_limit;
     } else if (option == "--target-total-peak") {
       options.tvm_hill_climb.target_total_peak = ParseUnsigned(next(&i, option), option);
     } else if (option == "--worse-move-scale") {
@@ -139,7 +147,8 @@ Options ParseOptions(int argc, char** argv) {
     }
   }
   if (options.input.empty()) UsageError("--input is required");
-  if (options.solver != "first-fit" && options.solver != "local-search" &&
+  if (options.solver != "first-fit" && options.solver != "xla-heap" &&
+      options.solver != "local-search" && options.solver != "pypto-structured-search" &&
       options.solver != "tvm-hill-climb") {
     UsageError("unknown solver '" + options.solver + "'");
   }
@@ -304,7 +313,7 @@ std::string BuildJson(const Options& options, const dsa::StructuredProblemDocume
     output << ",\"relaxed_features\":";
     AppendStringArray(&output, document.relaxed_features);
   }
-  if (options.solver == "local-search") {
+  if (options.solver == "local-search" || options.solver == "pypto-structured-search") {
     output << ",\"search_budget\":" << options.local_search.max_iterations
            << ",\"restarts\":" << options.local_search.restarts
            << ",\"stagnation_limit\":" << options.local_search.stagnation_limit;
@@ -335,7 +344,11 @@ int main(int argc, char** argv) {
     dsa::StructuredProblemDocument document = LoadProblemDocument(options);
 
     std::unique_ptr<dsa::DsaSolver> solver;
-    if (options.solver == "local-search") {
+    if (options.solver == "xla-heap") {
+      solver = std::make_unique<dsa::XlaHeapSolver>();
+    } else if (options.solver == "pypto-structured-search") {
+      solver = std::make_unique<dsa::PyptoStructuredSearchSolver>(options.pypto_structured_search);
+    } else if (options.solver == "local-search") {
       solver = std::make_unique<dsa::LocalSearchSolver>(options.local_search);
     } else if (options.solver == "tvm-hill-climb") {
       solver = std::make_unique<dsa::TvmHillClimbSolver>(options.tvm_hill_climb);

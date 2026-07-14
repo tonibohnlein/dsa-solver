@@ -20,8 +20,10 @@ The project is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE
 - Optional reuse penalties plus normalized PyPTO alias and pipeline-group provenance.
 - An independent problem/solution validator and objective recomputation.
 - A deterministic decreasing-size first-fit baseline with lifetime-aware hole reuse.
+- A frozen OpenXLA spatial decreasing-size/best-fit heap baseline.
 - A seeded iterated local-search baseline over first-fit placement orderings.
 - A named reimplementation of Apache TVM USMP's graph-guided hill-climb policy.
+- A PyPTO-structured search with pipeline-block, semantic-alias, and reuse-cost neighborhoods.
 - Native MiniMalloc input/output CSV support (`id,lower,upper,size[,offset]`).
 - A `dsa-bench` CLI with JSON results and reference-solution comparison.
 - A native `dsa-suite` runner that executes repeated heuristic and exact MiniMalloc runs, independently
@@ -60,6 +62,10 @@ without that baseline.
   --input tests/data/minimalloc_example.csv \
   --solver first-fit \
   --output first-fit.csv
+
+./build/dsa-bench \
+  --input tests/data/minimalloc_example.csv \
+  --solver xla-heap
 
 ./build/dsa-bench \
   --input tests/data/minimalloc_example.csv \
@@ -142,7 +148,8 @@ Raw PyPTO exports use function-local names such as `kernel`, so concatenating mo
 create duplicate benchmark identities. `dsa-corpus` normalizes an export tree without changing its DSA
 problem, deduplicates repeated target/problem shapes without losing source observations, attaches the
 exact source repository/commit/path and raw-file fingerprint, and writes `manifest.tsv` plus
-`coverage.tsv`:
+`coverage.tsv`. Unique but allocation-trivial shapes remain auditable in the manifest and are not
+weighted as solver benchmarks:
 
 ```bash
 ./build/dsa-corpus \
@@ -151,12 +158,20 @@ exact source repository/commit/path and raw-file fingerprint, and writes `manife
   --coverage-targets benchmarks/pypto/targets/pypto_lib_bf89431.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
   --source-commit bf89431fc73902caf594893888de84d06c3bf435 \
+  --producer-repo https://github.com/tonibohnlein/pypto.git \
+  --producer-commit 1890b9e2aa92ea1f2e2a335d10190cc0f5bf1ad7 \
   --namespace pypto-lib
 ```
 
 The checked-in target contract covers all 11 runnable examples and all 45 runnable model programs at
 that PyPTO-Lib revision: DeepSeek v3.2/v4 and Qwen3 14B/32B are exhaustive. Import fails if any target
 has no DSA document or if an unlisted case appears. See [the corpus workflow](docs/compiler_corpus.md).
+
+Do not import the earlier 597-document `b8802dc6` regression archive as a
+published benchmark. That run was essential for finding the DeepSeek-v4
+lifetime-hole defect, but some exported lifetimes are now known to be unsound.
+Regenerate every case with the fixed producer revision above, then apply
+structural deduplication and meaningful-instance selection.
 
 Raw records distinguish `placement_valid` from `solution_valid`. The former validates address geometry
 while ignoring capacity only for a `best_effort_no_fit` diagnostic placement; the latter always validates
@@ -180,22 +195,22 @@ input/result reuse without changing the portable half-open model.
 
 The core model intentionally carries more structure than MiniMalloc CSV can encode:
 
-| Structure | Representation | First-fit | Local search | TVM hill climb |
-| --- | --- | --- | --- | --- |
-| Multi-interval liveness | `Buffer::live_intervals` | yes | yes | yes |
-| Fixed multi-pool planning | `Pool`, `Buffer::allowed_pools` | yes | yes | yes |
-| Flexible pool assignment | multiple allowed pools | no | no | no |
-| Must-alias | `Colocation` | yes | yes | yes |
-| Pipeline/hazard separation | `Separation` | yes | yes | yes |
-| Branch/phi exclusivity | `TemporalExclusion` | yes | yes | yes |
-| Pinned allocation | `PinnedAllocation` | yes | yes | yes |
-| Reserved address holes | `Pool::reserved_ranges` | yes | yes | yes |
-| Reuse/synchronization cost | `CostModel::reuse_penalties` | reported baseline | optimized | optimized |
-| Bank geometry/cost | `Pool::bank_geometry` | represented only | represented only | represented only |
+| Structure | Representation | First-fit | XLA heap | Local/TVM | PyPTO structured |
+| --- | --- | --- | --- | --- | --- |
+| Multi-interval liveness | `Buffer::live_intervals` | yes | no | yes | yes |
+| Fixed multi-pool planning | `Pool`, `Buffer::allowed_pools` | yes | no | yes | yes |
+| Flexible pool assignment | multiple allowed pools | no | no | no | no |
+| Must-alias | `Colocation` | yes | yes | yes | yes |
+| Pipeline/hazard separation | `Separation` | yes | no | yes | yes |
+| Branch/phi exclusivity | `TemporalExclusion` | yes | no | yes | yes |
+| Pinned allocation | `PinnedAllocation` | yes | no | yes | yes |
+| Reserved address holes | `Pool::reserved_ranges` | yes | no | yes | yes |
+| Reuse/synchronization cost | `CostModel::reuse_penalties` | reported | no | optimized | optimized + targeted moves |
+| Bank geometry/cost | `Pool::bank_geometry` | represented | no | represented | represented |
 
 Separation reasons and `PyptoStructure` are provenance: solvers enforce the translated generic constraints
-and costs. They are retained so the planned `pypto-structured-search` can introduce alias-class and
-pipeline-group neighborhoods without changing the portable core.
+and costs. `pypto-structured-search` consumes that provenance for alias-class, pipeline-block, and
+reuse-penalty neighborhoods without changing the portable core.
 
 Every solver advertises capabilities. Unsupported hard structure produces `kUnsupported`; it is not
 silently dropped. Objective-only mismatches are reported separately: first-fit can remain a disclosed
@@ -210,4 +225,5 @@ structural baseline, while a search solver rejects metrics it cannot use for can
 5. Implement placement-aware large-neighborhood search with reproducible ablations against the TVM policy.
 
 See [the TVM hill-climb study](docs/tvm_hill_climb.md) for the exact search state, neighborhood,
-deliberate compatibility fixes, and the PyPTO refinement path.
+deliberate compatibility fixes, and the PyPTO refinement path. See
+[the XLA heap study](docs/xla_heap.md) for the second frozen compiler baseline.
