@@ -1,8 +1,10 @@
 # PyPTO exported corpus
 
-These schema-v1 documents are byte-for-byte outputs of PyPTO's pre-memory-reuse
-DSA exporter. They are compiler instances, not manually reduced standard DSA
-problems.
+The root schema-v1 fixtures are byte-for-byte outputs of PyPTO's
+pre-memory-reuse DSA exporter. They are compiler instances, not manually reduced
+standard DSA problems. Larger model corpora live below `real/` after
+normalization with `dsa-corpus`; their `problem` is exporter-derived while the
+envelope gains globally unique identity and source provenance.
 
 | Instance | PyPTO source | Regression guarded | First-fit peak |
 | --- | --- | --- | ---: |
@@ -24,3 +26,32 @@ The source test name is the regeneration contract. Regenerate a document with
 PyPTO's `MemoryPlanner.DSA` and `dsa_export_dir`, review the schema diff, then
 replace the corresponding corpus file. CMake tests parse, validate, solve, and
 independently validate every document listed above.
+
+`targets/pypto_lib_bf89431.tsv` is the coverage contract for the first real
+PyPTO-Lib corpus. It lists every tracked runnable entry point at commit
+`bf89431fc73902caf594893888de84d06c3bf435`: 11 examples, 38 DeepSeek models,
+and 7 Qwen3 models. Its `case_id` matches the device-regression artifact
+directory. Importing with this target file fails on any missing or unknown case;
+`coverage.tsv` records the realized document count per entry point.
+
+`targets/pypto_b8802dc6.tsv` captures the real-device PyPTO kernel gates at the
+adapter-fix revision: explicit planner smoke kernels, col-vector control flow,
+gather whole-slot reuse, and depth-2 pipeline matmul. It complements the five
+byte-for-byte unit-export fixtures rather than pretending four selected system
+tests exhaust PyPTO's entire system-test suite.
+
+The normalized document metadata preserves:
+
+- exact source repository, commit, and Python entry point;
+- original exporter instance and relative export filename;
+- model family and case ID;
+- FNV-1a fingerprints of the raw exporter bytes and canonical target/problem;
+- the unchanged PyPTO producer, target, lifetime, and whole-slot contracts.
+
+`manifest.tsv` retains one observation per source/kernel export. Structurally
+identical target/problem shapes map to one representative JSON under
+`documents/`, so aggregate solver tables do not count repeated model reuse as
+independent evidence.
+
+Run `dsa-suite --pypto <normalized-corpus>/documents ...` for solver reports.
+See `docs/compiler_corpus.md` for ingestion and review rules.

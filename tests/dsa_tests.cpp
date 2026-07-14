@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -491,6 +492,40 @@ void TestPyptoExportedCorpus() {
   }
 }
 
+void TestEveryPyptoCorpusDocumentIsReplayable() {
+  const std::filesystem::path root =
+      std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto";
+  std::vector<std::filesystem::path> paths;
+  for (const std::filesystem::directory_entry& entry :
+       std::filesystem::recursive_directory_iterator(root)) {
+    if (entry.is_regular_file() && entry.path().extension() == ".json") {
+      paths.push_back(entry.path());
+    }
+  }
+  std::sort(paths.begin(), paths.end());
+  Require(paths.size() >= 5, "PyPTO benchmark corpus unexpectedly lost its seed fixtures");
+
+  std::set<std::string> identities;
+  for (const std::filesystem::path& path : paths) {
+    const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
+    Require(document.profile == dsa::BenchmarkProfile::kPyptoStructured,
+            "PyPTO corpus contains a document with the wrong profile: " + path.string());
+    Require(identities.insert(document.instance).second,
+            "PyPTO corpus contains duplicate benchmark identity '" + document.instance + "'");
+    Require(document.metadata.count("producer") != 0 &&
+                document.metadata.at("producer") == "pypto" &&
+                document.metadata.count("solver_input") != 0 &&
+                document.metadata.at("solver_input") == "pre_memory_reuse" &&
+                document.metadata.count("target") != 0 &&
+                !document.metadata.at("target").empty(),
+            "PyPTO corpus document lost exporter provenance: " + path.string());
+    Require(document.problem.pypto_structure.has_value() &&
+                document.problem.pypto_structure->whole_slot_reuse,
+            "PyPTO corpus document lost the whole-slot reuse contract: " + path.string());
+    static_cast<void>(SolveAndValidate(document.problem, dsa::FirstFitSolver()));
+  }
+}
+
 void TestCoreRelaxationProfiles() {
   const dsa::StructuredProblemDocument source = MakeStructuredDocument();
   const std::vector<dsa::StructuredProblemDocument> relaxations = dsa::BuildCoreRelaxations(source);
@@ -631,6 +666,7 @@ int main() {
       {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},
       {"structured JSON", TestStructuredJsonRoundTripAndProfiles},
       {"PyPTO exported corpus", TestPyptoExportedCorpus},
+      {"PyPTO recursive corpus", TestEveryPyptoCorpusDocumentIsReplayable},
       {"core relaxation", TestCoreRelaxationProfiles},
       {"solver capabilities", TestSolverCapabilityMatching},
       {"invalid problem", TestInvalidProblemIsReported},

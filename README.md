@@ -26,6 +26,8 @@ The project is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE
 - A `dsa-bench` CLI with JSON results and reference-solution comparison.
 - A native `dsa-suite` runner that executes repeated heuristic and exact MiniMalloc runs, independently
   validates solutions, and writes raw JSONL, aggregated CSV, and Markdown tables.
+- A native `dsa-corpus` importer that turns raw compiler export trees into uniquely identified,
+  provenance-rich benchmark corpora and fails closed on missing coverage targets.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
 - A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by all built-in solvers in CTest.
 - Explicit standard, PyPTO-structured, and sound core-relaxation benchmark profiles.
@@ -129,8 +131,32 @@ MiniMalloc solver with a per-instance timeout:
 The output directory contains:
 
 - `results.jsonl`: one immutable record per instance, method, and seed;
-- `summary.csv`: long-form per-method aggregation with best objective and median runtime;
-- `report.md`: separate standard-DSA and PyPTO-structured comparison tables.
+- `summary.csv`: long-form per-method aggregation with best objective, median runtime, and compiler
+  family/source columns when present;
+- `report.md`: separate standard-DSA and PyPTO-structured comparison tables, including normalized
+  compiler provenance.
+
+## Import compiler model corpora
+
+Raw PyPTO exports use function-local names such as `kernel`, so concatenating model runs directly can
+create duplicate benchmark identities. `dsa-corpus` normalizes an export tree without changing its DSA
+problem, deduplicates repeated target/problem shapes without losing source observations, attaches the
+exact source repository/commit/path and raw-file fingerprint, and writes `manifest.tsv` plus
+`coverage.tsv`:
+
+```bash
+./build/dsa-corpus \
+  --input device-regression-artifacts/corpus \
+  --output benchmarks/pypto/real/pypto-lib-bf89431 \
+  --coverage-targets benchmarks/pypto/targets/pypto_lib_bf89431.tsv \
+  --source-repo https://github.com/hw-native-sys/pypto-lib.git \
+  --source-commit bf89431fc73902caf594893888de84d06c3bf435 \
+  --namespace pypto-lib
+```
+
+The checked-in target contract covers all 11 runnable examples and all 45 runnable model programs at
+that PyPTO-Lib revision: DeepSeek v3.2/v4 and Qwen3 14B/32B are exhaustive. Import fails if any target
+has no DSA document or if an unlisted case appears. See [the corpus workflow](docs/compiler_corpus.md).
 
 Raw records distinguish `placement_valid` from `solution_valid`. The former validates address geometry
 while ignoring capacity only for a `best_effort_no_fit` diagnostic placement; the latter always validates
@@ -177,8 +203,8 @@ structural baseline, while a search solver rejects metrics it cannot use for can
 
 ## Next benchmark milestones
 
-1. Grow the exported PyPTO corpus across models, memory pools, control flow, and pipeline shapes.
-2. Record public `pypto-lib` instances with source revisions, target, pool, and content hashes.
+1. Ingest the device-verified PyPTO-Lib exports against the checked-in exhaustive coverage target.
+2. Extend the same explicit coverage contract to a curated PyPTO system-test/kernel inventory.
 3. Model capacity-driven pipeline-depth choices rather than only fixed pairwise separations.
 4. Add idealloc and additional heuristic baselines through the same result contract.
 5. Implement placement-aware large-neighborhood search with reproducible ablations against the TVM policy.

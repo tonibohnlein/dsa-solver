@@ -1,0 +1,3 @@
+case_id	source_path	family	devices	minimum_documents
+case_a	models/example/case_a.py	example	1	1
+case_b	models/example/case_b.py	example	1	1

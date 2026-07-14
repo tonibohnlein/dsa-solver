@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.4.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.5.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -60,6 +60,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa-bench PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 elseif(MSVC)
   target_compile_options(dsa-bench PRIVATE /W4 /permissive-)
+endif()
+
+add_executable(dsa-corpus tools/dsa_corpus.cpp)
+target_link_libraries(dsa-corpus PRIVATE dsa::solver)
+set_target_properties(dsa-corpus PROPERTIES
+  CXX_EXTENSIONS OFF
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED YES
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(dsa-corpus PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+elseif(MSVC)
+  target_compile_options(dsa-corpus PRIVATE /W4 /permissive-)
 endif()
 
 option(DSA_ENABLE_MINIMALLOC_BASELINE
@@ -238,9 +251,19 @@ if(BUILD_TESTING)
   set_tests_properties(dsa-suite-smoke PROPERTIES
     PASS_REGULAR_EXPRESSION "wrote .*report.md"
   )
+  add_test(
+    NAME dsa-corpus-import-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_CORPUS=$<TARGET_FILE:dsa-corpus>
+      -DDSA_BENCH=$<TARGET_FILE:dsa-bench>
+      -DDSA_SUITE=$<TARGET_FILE:dsa-suite>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_corpus_smoke.cmake
+  )
 endif()
 
-install(TARGETS dsa_solver dsa-bench dsa-suite
+install(TARGETS dsa_solver dsa-bench dsa-corpus dsa-suite
   EXPORT dsa-solver-targets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

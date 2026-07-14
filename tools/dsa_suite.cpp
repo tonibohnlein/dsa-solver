@@ -103,6 +103,8 @@ struct Summary {
   std::string instance;
   std::string profile;
   std::string source;
+  std::string corpus_family;
+  std::string corpus_source_path;
   std::string method;
   std::string comparison_scope;
   std::string status;
@@ -702,6 +704,12 @@ std::vector<Summary> Summarize(const std::vector<RunRecord>& records) {
     summary.method = std::get<2>(key);
     summary.comparison_scope = std::get<3>(key);
     summary.source = group.front()->source;
+    const auto family = group.front()->metadata.find("corpus_family");
+    if (family != group.front()->metadata.end()) summary.corpus_family = family->second;
+    const auto source_path = group.front()->metadata.find("corpus_source_path");
+    if (source_path != group.front()->metadata.end()) {
+      summary.corpus_source_path = source_path->second;
+    }
     summary.relaxed_from = group.front()->relaxed_from;
     summary.capacity = group.front()->capacity;
     summary.target = group.front()->target;
@@ -805,14 +813,16 @@ void WriteRawResults(const fs::path& path, const std::vector<RunRecord>& records
 void WriteSummaryCsv(const fs::path& path, const std::vector<Summary>& summaries) {
   std::ofstream output(path);
   if (!output) throw std::runtime_error("cannot write summary CSV: " + path.string());
-  output << "instance,profile,source,method,comparison_scope,status,runs,feasible_runs,"
+  output << "instance,profile,source,corpus_family,corpus_source_path,method,comparison_scope,"
+            "status,runs,feasible_runs,"
             "placement_valid_runs,valid_runs,"
             "best_seed,best_peak,best_total_peak,best_capacity_overflow,best_reuse_cost,"
             "median_runtime_us,certified_optimal,capacity,target,features,relaxed_from\n";
   for (const Summary& summary : summaries) {
     const RunRecord* best = summary.best ? &*summary.best : nullptr;
     output << CsvEscape(summary.instance) << ',' << CsvEscape(summary.profile) << ','
-           << CsvEscape(summary.source) << ',' << CsvEscape(summary.method) << ','
+           << CsvEscape(summary.source) << ',' << CsvEscape(summary.corpus_family) << ','
+           << CsvEscape(summary.corpus_source_path) << ',' << CsvEscape(summary.method) << ','
            << CsvEscape(summary.comparison_scope) << ',' << CsvEscape(summary.status) << ','
            << summary.runs << ',' << summary.feasible_runs << ',' << summary.placement_valid_runs
            << ',' << summary.valid_runs << ',' << (best ? OptionalCsv(best->seed) : std::string{})
@@ -1029,16 +1039,19 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << " |\n";
   }
 
-  output << "\n## PyPTO structured DSA\n\n"
-         << "| Instance | Target | Buffers | Structure | Exact core lower bound | First fit | TVM "
-            "hill "
-            "climb | Local search |\n"
-         << "| --- | --- | ---: | --- | --- | --- | --- | --- |\n";
+  output
+      << "\n## PyPTO structured DSA\n\n"
+      << "| Instance | Family | Source | Target | Buffers | Structure | Exact core lower bound | "
+         "First fit | TVM hill "
+         "climb | Local search |\n"
+      << "| --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- |\n";
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
     if (document.profile != dsa::BenchmarkProfile::kPyptoStructured) continue;
     const std::string profile = dsa::ToString(document.profile);
     output << "| " << MarkdownEscape(document.instance) << " | "
+           << MarkdownEscape(MetadataValue(document, "corpus_family")) << " | "
+           << MarkdownEscape(MetadataValue(document, "corpus_source_path")) << " | "
            << MarkdownEscape(MetadataValue(document, "target")) << " | "
            << document.problem.buffers.size() << " | "
            << MarkdownEscape(Join(ProblemFeatures(document.problem), "; ")) << " | "
