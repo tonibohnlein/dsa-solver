@@ -168,7 +168,8 @@ The output directory contains:
 
 - `results.jsonl`: one immutable record per instance, method, and seed;
 - `summary.csv`: long-form best-peak and median-runtime aggregation;
-- `report.md`: compact per-family solution-quality and runtime aggregates.
+- `report.md`: compact per-corpus solution-quality and first-fit-normalized
+  runtime aggregates.
 
 Presentation-only changes do not require rerunning solvers. Rebuild the report
 from the existing raw results by appending `--report-only` to the recorded

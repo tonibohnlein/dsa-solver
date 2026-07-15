@@ -22,7 +22,8 @@ rows after rejecting 474 no-choice pools and 120 duplicates.
 
 The snapshot contains:
 
-- `report.md`: compact per-family quality and runtime aggregates;
+- `report.md`: compact quality and first-fit-normalized runtime aggregates for
+  the MiniMalloc benchmark corpus, PyPTO, and PyPTO-Lib;
 - `summary.csv`: long-form best-peak and median-runtime aggregation;
 - `results.jsonl`: authoritative per-run results, status, validation, seed, and
   configuration metadata.
@@ -36,6 +37,12 @@ divided by the best validated peak for each instance, plus its win count. The
 same table exposes how many references MiniMalloc proved optimal. This avoids
 calling an uncertified timeout result an optimum while retaining every detailed
 instance and repetition in the CSV and JSONL backups.
+
+Runtime is normalized per instance before aggregation: each solver's median is
+divided by first fit's median on the same problem, then those ratios are
+geometrically averaged within a corpus. This controls for heterogeneous problem
+sizes better than averaging raw wall-clock times; the raw medians remain in
+`summary.csv`.
 
 Runtime is machine-dependent. Regenerate the complete snapshot using the exact
 command recorded in `standard-v1/report.md`; review raw and aggregated changes

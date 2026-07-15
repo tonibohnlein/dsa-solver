@@ -1510,23 +1510,11 @@ bool HasPrefix(std::string_view value, std::string_view prefix) {
 }
 
 std::string StandardBenchmarkFamily(const dsa::StructuredProblemDocument& document) {
-  if (MetadataValue(document, "standard_origin") != "pypto_projection") return "MiniMalloc";
-  constexpr std::string_view kPyptoLibPrefix = "pypto-lib::";
-  const bool is_pypto_lib = HasPrefix(document.instance, kPyptoLibPrefix);
-  const std::string family = MetadataValue(document, "corpus_family");
-  if (is_pypto_lib) {
-    if (family == "deepseek-v3_2") return "PyPTO-Lib / DeepSeek v3.2";
-    if (family == "deepseek-v4") return "PyPTO-Lib / DeepSeek v4";
-    if (family == "qwen3-14b") return "PyPTO-Lib / Qwen3 14B";
-    if (family == "qwen3-32b") return "PyPTO-Lib / Qwen3 32B";
-    return "PyPTO-Lib / " + (family.empty() ? std::string("other") : family);
+  if (MetadataValue(document, "standard_origin") != "pypto_projection") {
+    return "MiniMalloc benchmark corpus";
   }
-  if (HasPrefix(family, "pypto-examples-")) return "PyPTO / examples";
-  if (family == "pypto-runtime-control_flow") return "PyPTO / control flow";
-  if (family == "pypto-runtime-cross_core") return "PyPTO / cross-core";
-  if (family == "pypto-runtime-framework_and_models") return "PyPTO / framework and models";
-  if (family == "pypto-runtime-ops") return "PyPTO / operations";
-  return "PyPTO / " + (family.empty() ? std::string("regression fixtures") : family);
+  constexpr std::string_view kPyptoLibPrefix = "pypto-lib::";
+  return HasPrefix(document.instance, kPyptoLibPrefix) ? "PyPTO-Lib" : "PyPTO";
 }
 
 struct StandardAggregateCell {
@@ -1534,7 +1522,7 @@ struct StandardAggregateCell {
   std::size_t wins = 0;
   long double log_peak_ratio_sum = 0.0L;
   std::size_t runtime_instances = 0;
-  long double log_runtime_us_sum = 0.0L;
+  long double log_runtime_ratio_sum = 0.0L;
 };
 
 struct StandardAggregateGroup {
@@ -1562,6 +1550,13 @@ void AccumulateStandardInstance(
     }
   }
 
+  const Summary* first_fit = FindSummary(summaries, instance.document.instance, profile, kFirstFit);
+  const std::optional<std::uint64_t> runtime_reference =
+      first_fit != nullptr && first_fit->best && first_fit->median_runtime_us != 0 &&
+              first_fit->best->status != "not_run" && first_fit->best->status != "unavailable"
+          ? std::optional<std::uint64_t>(first_fit->median_runtime_us)
+          : std::nullopt;
+
   for (const auto& [label, method] : methods) {
     static_cast<void>(label);
     const Summary* summary = FindSummary(summaries, instance.document.instance, profile, method);
@@ -1574,9 +1569,11 @@ void AccumulateStandardInstance(
       ++cell.quality_instances;
       if (*summary->best->peak == *reference_peak) ++cell.wins;
     }
-    if (summary->median_runtime_us != 0 && summary->best->status != "not_run" &&
-        summary->best->status != "unavailable") {
-      cell.log_runtime_us_sum += std::log(static_cast<long double>(summary->median_runtime_us));
+    if (runtime_reference && summary->median_runtime_us != 0 &&
+        summary->best->status != "not_run" && summary->best->status != "unavailable") {
+      const long double runtime_ratio = static_cast<long double>(summary->median_runtime_us) /
+                                        static_cast<long double>(*runtime_reference);
+      cell.log_runtime_ratio_sum += std::log(runtime_ratio);
       ++cell.runtime_instances;
     }
   }
@@ -1597,11 +1594,13 @@ std::string FormatAggregateQuality(const StandardAggregateCell* cell) {
          std::to_string(cell->quality_instances) + ')';
 }
 
-std::string FormatAggregateRuntime(const StandardAggregateCell* cell) {
+std::string FormatAggregateRuntimeRatio(const StandardAggregateCell* cell) {
   if (cell == nullptr || cell->runtime_instances == 0) return "—";
   const long double geometric_mean =
-      std::exp(cell->log_runtime_us_sum / static_cast<long double>(cell->runtime_instances));
-  return FormatRuntime(static_cast<std::uint64_t>(std::llround(geometric_mean)));
+      std::exp(cell->log_runtime_ratio_sum / static_cast<long double>(cell->runtime_instances));
+  std::ostringstream output;
+  output << std::fixed << std::setprecision(2) << geometric_mean << "x";
+  return output.str();
 }
 
 void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& instances,
@@ -1661,33 +1660,25 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
       {"TVM hill climb", kTvmHillClimb}, {"Local search", kLocalSearch},
   };
   std::map<std::string, StandardAggregateGroup> groups;
-  StandardAggregateGroup overall;
-  overall.name = "Overall";
-  StandardAggregateGroup compiler_overall;
-  compiler_overall.name = "All PyPTO projections";
   for (const Instance& instance : instances) {
     const std::string family = StandardBenchmarkFamily(instance.document);
     StandardAggregateGroup& group = groups[family];
     group.name = family;
     AccumulateStandardInstance(&group, instance, summaries, methods);
-    AccumulateStandardInstance(&overall, instance, summaries, methods);
-    if (family != "MiniMalloc") {
-      AccumulateStandardInstance(&compiler_overall, instance, summaries, methods);
-    }
   }
 
   auto write_quality_header = [&]() {
-    output << "| Instance family | N | Proven";
+    output << "| Instance corpus | N";
     for (const auto& [label, method] : methods) {
       static_cast<void>(method);
       output << " | " << label;
     }
-    output << " |\n| --- | ---: | ---:";
+    output << " |\n| --- | ---:";
     for (std::size_t index = 0; index < methods.size(); ++index) output << " | ---:";
     output << " |\n";
   };
   auto write_runtime_header = [&]() {
-    output << "| Instance family | N";
+    output << "| Instance corpus | N";
     for (const auto& [label, method] : methods) {
       static_cast<void>(method);
       output << " | " << label;
@@ -1698,8 +1689,7 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
   };
 
   auto write_quality_row = [&](const StandardAggregateGroup& group) {
-    output << "| " << MarkdownEscape(group.name) << " | " << group.instances << " | "
-           << group.proven_optima << '/' << group.instances;
+    output << "| " << MarkdownEscape(group.name) << " | " << group.instances;
     for (const auto& [label, method] : methods) {
       static_cast<void>(label);
       const auto cell = group.by_method.find(std::string(method));
@@ -1709,48 +1699,54 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
     output << " |\n";
   };
 
-  const StandardAggregateCell& compiler_first_fit =
-      compiler_overall.by_method.at(std::string(kFirstFit));
-  const StandardAggregateCell& compiler_xla = compiler_overall.by_method.at(std::string(kXlaHeap));
-  const StandardAggregateCell& compiler_tvm =
-      compiler_overall.by_method.at(std::string(kTvmHillClimb));
-  const StandardAggregateCell& compiler_local =
-      compiler_overall.by_method.at(std::string(kLocalSearch));
-  const StandardAggregateGroup& minimalloc_group = groups.at("MiniMalloc");
-  output << "## Highlights\n\n"
-         << "- MiniMalloc certified " << overall.proven_optima << '/' << overall.instances
-         << " reference peaks: all " << compiler_overall.instances
-         << " PyPTO projections, but only " << minimalloc_group.proven_optima << '/'
-         << minimalloc_group.instances << " public MiniMalloc cases under the bounded timeout.\n"
-         << "- On PyPTO projections, TVM hill climb and local search match the reference on "
-         << compiler_tvm.wins << '/' << compiler_tvm.quality_instances << " and "
-         << compiler_local.wins << '/' << compiler_local.quality_instances
-         << " instances; first fit reaches " << compiler_first_fit.wins << '/'
-         << compiler_first_fit.quality_instances << " and XLA reaches " << compiler_xla.wins << '/'
-         << compiler_xla.quality_instances << ".\n"
-         << "- The public MiniMalloc family remains discriminating: TVM hill climb has a "
-            "geometric-mean peak ratio of "
-         << FormatAggregateRatio(&minimalloc_group.by_method.at(std::string(kTvmHillClimb)))
-         << ", versus "
-         << FormatAggregateRatio(&minimalloc_group.by_method.at(std::string(kLocalSearch)))
-         << " for local search.\n\n";
+  const auto minimalloc = groups.find("MiniMalloc benchmark corpus");
+  const auto pypto = groups.find("PyPTO");
+  const auto pypto_lib = groups.find("PyPTO-Lib");
+  if (minimalloc != groups.end() && pypto != groups.end() && pypto_lib != groups.end()) {
+    const StandardAggregateGroup& minimalloc_group = minimalloc->second;
+    const StandardAggregateGroup& pypto_group = pypto->second;
+    const StandardAggregateGroup& pypto_lib_group = pypto_lib->second;
+    const StandardAggregateCell& pypto_tvm = pypto_group.by_method.at(std::string(kTvmHillClimb));
+    const StandardAggregateCell& pypto_local = pypto_group.by_method.at(std::string(kLocalSearch));
+    const StandardAggregateCell& pypto_lib_tvm =
+        pypto_lib_group.by_method.at(std::string(kTvmHillClimb));
+    const StandardAggregateCell& pypto_lib_local =
+        pypto_lib_group.by_method.at(std::string(kLocalSearch));
+    output << "## Highlights\n\n"
+           << "- MiniMalloc certified all " << pypto_group.proven_optima << '/'
+           << pypto_group.instances << " PyPTO and " << pypto_lib_group.proven_optima << '/'
+           << pypto_lib_group.instances << " PyPTO-Lib reference peaks, but only "
+           << minimalloc_group.proven_optima << '/' << minimalloc_group.instances
+           << " public MiniMalloc cases under the bounded timeout.\n"
+           << "- TVM hill climb and local search both match the reference on all " << pypto_tvm.wins
+           << '/' << pypto_tvm.quality_instances << " PyPTO and " << pypto_lib_tvm.wins << '/'
+           << pypto_lib_tvm.quality_instances
+           << " PyPTO-Lib instances (local-search wins: " << pypto_local.wins << '/'
+           << pypto_local.quality_instances << " and " << pypto_lib_local.wins << '/'
+           << pypto_lib_local.quality_instances << ").\n"
+           << "- The public MiniMalloc family remains discriminating: TVM hill climb has a "
+              "geometric-mean peak ratio of "
+           << FormatAggregateRatio(&minimalloc_group.by_method.at(std::string(kTvmHillClimb)))
+           << ", versus "
+           << FormatAggregateRatio(&minimalloc_group.by_method.at(std::string(kLocalSearch)))
+           << " for local search.\n\n";
+  }
 
   output << "## Solution quality\n\n"
          << "Each solver cell is `geometric-mean peak / reference peak (wins/N)`. The reference "
-            "is the lowest independently validated peak found for that instance; the `Proven` "
-            "column reports how often MiniMalloc certified that reference as optimal. Lower is "
-            "better, `1.000` is ideal, and a win includes ties.\n\n";
+            "is the lowest independently validated peak found for that instance. The highlights "
+            "state where MiniMalloc certified it as optimal. Lower is better, `1.000` is ideal, "
+            "and a win includes ties.\n\n";
   write_quality_header();
-  write_quality_row(overall);
-  write_quality_row(compiler_overall);
   for (const auto& [name, group] : groups) {
     static_cast<void>(name);
     write_quality_row(group);
   }
 
-  output << "\n## Runtime\n\n";
-  output << "Each cell is the geometric mean of per-instance runtime. First fit and XLA use the "
-            "median of "
+  output << "\n## Runtime relative to first fit\n\n";
+  output << "Each cell is the geometric mean of the per-instance `solver median / first-fit "
+            "median` ratio. Normalizing before aggregation controls for instance size and "
+            "difficulty; `1.00x` is first-fit speed. First fit and XLA use the median of "
          << options.deterministic_repetitions
          << " repetitions per instance; stochastic searches use the median of "
          << options.seeds.size()
@@ -1762,12 +1758,11 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
       static_cast<void>(label);
       const auto cell = group.by_method.find(std::string(method));
       output << " | "
-             << FormatAggregateRuntime(cell == group.by_method.end() ? nullptr : &cell->second);
+             << FormatAggregateRuntimeRatio(cell == group.by_method.end() ? nullptr
+                                                                          : &cell->second);
     }
     output << " |\n";
   };
-  write_runtime_row(overall);
-  write_runtime_row(compiler_overall);
   for (const auto& [name, group] : groups) {
     static_cast<void>(name);
     write_runtime_row(group);
