@@ -109,6 +109,8 @@ BenchmarkProfile ReadProfile(const Json& value, const std::string& path) {
   const std::string name = ReadString(value, path);
   if (name == "standard_dsa") return BenchmarkProfile::kStandardDsa;
   if (name == "pypto_structured") return BenchmarkProfile::kPyptoStructured;
+  if (name == "pypto_hard_v1") return BenchmarkProfile::kPyptoHardV1;
+  if (name == "pypto_research_v1") return BenchmarkProfile::kPyptoResearchV1;
   if (name == "pypto_core_relaxation") return BenchmarkProfile::kPyptoCoreRelaxation;
   throw std::runtime_error(path + " has unknown profile '" + name + "'");
 }

@@ -42,7 +42,7 @@ Fingerprint collisions are checked by comparing canonical bytes. This keeps
 source coverage exhaustive without weighting a shared kernel shape once per
 model that happens to reuse it.
 
-The importer rejects inputs that are not `pypto_structured`, already-normalized
+The importer rejects inputs that do not use a PyPTO profile, already-normalized
 inputs, duplicate identities/output paths, unknown cases, invalid target paths,
 and missing target counts. The output directory must be new or empty, preventing
 stale documents from surviving a regeneration.
@@ -98,6 +98,8 @@ Review before checking in:
    non-empty target, and `whole_slot_reuse=true`.
 4. `dsa-suite` reports every available heuristic feasible and
    placement-valid.
+   Review `features.csv` and the report's feature-occurrence table; zero-count
+   features cannot support structured-search claims.
 5. Large or redundant corpora are measured before committing; keep complete
    source coverage, but record repeated problem shapes rather than silently
    weighting aggregate results as independent evidence.

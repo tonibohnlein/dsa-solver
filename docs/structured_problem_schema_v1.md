@@ -16,7 +16,7 @@ schema versions so a document's semantics cannot change silently.
 ```json
 {
   "schema_version": 1,
-  "profile": "pypto_structured",
+  "profile": "pypto_hard_v1",
   "instance": "kernel_name",
   "metadata": {
     "target": "ascend910b"
@@ -28,10 +28,12 @@ schema versions so a document's semantics cannot change silently.
 Fields:
 
 - `schema_version`: exactly `1` for this document.
-- `profile`: one of `standard_dsa`, `pypto_structured`, or `pypto_core_relaxation`.
+- `profile`: `standard_dsa`, `pypto_hard_v1`, `pypto_research_v1`, legacy
+  `pypto_structured`, or `pypto_core_relaxation`.
 - `instance`: stable benchmark-instance name.
-- `metadata`: optional string-to-string provenance, including an adapter's configured `target`. It does not
-  affect feasibility.
+- `metadata`: string-to-string envelope data. Most keys are provenance and never affect feasibility;
+  versioned PyPTO profiles additionally require their event-ordering, solver-input, and address-reuse
+  contract keys so those semantics cannot be omitted silently. The values still do not change a placement.
 - `relaxed_from`: required for `pypto_core_relaxation`, forbidden for the other profiles.
 - `relaxed_features`: structure deliberately removed by a core relaxation.
 - `problem`: the solver-independent DSA problem.
@@ -113,7 +115,7 @@ analysis; the numeric `cost` is what the current objective evaluator consumes.
 
 ### Normalized PyPTO structure
 
-A `pypto_structured` document may carry compiler relationships in addition to their portable translation:
+A PyPTO document may carry compiler relationships in addition to their portable translation:
 
 ```json
 {
@@ -175,16 +177,30 @@ Directly comparable with MiniMalloc:
 
 MiniMalloc CSV input is wrapped in this profile internally.
 
-### `pypto_structured`
+### `pypto_hard_v1`
 
-Carries the full portable structure emitted by the PyPTO adapter. A result is valid only when the
-selected solver structurally supports every feature and the independent validator accepts the placement.
-Current PyPTO exports set `pypto_structure.whole_slot_reuse=true`; standard and core-relaxation instances
-retain ordinary DSA freed-region subdivision.
+Carries only the current production correctness contract. It requires one fixed pool and one conservative
+interval per buffer, whole-slot reuse, the peak objective, and the explicit PyPTO metadata contracts. It
+permits alignment, multiple fixed pools, reservations, separations, and normalized alias/pipeline
+provenance. It rejects cost models, banks, colocations, temporal exclusions, pins, flexible pools, and
+multi-interval lifetimes. See [`pypto_hard_v1.md`](pypto_hard_v1.md) for the formal constraints and field
+audit.
+
+### `pypto_research_v1`
+
+Requires the same PyPTO event-ordering, input-stage, and whole-slot contracts, but permits experimental
+hard features and cost overlays. The profile does not make those fields production requirements. The
+current adjacent pipeline reuse proxy uses this profile because its unit cost has not been device
+calibrated.
+
+### `pypto_structured` (legacy)
+
+Kept readable for existing schema-v1 artifacts. It predates the hard/research distinction and should not
+be emitted by new producers.
 
 ### `pypto_core_relaxation`
 
-A standard-DSA lower-bound problem derived from one fixed pool of a structured document. The library:
+A standard-DSA lower-bound problem derived from one fixed pool of any PyPTO document. The library:
 
 - partitions fixed pools into independent documents;
 - removes alignment, reservations, banks, pins, colocations, separations, costs, and PyPTO provenance;

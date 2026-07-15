@@ -1,9 +1,12 @@
 {
   "schema_version": 1,
-  "profile": "pypto_structured",
+  "profile": "pypto_research_v1",
   "instance": "pypto_fixture",
   "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
     "kernel": "fixture",
+    "lifetime_ordering": "pypto_read_before_write",
+    "solver_input": "pre_memory_reuse",
     "source": "unit_test",
     "target": "ascend910b"
   },
@@ -107,6 +110,27 @@
           "second": 1,
           "cost": 25,
           "reason": "cross_pipe"
+        }
+      ]
+    },
+    "pypto_structure": {
+      "whole_slot_reuse": true,
+      "alias_classes": [
+        {"buffer": 0, "members": ["tile_a", "tile_a_view"]},
+        {"buffer": 1, "members": ["tile_b"]},
+        {"buffer": 2, "members": ["tile_c"]}
+      ],
+      "pipeline_groups": [
+        {
+          "group": 7,
+          "pool": 3,
+          "slot_size": 32,
+          "depth": 2,
+          "effective_depth": 2,
+          "members": [
+            {"buffer": 0, "stage": 0, "residue": 0},
+            {"buffer": 1, "stage": 1, "residue": 1}
+          ]
         }
       ]
     },

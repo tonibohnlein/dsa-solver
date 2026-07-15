@@ -1,10 +1,13 @@
 # Reproducible benchmark results
 
-Each result directory is produced by `dsa-suite` and contains three views of one run:
+Each newly generated result directory is produced by `dsa-suite` and contains four views of one run:
 
 - `results.jsonl` is the authoritative per-run record;
 - `summary.csv` aggregates repeated seeds without discarding status or validity;
+- `features.csv` records per-instance constraint and provenance occurrence;
 - `report.md` renders separate standard and PyPTO-structured tables.
+
+Older snapshots created before `features.csv` was introduced retain their original three files.
 
 In raw records, `placement_valid` checks address geometry while relaxing capacity only for explicit
 best-effort diagnostics. `solution_valid` checks the complete original problem, including capacity.

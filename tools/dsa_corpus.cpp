@@ -501,9 +501,8 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
     }
 
     dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(input.path);
-    if (document.profile != dsa::BenchmarkProfile::kPyptoStructured) {
-      throw std::runtime_error("input export does not use pypto_structured: " +
-                               input.path.string());
+    if (!dsa::IsPyptoProfile(document.profile)) {
+      throw std::runtime_error("input export does not use a PyPTO profile: " + input.path.string());
     }
     for (const auto& [key, value] : document.metadata) {
       static_cast<void>(value);
@@ -518,9 +517,12 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
     dsa::StructuredProblemDocument shape = document;
     shape.instance = "corpus_shape";
     shape.metadata.clear();
-    const auto target_metadata = document.metadata.find("target");
-    if (target_metadata != document.metadata.end()) {
-      shape.metadata.emplace("target", target_metadata->second);
+    for (const char* semantic_key :
+         {"address_reuse_contract", "lifetime_ordering", "solver_input", "target"}) {
+      const auto semantic_metadata = document.metadata.find(semantic_key);
+      if (semantic_metadata != document.metadata.end()) {
+        shape.metadata.emplace(semantic_key, semantic_metadata->second);
+      }
     }
     NormalizeNonSemanticProblemNames(&shape);
     std::ostringstream canonical_output;

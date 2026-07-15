@@ -110,6 +110,6 @@
       "pipeline_groups": []
     }
   },
-  "profile": "pypto_structured",
+  "profile": "pypto_hard_v1",
   "schema_version": 1
 }

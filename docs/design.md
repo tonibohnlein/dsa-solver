@@ -35,7 +35,9 @@ the generic fields above remain the complete feasibility and objective contract.
 One runner serves three claims that must remain distinct:
 
 - `standard_dsa`: the MiniMalloc-compatible common subset used for direct exact-solver comparisons;
-- `pypto_structured`: full exported compiler structure, run only on structurally compatible solvers;
+- `pypto_hard_v1`: device-correct production constraints only;
+- `pypto_research_v1`: the same PyPTO base contract plus explicitly experimental fields;
+- `pypto_structured`: readable legacy profile that predates the hard/research split;
 - `pypto_core_relaxation`: a named, per-pool standard relaxation used only as a lower bound.
 
 The relaxation is generated rather than hand-authored. Its envelope records the source instance, source
@@ -68,7 +70,7 @@ explicit best-effort diagnostic placement. `solution_valid` checks every origina
 including pool capacity.
 
 The pinned MiniMalloc core is an optional in-process exact baseline. Standard instances compare directly.
-For `pypto_structured`, the runner first invokes the schema-defined per-pool relaxation and labels exact
+For a PyPTO profile, the runner first invokes the schema-defined per-pool relaxation and labels exact
 results `core_lower_bound`. Exact runs that exhaust their budget remain timeouts even when they produced a
 feasible upper bound, so an incomplete search can never create a false optimality-gap or lower-bound
 claim.
@@ -123,7 +125,7 @@ therefore collapses colocations and adds temporal conflicts, separations, and wh
 pins as blocking edges. The decoder continues to honor fixed pools, multi-interval liveness, alignment,
 reserved ranges, and pinned offsets; candidate comparison uses the requested lexicographic objective.
 This makes standard-profile runs comparable with TVM's algorithmic idea while allowing the identical
-policy to run as an explicit ablation on `pypto_structured` instances.
+policy to run as an explicit ablation on PyPTO instances.
 
 This is a behavioral reimplementation, not bit-for-bit compatibility: it uses a portable seeded random
 engine, preserves the best solution seen, uses the current buffer's alignment through the shared decoder,

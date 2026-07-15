@@ -32,7 +32,7 @@ The project is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE
   provenance-rich benchmark corpora and fails closed on missing coverage targets.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
 - A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by all built-in solvers in CTest.
-- Explicit standard, PyPTO-structured, and sound core-relaxation benchmark profiles.
+- Explicit standard, PyPTO hard-v1, PyPTO research-v1, legacy structured, and sound core-relaxation profiles.
 - Central solver capability matching for hard features and requested objective terms.
 - Google MiniMalloc pinned as a submodule, including the official A–K corpus and exact C++ solver.
 - CMake install/export support for later `find_package` or `add_subdirectory` use from PyPTO.

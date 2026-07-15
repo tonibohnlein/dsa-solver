@@ -377,7 +377,7 @@ int main(int argc, char** argv) {
         throw std::runtime_error("solver returned an invalid solution: " + validation.front());
       }
       if (options.output) {
-        if (document.profile == dsa::BenchmarkProfile::kPyptoStructured) {
+        if (dsa::IsPyptoProfile(document.profile)) {
           throw std::runtime_error(
               "--output CSV is unavailable for a structured profile; use a core relaxation");
         }
@@ -385,7 +385,7 @@ int main(int argc, char** argv) {
       }
     }
 
-    if (options.reference_output && document.profile == dsa::BenchmarkProfile::kPyptoStructured) {
+    if (options.reference_output && dsa::IsPyptoProfile(document.profile)) {
       throw std::runtime_error(
           "MiniMalloc references are only comparable with standard or core-relaxation profiles");
     }

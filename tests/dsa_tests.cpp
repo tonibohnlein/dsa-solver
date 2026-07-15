@@ -32,6 +32,12 @@ bool Contains(const std::vector<std::string>& values, std::string_view expected)
   return std::find(values.begin(), values.end(), expected) != values.end();
 }
 
+bool ContainsSubstring(const std::vector<std::string>& values, std::string_view expected) {
+  return std::any_of(values.begin(), values.end(), [&](const std::string& value) {
+    return value.find(expected) != std::string::npos;
+  });
+}
+
 dsa::Buffer MakeBuffer(dsa::BufferId id, std::vector<dsa::Interval> intervals, std::uint64_t size) {
   dsa::Buffer buffer;
   buffer.id = id;
@@ -341,9 +347,13 @@ void TestTvmHillClimbClosesOrderingGap() {
 
 dsa::StructuredProblemDocument MakeStructuredDocument() {
   dsa::StructuredProblemDocument document;
-  document.profile = dsa::BenchmarkProfile::kPyptoStructured;
+  document.profile = dsa::BenchmarkProfile::kPyptoResearchV1;
   document.instance = "pypto_fixture";
-  document.metadata = {{"kernel", "fixture"}, {"target", "ascend910b"}};
+  document.metadata = {{"address_reuse_contract", "whole_slot_v1"},
+                       {"kernel", "fixture"},
+                       {"lifetime_ordering", "pypto_read_before_write"},
+                       {"solver_input", "pre_memory_reuse"},
+                       {"target", "ascend910b"}};
   document.problem.pools = {
       {3, "L1", 128, {{0, 16}}, dsa::BankGeometry{16, 8}},
       {4, "L0B", 64, {}, std::nullopt},
@@ -390,7 +400,7 @@ void TestStructuredJsonRoundTripAndProfiles() {
   const dsa::StructuredProblemDocument parsed = dsa::ReadStructuredProblemJson(input);
   Require(parsed.schema_version == dsa::kStructuredProblemSchemaVersion,
           "structured schema version did not round-trip");
-  Require(parsed.profile == dsa::BenchmarkProfile::kPyptoStructured,
+  Require(parsed.profile == dsa::BenchmarkProfile::kPyptoResearchV1,
           "structured profile did not round-trip");
   Require(parsed.problem.buffers.size() == 3 && parsed.problem.pools.size() == 2,
           "structured core did not round-trip");
@@ -411,6 +421,11 @@ void TestStructuredJsonRoundTripAndProfiles() {
   Require(parsed.problem.objective.terms == dsa::FitThenMinimizeReuseCostObjective().terms,
           "structured objective did not round-trip");
 
+  dsa::StructuredProblemDocument falsely_hard = original;
+  falsely_hard.profile = dsa::BenchmarkProfile::kPyptoHardV1;
+  Require(!dsa::ValidateStructuredProblemDocument(falsely_hard).empty(),
+          "pypto_hard_v1 silently accepted research-only features");
+
   dsa::StructuredProblemDocument invalid_structure = original;
   invalid_structure.problem.pypto_structure->pipeline_groups.front().effective_depth = 3;
   Require(!dsa::ValidateStructuredProblemDocument(invalid_structure).empty(),
@@ -426,6 +441,46 @@ void TestStructuredJsonRoundTripAndProfiles() {
     rejected = true;
   }
   Require(rejected, "schema-v1 reader silently accepted an unknown field");
+}
+
+void TestPyptoHardV1RejectsResearchFeatures() {
+  const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
+                                     "pypto" / "chain_read_before_write_v1.json";
+  const dsa::StructuredProblemDocument hard = dsa::ReadStructuredProblemJsonFile(path);
+  Require(hard.profile == dsa::BenchmarkProfile::kPyptoHardV1 &&
+              dsa::ValidateStructuredProblemDocument(hard).empty(),
+          "hard-v1 fixture should validate");
+
+  auto rejects = [&](dsa::StructuredProblemDocument document, std::string_view feature) {
+    const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(document);
+    Require(ContainsSubstring(errors, feature),
+            "pypto_hard_v1 did not reject research feature '" + std::string(feature) + "'");
+  };
+
+  dsa::StructuredProblemDocument candidate = hard;
+  candidate.problem.buffers.front().live_intervals.push_back({20, 21});
+  rejects(candidate, "one conservative live interval");
+  candidate = hard;
+  candidate.problem.buffers.front().allowed_pools.push_back(candidate.problem.pools.front().id);
+  rejects(candidate, "one fixed pool");
+  candidate = hard;
+  candidate.problem.pools.front().bank_geometry = dsa::BankGeometry{32, 8};
+  rejects(candidate, "bank geometry");
+  candidate = hard;
+  candidate.problem.colocations.push_back({0, 1});
+  rejects(candidate, "colocations");
+  candidate = hard;
+  candidate.problem.temporal_exclusions.push_back({0, 1});
+  rejects(candidate, "temporal exclusions");
+  candidate = hard;
+  candidate.problem.pinned_allocations.push_back({0, candidate.problem.pools.front().id, 0, false});
+  rejects(candidate, "pinned allocations");
+  candidate = hard;
+  candidate.problem.cost_model = dsa::CostModel{};
+  rejects(candidate, "cost model");
+  candidate = hard;
+  candidate.problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+  rejects(candidate, "peak-minimization objective");
 }
 
 void TestPyptoExportedCorpus() {
@@ -459,8 +514,10 @@ void TestPyptoExportedCorpus() {
     const std::filesystem::path path =
         std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto" / corpus_case.filename;
     const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
-    Require(document.profile == dsa::BenchmarkProfile::kPyptoStructured,
-            "exported corpus document has the wrong profile");
+    const dsa::BenchmarkProfile expected_profile = corpus_case.reuse_penalties == 0
+                                                       ? dsa::BenchmarkProfile::kPyptoHardV1
+                                                       : dsa::BenchmarkProfile::kPyptoResearchV1;
+    Require(document.profile == expected_profile, "exported corpus document has the wrong profile");
     Require(document.instance == corpus_case.instance,
             "exported corpus document has the wrong instance name");
     Require(document.problem.buffers.size() == corpus_case.buffers,
@@ -514,7 +571,7 @@ void TestEveryPyptoCorpusDocumentIsReplayable() {
   std::set<std::string> identities;
   for (const std::filesystem::path& path : paths) {
     const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
-    Require(document.profile == dsa::BenchmarkProfile::kPyptoStructured,
+    Require(dsa::IsPyptoProfile(document.profile),
             "PyPTO corpus contains a document with the wrong profile: " + path.string());
     Require(identities.insert(document.instance).second,
             "PyPTO corpus contains duplicate benchmark identity '" + document.instance + "'");
@@ -791,6 +848,7 @@ int main() {
       {"local search budget", TestLocalSearchUsesGlobalEvaluationBudget},
       {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},
       {"structured JSON", TestStructuredJsonRoundTripAndProfiles},
+      {"PyPTO hard-v1 profile", TestPyptoHardV1RejectsResearchFeatures},
       {"PyPTO exported corpus", TestPyptoExportedCorpus},
       {"PyPTO recursive corpus", TestEveryPyptoCorpusDocumentIsReplayable},
       {"core relaxation", TestCoreRelaxationProfiles},

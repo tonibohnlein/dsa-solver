@@ -18,6 +18,8 @@
       "enum": [
         "standard_dsa",
         "pypto_structured",
+        "pypto_hard_v1",
+        "pypto_research_v1",
         "pypto_core_relaxation"
       ]
     },

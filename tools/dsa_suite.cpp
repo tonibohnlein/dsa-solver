@@ -72,6 +72,30 @@ struct Instance {
   std::string source;
 };
 
+struct FeatureStats {
+  std::string instance;
+  std::string profile;
+  std::size_t buffers = 0;
+  std::size_t pools = 0;
+  std::size_t aligned_buffers = 0;
+  std::size_t multi_interval_buffers = 0;
+  std::size_t flexible_pool_buffers = 0;
+  std::size_t reserved_ranges = 0;
+  std::size_t bank_geometries = 0;
+  std::size_t colocations = 0;
+  std::size_t separations = 0;
+  std::size_t pipeline_separations = 0;
+  std::size_t target_hazard_separations = 0;
+  std::size_t semantic_no_alias_separations = 0;
+  std::size_t temporal_exclusions = 0;
+  std::size_t pinned_allocations = 0;
+  std::size_t reuse_penalties = 0;
+  std::size_t nontrivial_alias_classes = 0;
+  std::size_t pipeline_groups = 0;
+  std::size_t depth_shed_pipeline_groups = 0;
+  bool whole_slot_reuse = false;
+};
+
 struct RunRecord {
   std::string instance;
   std::string profile;
@@ -165,22 +189,23 @@ std::vector<std::uint64_t> ParseSeeds(std::string_view text) {
 }
 
 void PrintHelp() {
-  std::cout << "Usage: dsa-suite (--standard PATH | --pypto PATH)... [options]\n\n"
-            << "Inputs (repeatable; PATH may be a file or directory):\n"
-            << "  --standard PATH                 MiniMalloc CSV or standard JSON corpus\n"
-            << "  --pypto PATH                    PyPTO structured JSON corpus\n\n"
-            << "Output and budgets:\n"
-            << "  --output-dir DIR                Write results.jsonl, summary.csv, report.md\n"
-            << "  --run-label TEXT                Stable label stored in the report\n"
-            << "  --standard-capacity BYTES       Capacity/upper bound for standard instances\n"
-            << "  --seeds N[,N...]                Search seeds (default: 0,1,2)\n"
-            << "  --iterations N                  Local/TVM search budget (default: 2000)\n"
-            << "  --restarts N                    Local-search restarts (default: 4)\n"
-            << "  --stagnation N                  Local-search stagnation limit (default: 250)\n"
-            << "  --minimalloc-timeout-ms N       Exact-solver budget per instance\n"
-            << "  --no-minimalloc                 Do not execute the exact baseline\n"
-            << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
-            << "  --help                           Show this help\n";
+  std::cout
+      << "Usage: dsa-suite (--standard PATH | --pypto PATH)... [options]\n\n"
+      << "Inputs (repeatable; PATH may be a file or directory):\n"
+      << "  --standard PATH                 MiniMalloc CSV or standard JSON corpus\n"
+      << "  --pypto PATH                    PyPTO structured JSON corpus\n\n"
+      << "Output and budgets:\n"
+      << "  --output-dir DIR                Write results, summary, features, and report files\n"
+      << "  --run-label TEXT                Stable label stored in the report\n"
+      << "  --standard-capacity BYTES       Capacity/upper bound for standard instances\n"
+      << "  --seeds N[,N...]                Search seeds (default: 0,1,2)\n"
+      << "  --iterations N                  Local/TVM search budget (default: 2000)\n"
+      << "  --restarts N                    Local-search restarts (default: 4)\n"
+      << "  --stagnation N                  Local-search stagnation limit (default: 250)\n"
+      << "  --minimalloc-timeout-ms N       Exact-solver budget per instance\n"
+      << "  --no-minimalloc                 Do not execute the exact baseline\n"
+      << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
+      << "  --help                           Show this help\n";
 }
 
 Options ParseOptions(int argc, char** argv) {
@@ -321,6 +346,57 @@ std::vector<std::string> ProblemFeatures(const dsa::DsaProblem& problem) {
   return features;
 }
 
+FeatureStats AnalyzeFeatures(const Instance& instance) {
+  FeatureStats stats;
+  stats.instance = instance.document.instance;
+  stats.profile = dsa::ToString(instance.document.profile);
+  const dsa::DsaProblem& problem = instance.document.problem;
+  stats.buffers = problem.buffers.size();
+  stats.pools = problem.pools.size();
+  for (const dsa::Buffer& buffer : problem.buffers) {
+    if (buffer.alignment > 1) ++stats.aligned_buffers;
+    if (buffer.live_intervals.size() > 1) ++stats.multi_interval_buffers;
+    if (buffer.allowed_pools.size() > 1) ++stats.flexible_pool_buffers;
+  }
+  for (const dsa::Pool& pool : problem.pools) {
+    stats.reserved_ranges += pool.reserved_ranges.size();
+    if (pool.bank_geometry) ++stats.bank_geometries;
+  }
+  stats.colocations = problem.colocations.size();
+  stats.separations = problem.separations.size();
+  for (const dsa::Separation& separation : problem.separations) {
+    for (dsa::SeparationReason reason : separation.reasons) {
+      switch (reason) {
+        case dsa::SeparationReason::kPipelineStage:
+          ++stats.pipeline_separations;
+          break;
+        case dsa::SeparationReason::kTargetHazard:
+          ++stats.target_hazard_separations;
+          break;
+        case dsa::SeparationReason::kSemanticNoAlias:
+          ++stats.semantic_no_alias_separations;
+          break;
+        case dsa::SeparationReason::kGeneric:
+          break;
+      }
+    }
+  }
+  stats.temporal_exclusions = problem.temporal_exclusions.size();
+  stats.pinned_allocations = problem.pinned_allocations.size();
+  if (problem.cost_model) stats.reuse_penalties = problem.cost_model->reuse_penalties.size();
+  if (problem.pypto_structure) {
+    stats.whole_slot_reuse = problem.pypto_structure->whole_slot_reuse;
+    stats.pipeline_groups = problem.pypto_structure->pipeline_groups.size();
+    for (const dsa::PyptoAliasClass& alias_class : problem.pypto_structure->alias_classes) {
+      if (alias_class.members.size() > 1) ++stats.nontrivial_alias_classes;
+    }
+    for (const dsa::PyptoPipelineGroup& group : problem.pypto_structure->pipeline_groups) {
+      if (group.effective_depth < group.depth) ++stats.depth_shed_pipeline_groups;
+    }
+  }
+  return stats;
+}
+
 std::string MetadataValue(const dsa::StructuredProblemDocument& document, const std::string& key) {
   const auto found = document.metadata.find(key);
   return found == document.metadata.end() ? std::string{} : found->second;
@@ -361,8 +437,8 @@ Instance LoadPyptoInstance(const fs::path& path) {
   Instance instance;
   instance.source = DisplayPath(path);
   instance.document = dsa::ReadStructuredProblemJsonFile(path);
-  if (instance.document.profile != dsa::BenchmarkProfile::kPyptoStructured) {
-    throw std::runtime_error("--pypto JSON does not use pypto_structured: " + path.string());
+  if (!dsa::IsPyptoProfile(instance.document.profile)) {
+    throw std::runtime_error("--pypto JSON does not use a PyPTO profile: " + path.string());
   }
   const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(instance.document);
   if (!errors.empty()) {
@@ -410,7 +486,11 @@ std::string ComparisonScope(dsa::BenchmarkProfile profile) {
     case dsa::BenchmarkProfile::kStandardDsa:
       return "direct_standard";
     case dsa::BenchmarkProfile::kPyptoStructured:
-      return "pypto_structured";
+      return "pypto_legacy";
+    case dsa::BenchmarkProfile::kPyptoHardV1:
+      return "pypto_hard";
+    case dsa::BenchmarkProfile::kPyptoResearchV1:
+      return "pypto_research";
     case dsa::BenchmarkProfile::kPyptoCoreRelaxation:
       return "core_lower_bound";
   }
@@ -673,11 +753,11 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
     for (std::uint64_t seed : options.seeds) {
       records.push_back(RunHeuristic(instance, kTvmHillClimb, seed, options));
       records.push_back(RunHeuristic(instance, kLocalSearch, seed, options));
-      if (instance.document.profile == dsa::BenchmarkProfile::kPyptoStructured) {
+      if (dsa::IsPyptoProfile(instance.document.profile)) {
         records.push_back(RunHeuristic(instance, kPyptoStructuredSearch, seed, options));
       }
     }
-    if (instance.document.profile != dsa::BenchmarkProfile::kPyptoStructured) {
+    if (!dsa::IsPyptoProfile(instance.document.profile)) {
       records.push_back(RunMiniMalloc(instance, options));
     }
   }
@@ -854,6 +934,30 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<Summary>& summaries
   }
 }
 
+void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instances) {
+  std::ofstream output(path);
+  if (!output) throw std::runtime_error("cannot write feature CSV: " + path.string());
+  output << "instance,profile,buffers,pools,aligned_buffers,multi_interval_buffers,"
+            "flexible_pool_buffers,reserved_ranges,bank_geometries,colocations,separations,"
+            "pipeline_separations,target_hazard_separations,semantic_no_alias_separations,"
+            "temporal_exclusions,pinned_allocations,reuse_penalties,whole_slot_reuse,"
+            "nontrivial_alias_classes,pipeline_groups,depth_shed_pipeline_groups\n";
+  for (const Instance& instance : instances) {
+    if (instance.document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation) continue;
+    const FeatureStats stats = AnalyzeFeatures(instance);
+    output << CsvEscape(stats.instance) << ',' << CsvEscape(stats.profile) << ',' << stats.buffers
+           << ',' << stats.pools << ',' << stats.aligned_buffers << ','
+           << stats.multi_interval_buffers << ',' << stats.flexible_pool_buffers << ','
+           << stats.reserved_ranges << ',' << stats.bank_geometries << ',' << stats.colocations
+           << ',' << stats.separations << ',' << stats.pipeline_separations << ','
+           << stats.target_hazard_separations << ',' << stats.semantic_no_alias_separations << ','
+           << stats.temporal_exclusions << ',' << stats.pinned_allocations << ','
+           << stats.reuse_penalties << ',' << (stats.whole_slot_reuse ? "true" : "false") << ','
+           << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
+           << stats.depth_shed_pipeline_groups << '\n';
+  }
+}
+
 std::string MarkdownEscape(std::string value) {
   std::string escaped;
   escaped.reserve(value.size());
@@ -974,6 +1078,51 @@ std::string CoreLowerBoundCell(const std::vector<Summary>& summaries, std::strin
   return output.str();
 }
 
+void WriteFeatureOccurrenceReport(std::ostream& output, const std::vector<Instance>& instances) {
+  std::vector<FeatureStats> rows;
+  for (const Instance& instance : instances) {
+    if (dsa::IsPyptoProfile(instance.document.profile)) rows.push_back(AnalyzeFeatures(instance));
+  }
+  output
+      << "## PyPTO feature occurrence\n\n"
+      << "Counts are computed from unique input documents, before core relaxations. "
+         "A zero is evidence that the current corpus does not exercise the feature; it is not "
+         "evidence that the feature is unnecessary. Per-instance values are in `features.csv`.\n\n"
+      << "| Feature | Documents | Total occurrences |\n"
+      << "| --- | ---: | ---: |\n";
+  auto write_count = [&](std::string_view name, std::size_t FeatureStats::* member) {
+    std::size_t documents = 0;
+    std::size_t total = 0;
+    for (const FeatureStats& row : rows) {
+      const std::size_t value = row.*member;
+      if (value != 0) ++documents;
+      total += value;
+    }
+    output << "| " << name << " | " << documents << " | " << total << " |\n";
+  };
+  std::size_t whole_slot_documents = 0;
+  for (const FeatureStats& row : rows) whole_slot_documents += row.whole_slot_reuse ? 1 : 0;
+  output << "| whole-slot reuse | " << whole_slot_documents << " | " << whole_slot_documents
+         << " |\n";
+  write_count("aligned buffers", &FeatureStats::aligned_buffers);
+  write_count("reserved ranges", &FeatureStats::reserved_ranges);
+  write_count("separations", &FeatureStats::separations);
+  write_count("pipeline-stage separation reasons", &FeatureStats::pipeline_separations);
+  write_count("target-hazard separation reasons", &FeatureStats::target_hazard_separations);
+  write_count("semantic-no-alias separation reasons", &FeatureStats::semantic_no_alias_separations);
+  write_count("nontrivial alias provenance", &FeatureStats::nontrivial_alias_classes);
+  write_count("pipeline groups", &FeatureStats::pipeline_groups);
+  write_count("depth-shed pipeline groups", &FeatureStats::depth_shed_pipeline_groups);
+  write_count("experimental reuse penalties", &FeatureStats::reuse_penalties);
+  write_count("multi-interval buffers", &FeatureStats::multi_interval_buffers);
+  write_count("flexible-pool buffers", &FeatureStats::flexible_pool_buffers);
+  write_count("colocations", &FeatureStats::colocations);
+  write_count("temporal exclusions", &FeatureStats::temporal_exclusions);
+  write_count("pinned allocations", &FeatureStats::pinned_allocations);
+  write_count("bank geometries", &FeatureStats::bank_geometries);
+  output << '\n';
+}
+
 void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
                  const std::vector<Summary>& summaries, const Options& options) {
   std::ofstream output(path);
@@ -981,7 +1130,7 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
   output << "# DSA benchmark results\n\n"
          << "Generated by `dsa-suite` (run label: " << MarkdownEscape(options.run_label)
          << "). Raw per-run data is in `results.jsonl`; aggregated long-form data is in "
-            "`summary.csv`.\n\n"
+            "`summary.csv`, and per-instance constraint counts are in `features.csv`.\n\n"
          << "Configuration: seeds `";
   for (std::size_t index = 0; index < options.seeds.size(); ++index) {
     if (index != 0) output << ',';
@@ -1025,8 +1174,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
          << "MiniMalloc is compared directly only with standard DSA. For PyPTO instances it runs "
             "only on explicitly recorded core relaxations, so those numbers are lower bounds—not "
             "valid structured placements. Only certified relaxation optima are shown as bounds; a "
-            "timeout is never reported as a certified optimum.\n\n"
-         << "## MiniMalloc standard DSA\n\n"
+            "timeout is never reported as a certified optimum.\n\n";
+  WriteFeatureOccurrenceReport(output, instances);
+  output << "## MiniMalloc standard DSA\n\n"
          << "| Instance | Buffers | Capacity | MiniMalloc exact | First fit | XLA heap | TVM hill "
             "climb | Local search |\n"
          << "| --- | ---: | ---: | --- | --- | --- | --- | --- |\n";
@@ -1058,17 +1208,17 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << " |\n";
   }
 
-  output
-      << "\n## PyPTO structured DSA\n\n"
-      << "| Instance | Family | Source | Target | Buffers | Structure | Exact core lower bound | "
-         "First fit | TVM hill "
-         "climb | Local search | PyPTO structured search |\n"
-      << "| --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- |\n";
+  output << "\n## PyPTO structured DSA\n\n"
+         << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
+            "lower bound | "
+            "First fit | TVM hill "
+            "climb | Local search | PyPTO structured search |\n"
+         << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- |\n";
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
-    if (document.profile != dsa::BenchmarkProfile::kPyptoStructured) continue;
+    if (!dsa::IsPyptoProfile(document.profile)) continue;
     const std::string profile = dsa::ToString(document.profile);
-    output << "| " << MarkdownEscape(document.instance) << " | "
+    output << "| " << MarkdownEscape(document.instance) << " | " << MarkdownEscape(profile) << " | "
            << MarkdownEscape(MetadataValue(document, "corpus_family")) << " | "
            << MarkdownEscape(MetadataValue(document, "corpus_source_path")) << " | "
            << MarkdownEscape(MetadataValue(document, "target")) << " | "
@@ -1097,12 +1247,14 @@ void WriteOutputs(const Options& options, const std::vector<Instance>& instances
   const std::vector<Summary> summaries = Summarize(records);
   const fs::path raw_path = options.output_dir / "results.jsonl";
   const fs::path csv_path = options.output_dir / "summary.csv";
+  const fs::path features_path = options.output_dir / "features.csv";
   const fs::path report_path = options.output_dir / "report.md";
   WriteRawResults(raw_path, records, options);
   WriteSummaryCsv(csv_path, summaries);
+  WriteFeaturesCsv(features_path, instances);
   WriteReport(report_path, instances, summaries, options);
-  std::cout << "dsa-suite: wrote " << raw_path << ", " << csv_path << ", and " << report_path
-            << '\n';
+  std::cout << "dsa-suite: wrote " << raw_path << ", " << csv_path << ", " << features_path
+            << ", and " << report_path << '\n';
 }
 
 }  // namespace

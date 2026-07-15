@@ -20,10 +20,19 @@ enum class BenchmarkProfile : std::uint8_t {
   // directly with exact standard solvers.
   kStandardDsa,
 
-  // Full compiler instance, including portable hard constraints and optional
-  // cost overlays exported by a PyPTO adapter. Its normalized structure may
-  // explicitly request PyPTO's whole-slot address-reuse contract.
+  // Legacy schema-v1 compiler profile. Kept readable for existing artifacts;
+  // new producers must choose the explicit hard or research profile below.
   kPyptoStructured,
+
+  // Versioned production contract: only constraints currently required for a
+  // device-correct PyPTO placement. Speculative cost/placement extensions are
+  // rejected by profile validation.
+  kPyptoHardV1,
+
+  // PyPTO hard-v1 plus explicitly experimental constraints or cost overlays.
+  // Results are research evidence and must not silently define production
+  // compiler behavior.
+  kPyptoResearchV1,
 
   // A documented relaxation of one pool from a structured instance. Its result
   // is a lower bound, never a valid structured PyPTO placement claim.
@@ -32,7 +41,7 @@ enum class BenchmarkProfile : std::uint8_t {
 
 struct StructuredProblemDocument {
   std::uint32_t schema_version = kStructuredProblemSchemaVersion;
-  BenchmarkProfile profile = BenchmarkProfile::kPyptoStructured;
+  BenchmarkProfile profile = BenchmarkProfile::kPyptoHardV1;
   std::string instance;
   std::optional<std::string> relaxed_from;
   std::vector<std::string> relaxed_features;
@@ -41,6 +50,7 @@ struct StructuredProblemDocument {
 };
 
 [[nodiscard]] const char* ToString(BenchmarkProfile profile) noexcept;
+[[nodiscard]] bool IsPyptoProfile(BenchmarkProfile profile) noexcept;
 
 // Validates the envelope and profile contract in addition to ValidateProblem.
 // In particular, standard and core-relaxation documents must remain directly

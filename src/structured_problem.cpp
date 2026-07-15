@@ -78,6 +78,61 @@ bool ObjectiveIsMinimizePeak(const ObjectiveSpec& objective) {
   return objective.aggregation == expected.aggregation && objective.terms == expected.terms;
 }
 
+void RequireMetadataValue(const StructuredProblemDocument& document, const std::string& key,
+                          const std::string& expected, std::vector<std::string>* errors) {
+  const auto found = document.metadata.find(key);
+  if (found == document.metadata.end() || found->second != expected) {
+    errors->push_back(std::string(ToString(document.profile)) + " requires metadata '" + key +
+                      "' = '" + expected + "'");
+  }
+}
+
+std::vector<std::string> ValidatePyptoV1(const StructuredProblemDocument& document,
+                                         bool reject_experimental) {
+  const DsaProblem& problem = document.problem;
+  const std::string profile = ToString(document.profile);
+  std::vector<std::string> errors;
+  RequireMetadataValue(document, "lifetime_ordering", "pypto_read_before_write", &errors);
+  RequireMetadataValue(document, "solver_input", "pre_memory_reuse", &errors);
+  RequireMetadataValue(document, "address_reuse_contract", "whole_slot_v1", &errors);
+  if (!problem.pypto_structure || !problem.pypto_structure->whole_slot_reuse) {
+    errors.push_back(profile + " requires whole-slot address reuse");
+  }
+  if (!reject_experimental) return errors;
+  for (const Buffer& buffer : problem.buffers) {
+    if (buffer.live_intervals.size() != 1) {
+      errors.push_back("pypto_hard_v1 buffer " + std::to_string(buffer.id) +
+                       " must have one conservative live interval");
+    }
+    if (buffer.allowed_pools.size() != 1) {
+      errors.push_back("pypto_hard_v1 buffer " + std::to_string(buffer.id) +
+                       " must have one fixed pool");
+    }
+  }
+  for (const Pool& pool : problem.pools) {
+    if (pool.bank_geometry) {
+      errors.push_back("pypto_hard_v1 cannot encode experimental bank geometry");
+      break;
+    }
+  }
+  if (!problem.colocations.empty()) {
+    errors.push_back("pypto_hard_v1 cannot encode experimental colocations");
+  }
+  if (!problem.temporal_exclusions.empty()) {
+    errors.push_back("pypto_hard_v1 cannot encode experimental temporal exclusions");
+  }
+  if (!problem.pinned_allocations.empty()) {
+    errors.push_back("pypto_hard_v1 cannot encode experimental pinned allocations");
+  }
+  if (problem.cost_model) {
+    errors.push_back("pypto_hard_v1 cannot encode an experimental cost model");
+  }
+  if (!ObjectiveIsMinimizePeak(problem.objective)) {
+    errors.push_back("pypto_hard_v1 requires the peak-minimization objective");
+  }
+  return errors;
+}
+
 bool PairTouches(const std::unordered_set<BufferId>& selected, BufferId first, BufferId second) {
   return selected.count(first) != 0 || selected.count(second) != 0;
 }
@@ -90,10 +145,19 @@ const char* ToString(BenchmarkProfile profile) noexcept {
       return "standard_dsa";
     case BenchmarkProfile::kPyptoStructured:
       return "pypto_structured";
+    case BenchmarkProfile::kPyptoHardV1:
+      return "pypto_hard_v1";
+    case BenchmarkProfile::kPyptoResearchV1:
+      return "pypto_research_v1";
     case BenchmarkProfile::kPyptoCoreRelaxation:
       return "pypto_core_relaxation";
   }
   return "unknown";
+}
+
+bool IsPyptoProfile(BenchmarkProfile profile) noexcept {
+  return profile == BenchmarkProfile::kPyptoStructured ||
+         profile == BenchmarkProfile::kPyptoHardV1 || profile == BenchmarkProfile::kPyptoResearchV1;
 }
 
 std::vector<std::string> ValidateStructuredProblemDocument(
@@ -119,10 +183,34 @@ std::vector<std::string> ValidateStructuredProblemDocument(
       break;
     case BenchmarkProfile::kPyptoStructured:
       if (document.relaxed_from) {
-        errors.push_back("structured PyPTO document cannot declare relaxed_from");
+        errors.push_back("legacy structured PyPTO document cannot declare relaxed_from");
       }
       if (!document.relaxed_features.empty()) {
-        errors.push_back("structured PyPTO document cannot declare relaxed_features");
+        errors.push_back("legacy structured PyPTO document cannot declare relaxed_features");
+      }
+      break;
+    case BenchmarkProfile::kPyptoHardV1:
+      if (document.relaxed_from) {
+        errors.push_back("pypto_hard_v1 document cannot declare relaxed_from");
+      }
+      if (!document.relaxed_features.empty()) {
+        errors.push_back("pypto_hard_v1 document cannot declare relaxed_features");
+      }
+      {
+        std::vector<std::string> hard_errors = ValidatePyptoV1(document, true);
+        errors.insert(errors.end(), hard_errors.begin(), hard_errors.end());
+      }
+      break;
+    case BenchmarkProfile::kPyptoResearchV1:
+      if (document.relaxed_from) {
+        errors.push_back("pypto_research_v1 document cannot declare relaxed_from");
+      }
+      if (!document.relaxed_features.empty()) {
+        errors.push_back("pypto_research_v1 document cannot declare relaxed_features");
+      }
+      {
+        std::vector<std::string> research_errors = ValidatePyptoV1(document, false);
+        errors.insert(errors.end(), research_errors.begin(), research_errors.end());
       }
       break;
     case BenchmarkProfile::kPyptoCoreRelaxation:
@@ -147,8 +235,8 @@ std::vector<StructuredProblemDocument> BuildCoreRelaxations(
     throw std::invalid_argument("cannot relax an invalid structured problem: " +
                                 source_errors.front());
   }
-  if (source.profile != BenchmarkProfile::kPyptoStructured) {
-    throw std::invalid_argument("core relaxations require a pypto_structured source document");
+  if (!IsPyptoProfile(source.profile)) {
+    throw std::invalid_argument("core relaxations require a PyPTO source document");
   }
   if (!source.problem.temporal_exclusions.empty()) {
     throw std::invalid_argument(
