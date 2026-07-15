@@ -354,6 +354,14 @@ if(BUILD_TESTING)
       -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_bind_smoke.cmake
   )
+  add_test(
+    NAME dsa-standard-suite-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_SUITE=$<TARGET_FILE:dsa-suite>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_standard_suite_smoke.cmake
+  )
 endif()
 
 install(TARGETS dsa_solver dsa-bench dsa-bind dsa-corpus dsa-suite

@@ -144,9 +144,10 @@ new compiler capture. See [the binding contract](docs/architecture_binding.md).
 
 ## Run reproducible benchmark suites
 
-`dsa-suite` accepts repeatable files or directories. This command runs the official MiniMalloc A–K
-challenge corpus, the checked-in PyPTO exporter corpus, three seeds for stochastic methods, and
-the exact MiniMalloc solver with a per-instance timeout:
+`dsa-suite --standard-only` compares algorithms on capacity-free standard DSA.
+It uses MiniMalloc inputs directly and derives independent per-pool standard
+projections from the checked-in PyPTO corpus. Trivial and duplicate projections
+are omitted:
 
 ```bash
 ./build/dsa-suite \
@@ -154,23 +155,20 @@ the exact MiniMalloc solver with a per-instance timeout:
   --pypto benchmarks/pypto \
   --pypto benchmarks/pypto-lib \
   --output-dir benchmark-results \
-  --run-label local-a-k \
-  --standard-capacity 1048576 \
+  --run-label local-standard \
   --seeds 0,1,2 \
   --iterations 2000 \
   --restarts 4 \
-  --minimalloc-timeout-ms 60000
+  --deterministic-repetitions 5 \
+  --minimalloc-timeout-ms 5000 \
+  --standard-only
 ```
 
 The output directory contains:
 
 - `results.jsonl`: one immutable record per instance, method, and seed;
-- `summary.csv`: long-form per-method aggregation with best objective, median runtime, and compiler
-  family/source columns when present;
-- `features.csv`: per-instance provenance, size distribution, memory-space pressure, conflict graph,
-  and structured-constraint statistics;
-- `report.md`: separate standard-DSA and PyPTO-structured comparison tables, including normalized
-  compiler provenance.
+- `summary.csv`: long-form best-peak and median-runtime aggregation;
+- `report.md`: separate peak-memory and runtime tables.
 
 ## Import compiler model corpora
 
@@ -204,10 +202,7 @@ target is missing, an excluded target produces a document, or an unlisted case a
 The checked-in corpus stores normalized JSON directly under
 `benchmarks/pypto` and `benchmarks/pypto-lib`, organized by source program. The
 two directories contain 454 unique meaningful problems after structural
-deduplication and removal of no-choice instances. The
-host-only solver comparison remains recorded in
-[host-corpus-v1](benchmarks/results/host-corpus-v1/report.md); it is not a device
-performance or numerical-correctness claim.
+deduplication and removal of no-choice instances.
 
 The complete per-instance size, lifetime, memory-space, capacity-pressure, and
 structured-constraint inventory is checked in as
@@ -224,13 +219,10 @@ Raw records distinguish `placement_valid` from `solution_valid`. The former vali
 while ignoring capacity only for a `best_effort_no_fit` diagnostic placement; the latter always validates
 the original problem, including pool capacities.
 
-The runner invokes MiniMalloc's capacity-minimization mode. A completed run is marked `optimal`; a
-budget exhaustion is marked `timeout` or `timeout_with_upper_bound` and is never used as a certified
-optimality gap. On PyPTO inputs, MiniMalloc runs only on generated per-pool core relaxations. Those
-results are reported as lower bounds only when the projection is sound and the relaxation optimum is
-certified, never as valid structured placements. Schema v1 declines the lower-bound column for temporal
-exclusions, flexible pool assignment, colocations, or overlapping intervals within one buffer. See the
-checked-in [complete-v1 snapshot](benchmarks/results/complete-v1/report.md).
+The standard-only runner invokes MiniMalloc's capacity-minimization mode using
+the sum of buffer sizes as an initial safe upper bound. A completed run is
+marked `optimal`; a budget exhaustion is marked `timeout` or
+`timeout_with_upper_bound` and is never reported as certified.
 
 ## Source layout
 

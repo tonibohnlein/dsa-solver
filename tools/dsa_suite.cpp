@@ -63,8 +63,10 @@ struct Options {
   std::size_t restarts = 4;
   std::size_t stagnation_limit = 250;
   std::uint64_t minimalloc_timeout_ms = 60'000;
+  std::size_t deterministic_repetitions = 5;
   bool run_minimalloc = true;
   bool build_core_relaxations = true;
+  bool standard_only = false;
   std::string run_label = "local";
 };
 
@@ -225,8 +227,10 @@ void PrintHelp() {
       << "  --restarts N                    Local-search restarts (default: 4)\n"
       << "  --stagnation N                  Local-search stagnation limit (default: 250)\n"
       << "  --minimalloc-timeout-ms N       Exact-solver budget per instance\n"
+      << "  --deterministic-repetitions N  Runtime repetitions for first-fit/XLA (default: 5)\n"
       << "  --no-minimalloc                 Do not execute the exact baseline\n"
       << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
+      << "  --standard-only                 Project PyPTO pools to capacity-free standard DSA\n"
       << "  --help                           Show this help\n";
 }
 
@@ -263,10 +267,14 @@ Options ParseOptions(int argc, char** argv) {
       options.stagnation_limit = ParseSize(next(&index, option), option);
     } else if (option == "--minimalloc-timeout-ms") {
       options.minimalloc_timeout_ms = ParseUnsigned(next(&index, option), option);
+    } else if (option == "--deterministic-repetitions") {
+      options.deterministic_repetitions = ParseSize(next(&index, option), option);
     } else if (option == "--no-minimalloc") {
       options.run_minimalloc = false;
     } else if (option == "--no-core-relaxations") {
       options.build_core_relaxations = false;
+    } else if (option == "--standard-only") {
+      options.standard_only = true;
     } else {
       UsageError("unknown option '" + option + "'");
     }
@@ -278,8 +286,17 @@ Options ParseOptions(int argc, char** argv) {
   if (options.output_dir.empty()) UsageError("--output-dir cannot be empty");
   if (options.run_label.empty()) UsageError("--run-label cannot be empty");
   if (options.restarts == 0) UsageError("--restarts must be positive");
+  if (options.deterministic_repetitions == 0) {
+    UsageError("--deterministic-repetitions must be positive");
+  }
   if (options.minimalloc_timeout_ms == 0) {
     UsageError("--minimalloc-timeout-ms must be positive");
+  }
+  if (options.standard_only && options.standard_capacity) {
+    UsageError("--standard-only cannot be combined with --standard-capacity");
+  }
+  if (options.standard_only && !options.build_core_relaxations && !options.pypto_roots.empty()) {
+    UsageError("--standard-only requires core projections for --pypto inputs");
   }
   return options;
 }
@@ -596,12 +613,89 @@ Instance LoadPyptoInstance(const fs::path& path) {
   return instance;
 }
 
+std::string CanonicalStandardShape(const dsa::DsaProblem& problem) {
+  std::set<std::int64_t> event_values;
+  for (const dsa::Buffer& buffer : problem.buffers) {
+    if (buffer.live_intervals.size() != 1) {
+      throw std::logic_error("standard shape fingerprint requires one interval per buffer");
+    }
+    event_values.insert(buffer.live_intervals.front().lower);
+    event_values.insert(buffer.live_intervals.front().upper);
+  }
+  std::map<std::int64_t, std::size_t> event_rank;
+  std::size_t next_rank = 0;
+  for (const std::int64_t event : event_values) event_rank.emplace(event, next_rank++);
+
+  using BufferShape = std::tuple<std::uint64_t, std::size_t, std::size_t>;
+  std::vector<BufferShape> buffers;
+  buffers.reserve(problem.buffers.size());
+  for (const dsa::Buffer& buffer : problem.buffers) {
+    const dsa::Interval& interval = buffer.live_intervals.front();
+    buffers.emplace_back(buffer.size, event_rank.at(interval.lower), event_rank.at(interval.upper));
+  }
+  std::sort(buffers.begin(), buffers.end());
+  std::ostringstream output;
+  for (const auto& [size, lower, upper] : buffers) {
+    output << size << ':' << lower << ':' << upper << ';';
+  }
+  return output.str();
+}
+
+bool HasNontrivialStandardChoice(const dsa::DsaProblem& problem) {
+  bool has_conflict = false;
+  bool has_reuse_candidate = false;
+  for (std::size_t first = 0; first < problem.buffers.size(); ++first) {
+    for (std::size_t second = first + 1; second < problem.buffers.size(); ++second) {
+      if (dsa::LifetimesOverlap(problem.buffers[first], problem.buffers[second])) {
+        has_conflict = true;
+      } else {
+        has_reuse_candidate = true;
+      }
+    }
+  }
+  return has_conflict && has_reuse_candidate;
+}
+
+dsa::StructuredProblemDocument MakeStandardProjection(dsa::StructuredProblemDocument relaxation) {
+  const std::string source_instance = relaxation.relaxed_from.value_or(relaxation.instance);
+  const std::string pool_name = MetadataValue(relaxation, "source_pool_name");
+  std::ostringstream removed_features;
+  for (std::size_t index = 0; index < relaxation.relaxed_features.size(); ++index) {
+    if (index != 0) removed_features << ',';
+    removed_features << relaxation.relaxed_features[index];
+  }
+
+  relaxation.profile = dsa::BenchmarkProfile::kStandardDsa;
+  relaxation.instance = source_instance + "::" + (pool_name.empty() ? "pool" : pool_name);
+  relaxation.metadata["standard_origin"] = "pypto_projection";
+  relaxation.metadata["projected_from"] = source_instance;
+  relaxation.metadata["projection_relaxed_features"] = removed_features.str();
+  relaxation.relaxed_from.reset();
+  relaxation.relaxed_features.clear();
+  for (dsa::Pool& pool : relaxation.problem.pools) pool.capacity.reset();
+
+  const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(relaxation);
+  if (!errors.empty()) {
+    throw std::logic_error("generated an invalid standard projection: " + errors.front());
+  }
+  return relaxation;
+}
+
 std::vector<Instance> LoadInstances(const Options& options) {
   std::vector<Instance> instances;
+  std::set<std::string> standard_shapes;
   std::set<std::string> compiler_problem_fingerprints;
   std::size_t duplicate_compiler_problems = 0;
+  std::size_t duplicate_standard_projections = 0;
+  std::size_t trivial_standard_projections = 0;
   for (const fs::path& path : DiscoverFiles(options.standard_roots, {".csv", ".json"})) {
-    instances.push_back(LoadStandardInstance(path, options.standard_capacity));
+    Instance standard = LoadStandardInstance(path, options.standard_capacity);
+    if (options.standard_only) {
+      for (dsa::Pool& pool : standard.document.problem.pools) pool.capacity.reset();
+      standard.document.metadata["standard_origin"] = "public_standard";
+      standard_shapes.insert(CanonicalStandardShape(standard.document.problem));
+    }
+    instances.push_back(std::move(standard));
   }
   for (const fs::path& path : DiscoverFiles(options.pypto_roots, {".json"})) {
     Instance structured = LoadPyptoInstance(path);
@@ -611,12 +705,25 @@ std::vector<Instance> LoadInstances(const Options& options) {
       ++duplicate_compiler_problems;
       continue;
     }
-    instances.push_back(structured);
+    if (!options.standard_only) instances.push_back(structured);
     if (!options.build_core_relaxations) continue;
     try {
       for (dsa::StructuredProblemDocument& relaxation :
            dsa::BuildCoreRelaxations(structured.document)) {
-        instances.push_back({std::move(relaxation), structured.source});
+        if (!options.standard_only) {
+          instances.push_back({std::move(relaxation), structured.source});
+          continue;
+        }
+        dsa::StructuredProblemDocument projection = MakeStandardProjection(std::move(relaxation));
+        if (!HasNontrivialStandardChoice(projection.problem)) {
+          ++trivial_standard_projections;
+          continue;
+        }
+        if (!standard_shapes.insert(CanonicalStandardShape(projection.problem)).second) {
+          ++duplicate_standard_projections;
+          continue;
+        }
+        instances.push_back({std::move(projection), structured.source});
       }
     } catch (const std::exception& error) {
       std::cerr << "dsa-suite: lower bounds unavailable for " << structured.document.instance
@@ -626,6 +733,11 @@ std::vector<Instance> LoadInstances(const Options& options) {
   if (duplicate_compiler_problems != 0) {
     std::cerr << "dsa-suite: skipped " << duplicate_compiler_problems
               << " repeated compiler problem shapes across corpus inputs\n";
+  }
+  if (options.standard_only) {
+    std::cerr << "dsa-suite: standard projection retained " << instances.size()
+              << " instances; skipped " << trivial_standard_projections << " trivial and "
+              << duplicate_standard_projections << " duplicate PyPTO pool projections\n";
   }
   std::sort(instances.begin(), instances.end(), [](const Instance& first, const Instance& second) {
     return std::tie(first.document.profile, first.document.instance) <
@@ -909,8 +1021,12 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
   for (const Instance& instance : instances) {
     std::cout << "[suite] " << instance.document.instance << " ["
               << dsa::ToString(instance.document.profile) << "]" << std::endl;
-    records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
-    records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
+    const std::size_t deterministic_runs =
+        options.standard_only ? options.deterministic_repetitions : 1;
+    for (std::size_t repetition = 0; repetition < deterministic_runs; ++repetition) {
+      records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
+    }
     for (std::uint64_t seed : options.seeds) {
       records.push_back(RunHeuristic(instance, kTvmHillClimb, seed, options));
       records.push_back(RunHeuristic(instance, kLocalSearch, seed, options));
@@ -1138,9 +1254,8 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
            << stats.max_buffer_bytes << ',' << stats.total_buffer_bytes << ','
            << stats.distinct_buffer_sizes << ',' << (stats.uniform_buffer_size ? "true" : "false")
            << ',' << stats.min_alignment << ',' << stats.max_alignment << ','
-           << stats.temporal_conflicts << ','
-           << stats.reuse_candidates << ',' << conflict_density << ','
-           << CsvEscape(Join(stats.max_live_bytes_by_space, ";")) << ','
+           << stats.temporal_conflicts << ',' << stats.reuse_candidates << ',' << conflict_density
+           << ',' << CsvEscape(Join(stats.max_live_bytes_by_space, ";")) << ','
            << (stats.live_byte_stats_complete ? "true" : "false") << ','
            << CsvEscape(stats.tightest_space) << ','
            << (stats.max_live_capacity_ratio ? FormatRatio(*stats.max_live_capacity_ratio)
@@ -1322,6 +1437,138 @@ void WriteFeatureOccurrenceReport(std::ostream& output, const std::vector<Instan
   output << '\n';
 }
 
+std::string StandardOrigin(const dsa::StructuredProblemDocument& document) {
+  if (MetadataValue(document, "standard_origin") != "pypto_projection") return "MiniMalloc";
+  constexpr std::string_view kPyptoLibPrefix = "pypto-lib::";
+  const bool is_pypto_lib =
+      document.instance.compare(0, kPyptoLibPrefix.size(), kPyptoLibPrefix) == 0;
+  std::string origin = is_pypto_lib ? "PyPTO-Lib" : "PyPTO";
+  const std::string family = MetadataValue(document, "corpus_family");
+  const std::string pool = MetadataValue(document, "source_pool_name");
+  if (!family.empty()) origin += "/" + family;
+  if (!pool.empty()) origin += "/" + pool;
+  return origin;
+}
+
+std::string StandardPeakCell(const Summary* summary, bool exact) {
+  if (summary == nullptr || !summary->best) return "—";
+  const RunRecord& best = *summary->best;
+  if (!HasUsableSolution(best)) return MarkdownEscape(best.status);
+  std::string cell = std::to_string(*best.peak);
+  if (exact && !best.certified_optimal) cell += "†";
+  return cell;
+}
+
+std::string StandardRuntimeCell(const Summary* summary, bool exact) {
+  if (summary == nullptr || !summary->best) return "—";
+  if (summary->best->status == "not_run" || summary->best->status == "unavailable") {
+    return MarkdownEscape(summary->best->status);
+  }
+  std::string cell = FormatRuntime(summary->median_runtime_us);
+  if (exact && !summary->best->certified_optimal) cell += "†";
+  return cell;
+}
+
+void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& instances,
+                             const std::vector<Summary>& summaries, const Options& options) {
+  std::ofstream output(path);
+  if (!output) throw std::runtime_error("cannot write Markdown report: " + path.string());
+  output << "# Standard DSA benchmark results\n\n"
+         << "Every row is a capacity-free, single-pool standard DSA problem. Public MiniMalloc "
+            "instances are used directly. PyPTO rows are per-pool projections that retain buffer "
+            "sizes and lifetimes but remove compiler-specific constraints, alignment, capacity, "
+            "and architecture resources; they are not device-valid PyPTO placements.\n\n"
+         << "Raw per-run records are in `results.jsonl`; `summary.csv` is the authoritative "
+            "long-form aggregation. Peak values are bytes. A dagger (`†`) marks a feasible "
+            "MiniMalloc result whose optimality was not proved before the timeout.\n\n"
+         << "Configuration: run label `" << MarkdownEscape(options.run_label) << "`; seeds `";
+  for (std::size_t index = 0; index < options.seeds.size(); ++index) {
+    if (index != 0) output << ',';
+    output << options.seeds[index];
+  }
+  output << "`; search budget `" << options.iterations << "`; local-search restarts `"
+         << options.restarts << "`; deterministic repetitions `"
+         << options.deterministic_repetitions << "`; MiniMalloc timeout `"
+         << options.minimalloc_timeout_ms
+         << " ms` per instance. Peak is the best valid result. "
+            "Runtime is the median across deterministic repetitions or stochastic seeds; "
+            "MiniMalloc is one bounded run. All returned placements are independently "
+            "validated.\n\n"
+         << "Regenerate from the repository root:\n\n```bash\n./build/dsa-suite";
+  auto append_option = [&](std::string_view name, const std::string& value) {
+    output << " \\" << '\n' << "  --" << name << ' ' << ShellQuote(value);
+  };
+  for (const fs::path& root : options.standard_roots) {
+    append_option("standard", root.generic_string());
+  }
+  for (const fs::path& root : options.pypto_roots) {
+    append_option("pypto", root.generic_string());
+  }
+  append_option("output-dir", options.output_dir.generic_string());
+  append_option("run-label", options.run_label);
+  std::ostringstream seeds;
+  for (std::size_t index = 0; index < options.seeds.size(); ++index) {
+    if (index != 0) seeds << ',';
+    seeds << options.seeds[index];
+  }
+  append_option("seeds", seeds.str());
+  append_option("iterations", std::to_string(options.iterations));
+  append_option("restarts", std::to_string(options.restarts));
+  append_option("stagnation", std::to_string(options.stagnation_limit));
+  append_option("deterministic-repetitions", std::to_string(options.deterministic_repetitions));
+  append_option("minimalloc-timeout-ms", std::to_string(options.minimalloc_timeout_ms));
+  output << " \\" << '\n' << "  --standard-only";
+  if (!options.run_minimalloc) output << " \\" << '\n' << "  --no-minimalloc";
+  output << "\n```\n\n";
+
+  const std::vector<std::pair<std::string_view, std::string_view>> methods = {
+      {"MiniMalloc exact", kMiniMalloc}, {"First fit", kFirstFit},       {"XLA heap", kXlaHeap},
+      {"TVM hill climb", kTvmHillClimb}, {"Local search", kLocalSearch},
+  };
+  auto write_header = [&]() {
+    output << "| Instance | Origin | Buffers";
+    for (const auto& [label, method] : methods) {
+      static_cast<void>(method);
+      output << " | " << label;
+    }
+    output << " |\n| --- | --- | ---:";
+    for (std::size_t index = 0; index < methods.size(); ++index) output << " | ---:";
+    output << " |\n";
+  };
+
+  output << "## Peak memory (bytes)\n\n";
+  write_header();
+  for (const Instance& instance : instances) {
+    const dsa::StructuredProblemDocument& document = instance.document;
+    const std::string profile = dsa::ToString(document.profile);
+    output << "| " << MarkdownEscape(document.instance) << " | "
+           << MarkdownEscape(StandardOrigin(document)) << " | " << document.problem.buffers.size();
+    for (const auto& [label, method] : methods) {
+      static_cast<void>(label);
+      output << " | "
+             << StandardPeakCell(FindSummary(summaries, document.instance, profile, method),
+                                 method == kMiniMalloc);
+    }
+    output << " |\n";
+  }
+
+  output << "\n## Runtime\n\n";
+  write_header();
+  for (const Instance& instance : instances) {
+    const dsa::StructuredProblemDocument& document = instance.document;
+    const std::string profile = dsa::ToString(document.profile);
+    output << "| " << MarkdownEscape(document.instance) << " | "
+           << MarkdownEscape(StandardOrigin(document)) << " | " << document.problem.buffers.size();
+    for (const auto& [label, method] : methods) {
+      static_cast<void>(label);
+      output << " | "
+             << StandardRuntimeCell(FindSummary(summaries, document.instance, profile, method),
+                                    method == kMiniMalloc);
+    }
+    output << " |\n";
+  }
+}
+
 void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
                  const std::vector<Summary>& summaries, const Options& options) {
   std::ofstream output(path);
@@ -1461,14 +1708,20 @@ void WriteOutputs(const Options& options, const std::vector<Instance>& instances
   const std::vector<Summary> summaries = Summarize(records);
   const fs::path raw_path = options.output_dir / "results.jsonl";
   const fs::path csv_path = options.output_dir / "summary.csv";
-  const fs::path features_path = options.output_dir / "features.csv";
   const fs::path report_path = options.output_dir / "report.md";
   WriteRawResults(raw_path, records, options);
   WriteSummaryCsv(csv_path, summaries);
-  WriteFeaturesCsv(features_path, instances);
-  WriteReport(report_path, instances, summaries, options);
-  std::cout << "dsa-suite: wrote " << raw_path << ", " << csv_path << ", " << features_path
-            << ", and " << report_path << '\n';
+  if (options.standard_only) {
+    WriteStandardOnlyReport(report_path, instances, summaries, options);
+    std::cout << "dsa-suite: wrote " << raw_path << ", " << csv_path << ", and " << report_path
+              << '\n';
+  } else {
+    const fs::path features_path = options.output_dir / "features.csv";
+    WriteFeaturesCsv(features_path, instances);
+    WriteReport(report_path, instances, summaries, options);
+    std::cout << "dsa-suite: wrote " << raw_path << ", " << csv_path << ", " << features_path
+              << ", and " << report_path << '\n';
+  }
 }
 
 }  // namespace

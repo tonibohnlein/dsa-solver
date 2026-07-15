@@ -1,40 +1,37 @@
 # Reproducible benchmark results
 
-Each newly generated result directory is produced by `dsa-suite` and contains four views of one run:
+`standard-v1/` is the only checked-in result snapshot. It compares every
+applicable algorithm on capacity-free standard DSA:
 
-- `results.jsonl` is the authoritative per-run record;
-- `summary.csv` aggregates repeated seeds without discarding status or validity;
-- `features.csv` records per-instance constraint and provenance occurrence;
-- `report.md` renders separate standard and PyPTO-structured tables.
+- the public MiniMalloc A--K instances are used directly;
+- PyPTO and PyPTO-Lib inputs are projected into independent single-pool
+  standard problems;
+- compiler constraints, alignment, capacity, and architecture resources are
+  removed from those projections;
+- projections with no placement choice and structurally duplicate projections
+  are omitted.
 
-Older snapshots created before `features.csv` was introduced retain their original three files.
+A retained projection has at least one overlapping buffer pair and at least one
+non-overlapping pair. This removes cases whose peak is forced to either the sum
+or the largest buffer without excluding harder cases merely because the current
+algorithms happen to tie on them.
 
-In raw records, `placement_valid` checks address geometry while relaxing capacity only for explicit
-best-effort diagnostics. `solution_valid` checks the complete original problem, including capacity.
+The current snapshot has 334 rows: 11 public MiniMalloc instances and 323
+unique, nontrivial PyPTO/PyPTO-Lib pool projections. Projection retained 323
+rows after rejecting 474 no-choice pools and 120 duplicates.
 
-The checked-in `baseline` snapshot uses bounded budgets and is a regression/reference run, not a claim
-that its machine-dependent runtimes are universally representative. Regenerate it from the repository
-root with the command recorded at the top of its report. Review changes to raw records and the generated
-tables together.
+The snapshot contains:
 
-`complete-v1` is the current combined comparison. It covers the MiniMalloc A--K
-challenge corpus, every checked-in sound PyPTO document, and a generated
-standard core relaxation for each PyPTO pool.
-The trivial MiniMalloc example remains a parser/CLI fixture and is deliberately
-excluded from the research table.
+- `report.md`: separate peak-memory and runtime tables;
+- `summary.csv`: long-form best-peak and median-runtime aggregation;
+- `results.jsonl`: authoritative per-run results, status, validation, seed, and
+  configuration metadata.
 
-`minimalloc-1mib-xla` is the longer standard-DSA comparison. It uses the
-MiniMalloc A--K one-MiB capacity, 2,000 ordering-search candidates per seed,
-and a 60-second exact-solver budget per instance. This is the long-form
-quality/runtime table; `baseline` remains the quicker CI-style snapshot.
+The PyPTO-derived rows are standard-DSA algorithm benchmarks, not device-valid
+PyPTO placements or claims about `pypto_hard_v1`. Structured PyPTO comparisons
+will be added only after that problem variant is finalized.
 
-`host-corpus-v1` is the comprehensive host-compiled comparison at PyPTO
-`8df2ed4` and PyPTO-Lib `6e897cd`. It contains 11 public standard problems, 471
-deduplicated structured compiler problems, and 957 generated per-pool standard
-relaxations. Every returned heuristic placement is independently
-placement-valid; capacity misses remain explicit `best_effort_no_fit` rows.
-The snapshot is not a device-performance or numerical-correctness claim.
-
-New PyPTO or `pypto-lib` corpus entries should record public source revisions, target, memory pool, schema
-version, and a content hash in structured-problem metadata. Do not publish instances derived from private
-workloads or containing machine-specific paths.
+Runtime is machine-dependent. Regenerate the complete snapshot using the exact
+command recorded in `standard-v1/report.md`; review raw and aggregated changes
+together. A timed-out MiniMalloc run may retain a feasible peak, but the report
+marks it as uncertified rather than calling it optimal.

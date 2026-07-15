@@ -218,16 +218,11 @@ kept even when they appear easy for every current heuristic.
 6. Explore schedule/allocation outer-loop moves after fixed-schedule correctness
    and performance are stable.
 
-## Initial A--K checkpoint
+## Standard benchmark checkpoint
 
-The checked-in
-[`minimalloc-1mib-xla` report](../benchmarks/results/minimalloc-1mib-xla/report.md)
-uses three seeds, 2,000 ordering-search candidates per seed, and a 60-second
-MiniMalloc budget. None of the heuristics reaches the one-MiB capacity. TVM
-hill climb has the best heuristic height on A, B, C, E, F, J, and K; generic
-local search leads on D, G, H, and I. The one-shot XLA policy is competitive in
-compile time but is not a quality winner on this adversarial set. MiniMalloc
-certifies an optimum for eight instances and times out without a certificate
-on D, E, and J. These results justify keeping all three heuristic baselines and
-developing stronger placement-level neighborhoods rather than tuning one
-ordering policy against compiler-specific cases alone.
+The checked-in [`standard-v1` report](../benchmarks/results/standard-v1/report.md)
+compares MiniMalloc exact, first fit, XLA heap, TVM hill climb, and local search
+without imposing a capacity. It contains the public MiniMalloc A--K set and
+deduplicated, nontrivial per-pool standard projections of the PyPTO corpus.
+These projections support standard-DSA algorithm comparisons only; structured
+PyPTO conclusions are intentionally deferred.
