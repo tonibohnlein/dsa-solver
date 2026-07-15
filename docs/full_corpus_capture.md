@@ -19,7 +19,7 @@ Record and verify these revisions before building:
 | --- | --- |
 | PyPTO | `8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1` |
 | PyPTO-Lib | `6e897cd99c28767b22e05f209da3e041f15c3dfc` |
-| dsa-solver | revision containing `pypto_lib_6e897cd.tsv` |
+| dsa-solver | `574c1c2443d6ece833caba17908e9b1d16cf1774` |
 
 Also record runtime, pto-isa, PTOAS release and archive hash, CANN, Python,
 architecture, and device IDs. Keep every worktree clean. Build with at most two
