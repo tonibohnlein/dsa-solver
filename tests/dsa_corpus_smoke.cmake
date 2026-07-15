@@ -12,7 +12,7 @@ file(REMOVE_RECURSE "${INPUT_DIR}" "${OUTPUT_DIR}")
 file(MAKE_DIRECTORY "${INPUT_DIR}/case_a" "${INPUT_DIR}/case_a/second"
   "${INPUT_DIR}/case_b" "${INPUT_DIR}/case_c")
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_a"
 )
 file(RENAME
@@ -20,7 +20,7 @@ file(RENAME
   "${INPUT_DIR}/case_a/pypto_pipeline_stage_separation.dsa.json"
 )
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/target_hazard_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/target_hazard_v1.json"
   DESTINATION "${INPUT_DIR}/case_a/second"
 )
 file(RENAME
@@ -28,7 +28,7 @@ file(RENAME
   "${INPUT_DIR}/case_a/second/pypto_pipeline_stage_separation.dsa.json"
 )
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_b"
 )
 file(RENAME
@@ -45,7 +45,7 @@ string(REPLACE "\"name\": \"Vec\"" "\"name\": \"RenamedVec\"" DUPLICATE_TEXT
   "${DUPLICATE_TEXT}")
 file(WRITE "${DUPLICATE_INPUT}" "${DUPLICATE_TEXT}")
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/chain_read_before_write_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/chain_read_before_write_v1.json"
   DESTINATION "${INPUT_DIR}/case_c"
 )
 file(RENAME

@@ -279,7 +279,7 @@ if(BUILD_TESTING)
   add_test(
     NAME dsa-cli-pypto-exported-corpus
     COMMAND dsa-bench
-      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/issue_1908_fragmentation_v1.json
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/issue_1908_fragmentation_v1.json
       --solver first-fit
   )
   add_test(
@@ -292,7 +292,7 @@ if(BUILD_TESTING)
   add_test(
     NAME dsa-cli-pypto-structured-search
     COMMAND dsa-bench
-      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json
       --solver pypto-structured-search
       --seed 7
       --iterations 100

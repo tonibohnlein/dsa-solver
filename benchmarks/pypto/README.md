@@ -1,33 +1,26 @@
 # PyPTO DSA instances
 
-Every benchmark input is a schema-v1 JSON file below `instances/`. The directory
-path identifies the source repository and source program; capture method and
-revision are provenance, not separate kinds of DSA problem.
+Every benchmark input is a schema-v1 JSON file in this directory. Directory
+paths identify source suites and programs; capture method and revision are
+provenance, not separate kinds of DSA problem. A program directory is retained
+only when it contains multiple instances. A single-instance program is encoded
+as `<program>__<kernel>.json` in its parent directory.
 
 ```text
-instances/
-├── pypto-lib/
-│   ├── examples/{advanced,beginner,intermediate}/
-│   └── models/
-│       ├── deepseek/{v3_2,v4}/
-│       └── qwen3/{14b,32b}/
-└── pypto/
-    ├── system-tests/{examples,runtime}/
-    └── unit-tests/memory-planning/
+benchmarks/pypto/
+├── system-tests/{examples,runtime}/
+└── unit-tests/memory-planning/
 ```
 
-The checked-in corpus contains 478 unique problems:
+This directory contains 184 unique PyPTO problems:
 
 | Source | Instances |
 | --- | ---: |
-| PyPTO-Lib examples | 11 |
-| PyPTO-Lib DeepSeek models | 166 |
-| PyPTO-Lib Qwen3 models | 117 |
 | PyPTO system tests | 179 |
 | PyPTO memory-planning unit fixtures | 5 |
 
 Four system-test exports that are structurally identical to PyPTO-Lib model
-instances are stored only under `pypto-lib/`. Repeated observations from the
+instances are stored only under `benchmarks/pypto-lib/`. Repeated observations from the
 same program are likewise represented once. This prevents benchmark results
 from weighting a shared kernel multiple times.
 
@@ -52,7 +45,7 @@ check source coverage and emits a temporary manifest while normalizing raw
 
 ```bash
 ./build/dsa-suite \
-  --pypto benchmarks/pypto/instances \
+  --pypto benchmarks/pypto \
   --output-dir benchmark-results \
   --run-label local-pypto \
   --seeds 0,1,2 \

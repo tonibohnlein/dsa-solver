@@ -9,7 +9,8 @@ Regenerate from the repository root:
 ```bash
 ./build/dsa-suite \
   --standard 'third_party/minimalloc/benchmarks/challenging' \
-  --pypto 'benchmarks/pypto/instances' \
+  --pypto 'benchmarks/pypto' \
+  --pypto 'benchmarks/pypto-lib' \
   --output-dir 'benchmarks/results/complete-v1' \
   --run-label 'complete-v1' \
   --standard-capacity '1048576' \

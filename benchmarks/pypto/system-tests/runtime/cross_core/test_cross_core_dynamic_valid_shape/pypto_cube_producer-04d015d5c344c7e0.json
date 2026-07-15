@@ -1,0 +1,181 @@
+{
+  "instance": "pypto::tests::st::runtime::cross_core::test_cross_core_dynamic_valid_shape::pypto_cube_producer-04d015d5c344c7e0",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "tests__st__runtime__cross_core__test_cross_core_dynamic_valid_shape",
+    "corpus_export_file": "tests__st__runtime__cross_core__test_cross_core_dynamic_valid_shape/cross_core_c2v_dynamic_tpush_valid_shape_8x12/a2a3sim/pypto_cube_producer.dsa.json",
+    "corpus_family": "pypto-runtime-cross_core",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "cube_producer",
+    "corpus_problem_fingerprint_fnv1a64": "04d015d5c344c7e0",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_source_fingerprint_fnv1a64": "2df9676fc598b817",
+    "corpus_source_path": "tests/st/runtime/cross_core/test_cross_core_dynamic_valid_shape.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 15,
+            "upper": 19
+          }
+        ],
+        "name": "mem_mat_4",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 17,
+            "upper": 21
+          }
+        ],
+        "name": "mem_mat_5",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 19,
+            "upper": 23
+          }
+        ],
+        "name": "mem_left_6",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 21,
+            "upper": 23
+          }
+        ],
+        "name": "mem_right_7",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 23,
+            "upper": 27
+          }
+        ],
+        "name": "mem_acc_8",
+        "size": 1024
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 524288,
+        "id": 2,
+        "name": "Mat",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 3,
+        "name": "Left",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 4,
+        "name": "Right",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 131072,
+        "id": 5,
+        "name": "Acc",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "a_mat__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "b_mat__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "a_left__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "b_right__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "acc__ssa_v0",
+            "narrowed__ssa_v0"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

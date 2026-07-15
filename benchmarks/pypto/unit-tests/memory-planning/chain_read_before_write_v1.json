@@ -1,0 +1,107 @@
+{
+  "instance": "read_before_write_chain",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend950"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 7,
+            "upper": 9
+          }
+        ],
+        "name": "mem_vec_2",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 9,
+            "upper": 11
+          }
+        ],
+        "name": "mem_vec_3",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 11,
+            "upper": 13
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 16384
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 245760,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "whole_slot_reuse": true,
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "tile_a"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "tile_b"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "tile_c"
+          ]
+        }
+      ],
+      "pipeline_groups": []
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

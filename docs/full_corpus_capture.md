@@ -100,8 +100,8 @@ Run `dsa-suite` with:
 
 ```bash
 --standard third_party/minimalloc/benchmarks/challenging
---pypto <normalized-pypto>/instances
---pypto <normalized-pypto-lib>/instances
+--pypto benchmarks/pypto
+--pypto benchmarks/pypto-lib
 --seeds 0,1,2
 --iterations 2000
 --restarts 4
@@ -125,5 +125,5 @@ Preserve:
 4. normalized `manifest.tsv` and `coverage.tsv`;
 5. `results.jsonl`, `summary.csv`, `features.csv`, and `report.md`;
 6. golden failures and paired PyPTO/DSA classification logs; and
-7. a proposed diff under `benchmarks/pypto/instances` containing only unique meaningful
-   device-correct instances.
+7. proposed diffs under `benchmarks/pypto` and `benchmarks/pypto-lib` containing
+   only unique, meaningful, device-correct instances.

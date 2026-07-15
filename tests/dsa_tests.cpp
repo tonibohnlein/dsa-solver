@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -431,8 +432,8 @@ void TestStructuredJsonRoundTripAndProfiles() {
 
 void TestPyptoHardV1RejectsResearchFeatures() {
   const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
-                                     "pypto" / "instances" / "pypto" / "unit-tests" /
-                                     "memory-planning" / "chain_read_before_write_v1.json";
+                                     "pypto" / "unit-tests" / "memory-planning" /
+                                     "chain_read_before_write_v1.json";
   const dsa::StructuredProblemDocument hard = dsa::ReadStructuredProblemJsonFile(path);
   Require(hard.profile == dsa::BenchmarkProfile::kPyptoHardV1 &&
               dsa::ValidateStructuredProblemDocument(hard).empty(),
@@ -499,8 +500,8 @@ void TestPyptoExportedCorpus() {
 
   for (const CorpusCase& corpus_case : cases) {
     const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
-                                       "pypto" / "instances" / "pypto" / "unit-tests" /
-                                       "memory-planning" / corpus_case.filename;
+                                       "pypto" / "unit-tests" / "memory-planning" /
+                                       corpus_case.filename;
     const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
     const dsa::BenchmarkProfile expected_profile = corpus_case.reuse_penalties == 0
                                                        ? dsa::BenchmarkProfile::kPyptoHardV1
@@ -544,13 +545,17 @@ void TestPyptoExportedCorpus() {
 }
 
 void TestEveryPyptoCorpusDocumentIsReplayable() {
-  const std::filesystem::path root =
-      std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto" / "instances";
+  const std::filesystem::path benchmark_root =
+      std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks";
+  const std::array<std::filesystem::path, 2> roots = {benchmark_root / "pypto",
+                                                      benchmark_root / "pypto-lib"};
   std::vector<std::filesystem::path> paths;
-  for (const std::filesystem::directory_entry& entry :
-       std::filesystem::recursive_directory_iterator(root)) {
-    if (entry.is_regular_file() && entry.path().extension() == ".json") {
-      paths.push_back(entry.path());
+  for (const std::filesystem::path& root : roots) {
+    for (const std::filesystem::directory_entry& entry :
+         std::filesystem::recursive_directory_iterator(root)) {
+      if (entry.is_regular_file() && entry.path().extension() == ".json") {
+        paths.push_back(entry.path());
+      }
     }
   }
   std::sort(paths.begin(), paths.end());

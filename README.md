@@ -124,7 +124,8 @@ the exact MiniMalloc solver with a per-instance timeout:
 ```bash
 ./build/dsa-suite \
   --standard third_party/minimalloc/benchmarks/challenging \
-  --pypto benchmarks/pypto/instances \
+  --pypto benchmarks/pypto \
+  --pypto benchmarks/pypto-lib \
   --output-dir benchmark-results \
   --run-label local-a-k \
   --standard-capacity 1048576 \
@@ -172,11 +173,11 @@ Qwen3 14B/32B are exhaustive at the pinned revision. Import fails if a capture
 target is missing, an excluded target produces a document, or an unlisted case appears. See
 [the corpus workflow](docs/compiler_corpus.md).
 
-The checked-in corpus stores only normalized JSON under
-`benchmarks/pypto/instances`, organized by source repository and program. The
+The checked-in corpus stores normalized JSON directly under
+`benchmarks/pypto` and `benchmarks/pypto-lib`, organized by source program. The
 host captures contain 471 unique meaningful problems after cross-source
 deduplication. Two additional corrected DeepSeek-v4 device captures and five
-PyPTO unit-export fixtures bring the directory to 478 unique inputs. The
+PyPTO unit-export fixtures bring the two directories to 478 unique inputs. The
 host-only solver comparison remains recorded in
 [host-corpus-v1](benchmarks/results/host-corpus-v1/report.md); it is not a device
 performance or numerical-correctness claim.

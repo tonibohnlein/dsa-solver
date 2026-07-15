@@ -1,0 +1,385 @@
+{
+  "instance": "pypto::tests::st::runtime::ops::test_scatter_update::pypto_kernel-a359420001b9111f",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "tests__st__runtime__ops__test_scatter_update",
+    "corpus_export_file": "tests__st__runtime__ops__test_scatter_update/tile_scatter_update_single_batch/a2a3sim/pypto_kernel.dsa.json",
+    "corpus_family": "pypto-runtime-ops",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "kernel",
+    "corpus_problem_fingerprint_fnv1a64": "a359420001b9111f",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_source_fingerprint_fnv1a64": "927d83e8a7e5b28c",
+    "corpus_source_path": "tests/st/runtime/ops/test_scatter_update.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 29,
+            "upper": 65
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 31,
+            "upper": 45
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 33,
+            "upper": 53
+          }
+        ],
+        "name": "mem_vec_6",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 35,
+            "upper": 39
+          }
+        ],
+        "name": "mem_vec_7",
+        "size": 128
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 37,
+            "upper": 39
+          }
+        ],
+        "name": "mem_vec_8",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 39,
+            "upper": 49
+          }
+        ],
+        "name": "mem_vec_9",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 45,
+            "upper": 49
+          }
+        ],
+        "name": "mem_vec_10",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 49,
+            "upper": 59
+          }
+        ],
+        "name": "mem_vec_11",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 8,
+        "live_intervals": [
+          {
+            "lower": 51,
+            "upper": 65
+          }
+        ],
+        "name": "mem_vec_12",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 9,
+        "live_intervals": [
+          {
+            "lower": 55,
+            "upper": 61
+          }
+        ],
+        "name": "mem_vec_13",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 10,
+        "live_intervals": [
+          {
+            "lower": 57,
+            "upper": 59
+          }
+        ],
+        "name": "mem_vec_14",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 11,
+        "live_intervals": [
+          {
+            "lower": 61,
+            "upper": 65
+          }
+        ],
+        "name": "mem_vec_15",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 12,
+        "live_intervals": [
+          {
+            "lower": 63,
+            "upper": 65
+          }
+        ],
+        "name": "mem_vec_16",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 13,
+        "live_intervals": [
+          {
+            "lower": 65,
+            "upper": 67
+          }
+        ],
+        "name": "mem_vec_17",
+        "size": 4096
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 3,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 5
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 7
+        },
+        {
+          "first": 11,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 13
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 13
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "input_tile__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "index_tile__ssa_v0",
+            "su_idx_flat",
+            "su_row_base__rm_a0_tmp_v0"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "src_tile__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "su_col"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "su_tmpl"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "su_col_nd"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "su_row_base__row_major_tmp_v1",
+            "su_row_base"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "su_flat_idx"
+          ]
+        },
+        {
+          "buffer": 8,
+          "members": [
+            "su_v0",
+            "su_vals"
+          ]
+        },
+        {
+          "buffer": 9,
+          "members": [
+            "su_m0",
+            "su_mask"
+          ]
+        },
+        {
+          "buffer": 10,
+          "members": [
+            "su_ones"
+          ]
+        },
+        {
+          "buffer": 11,
+          "members": [
+            "su_pred"
+          ]
+        },
+        {
+          "buffer": 12,
+          "members": [
+            "su_tmp"
+          ]
+        },
+        {
+          "buffer": 13,
+          "members": [
+            "result__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

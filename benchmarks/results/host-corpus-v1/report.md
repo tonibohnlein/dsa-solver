@@ -9,20 +9,20 @@ Regenerate from the repository root:
 ```bash
 ./build/dsa-suite \
   --standard 'third_party/minimalloc/benchmarks/challenging' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/examples' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v3_2' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/decode_attention_csa' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/decode_attention_hca' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/decode_attention_swa' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/decode_fwd' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/decode_mtp' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/decode_sparse_attn_swa' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/lm_head' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/prefill_attention_csa' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/prefill_attention_hca' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/deepseek/v4/prefill_fwd' \
-  --pypto 'benchmarks/pypto/instances/pypto-lib/models/qwen3' \
-  --pypto 'benchmarks/pypto/instances/pypto/system-tests' \
+  --pypto 'benchmarks/pypto-lib/examples' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v3_2' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/decode_attention_csa' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/decode_attention_hca' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/decode_attention_swa' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/decode_fwd' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/decode_mtp' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/decode_sparse_attn_swa' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/lm_head' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/prefill_attention_csa' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/prefill_attention_hca' \
+  --pypto 'benchmarks/pypto-lib/models/deepseek/v4/prefill_fwd' \
+  --pypto 'benchmarks/pypto-lib/models/qwen3' \
+  --pypto 'benchmarks/pypto/system-tests' \
   --output-dir 'benchmarks/results/host-corpus-v1' \
   --run-label 'host-corpus-v1' \
   --standard-capacity '1048576' \

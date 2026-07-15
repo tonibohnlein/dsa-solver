@@ -1,0 +1,128 @@
+{
+  "instance": "issue_1908_fragmentation",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend950"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 9,
+            "upper": 11
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 65536
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 13,
+            "upper": 17
+          }
+        ],
+        "name": "mem_vec_6",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 15,
+            "upper": 17
+          }
+        ],
+        "name": "mem_vec_7",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 17,
+            "upper": 19
+          }
+        ],
+        "name": "mem_vec_8",
+        "size": 32768
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 245760,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "whole_slot_reuse": true,
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "producer"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "left"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "right"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "combined"
+          ]
+        }
+      ],
+      "pipeline_groups": []
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}
