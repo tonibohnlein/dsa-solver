@@ -177,7 +177,19 @@ if(NOT EXISTS "${OUTPUT_DIR}/suite-report/features.csv")
   message(FATAL_ERROR "corpus suite did not write features.csv")
 endif()
 file(READ "${OUTPUT_DIR}/suite-report/features.csv" FEATURES_TEXT)
-foreach(EXPECTED "whole_slot_reuse" "pipeline_separations")
+foreach(EXPECTED
+    "min_buffer_bytes"
+    "uniform_buffer_size"
+    "memory_spaces"
+    "pool_capacities_bytes"
+    "max_interval_live_bytes_by_space"
+    "temporal_conflicts"
+    "whole_slot_reuse"
+    "alias_classes"
+    "pipeline_separations"
+    "UB=245760"
+    "16384,16384,32768,1,true"
+    "UB=16384")
   string(FIND "${FEATURES_TEXT}" "${EXPECTED}" FOUND)
   if(FOUND EQUAL -1)
     message(FATAL_ERROR "corpus feature report is missing '${EXPECTED}'")

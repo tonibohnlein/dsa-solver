@@ -76,8 +76,29 @@ struct Instance {
 struct FeatureStats {
   std::string instance;
   std::string profile;
+  std::string source;
+  std::string corpus_namespace;
+  std::string corpus_family;
+  std::string corpus_source_path;
+  std::string target;
+  std::vector<std::string> memory_spaces;
+  std::vector<std::string> pool_capacities;
+  std::vector<std::string> max_live_bytes_by_space;
+  std::string tightest_space;
+  std::optional<long double> max_live_capacity_ratio;
   std::size_t buffers = 0;
   std::size_t pools = 0;
+  std::uint64_t min_buffer_bytes = 0;
+  std::uint64_t max_buffer_bytes = 0;
+  std::uint64_t total_buffer_bytes = 0;
+  std::size_t distinct_buffer_sizes = 0;
+  bool uniform_buffer_size = false;
+  std::uint64_t min_alignment = 0;
+  std::uint64_t max_alignment = 0;
+  std::size_t live_intervals = 0;
+  std::size_t temporal_conflicts = 0;
+  std::size_t reuse_candidates = 0;
+  bool live_byte_stats_complete = true;
   std::size_t aligned_buffers = 0;
   std::size_t multi_interval_buffers = 0;
   std::size_t flexible_pool_buffers = 0;
@@ -91,6 +112,7 @@ struct FeatureStats {
   std::size_t temporal_exclusions = 0;
   std::size_t pinned_allocations = 0;
   std::size_t reuse_penalties = 0;
+  std::size_t alias_classes = 0;
   std::size_t nontrivial_alias_classes = 0;
   std::size_t pipeline_groups = 0;
   std::size_t depth_shed_pipeline_groups = 0;
@@ -347,19 +369,151 @@ std::vector<std::string> ProblemFeatures(const dsa::DsaProblem& problem) {
   return features;
 }
 
+std::string MetadataValue(const dsa::StructuredProblemDocument& document, const std::string& key) {
+  const auto found = document.metadata.find(key);
+  return found == document.metadata.end() ? std::string{} : found->second;
+}
+
+std::string MemorySpaceName(std::string_view pool_name) {
+  if (pool_name == "Vec") return "UB";
+  if (pool_name == "Mat") return "L1";
+  if (pool_name == "Left") return "L0A";
+  if (pool_name == "Right") return "L0B";
+  if (pool_name == "Acc") return "L0C";
+  return std::string(pool_name);
+}
+
+bool ShareAllowedPool(const dsa::Buffer& first, const dsa::Buffer& second) {
+  return std::any_of(first.allowed_pools.begin(), first.allowed_pools.end(), [&](dsa::PoolId pool) {
+    return std::find(second.allowed_pools.begin(), second.allowed_pools.end(), pool) !=
+           second.allowed_pools.end();
+  });
+}
+
+std::map<dsa::PoolId, std::uint64_t> MaxLiveBytesByPool(const dsa::DsaProblem& problem,
+                                                        bool* complete) {
+  struct EventTotals {
+    std::uint64_t ending = 0;
+    std::uint64_t starting = 0;
+  };
+  std::map<dsa::PoolId, std::map<std::int64_t, EventTotals>> events_by_pool;
+  *complete = true;
+  for (const dsa::Buffer& buffer : problem.buffers) {
+    if (buffer.allowed_pools.size() != 1) {
+      *complete = false;
+      continue;
+    }
+    std::vector<dsa::Interval> intervals = buffer.live_intervals;
+    std::sort(intervals.begin(), intervals.end(), [](const auto& first, const auto& second) {
+      return std::tie(first.lower, first.upper) < std::tie(second.lower, second.upper);
+    });
+    std::vector<dsa::Interval> merged;
+    for (const dsa::Interval& interval : intervals) {
+      if (merged.empty() || interval.lower > merged.back().upper) {
+        merged.push_back(interval);
+      } else {
+        merged.back().upper = std::max(merged.back().upper, interval.upper);
+      }
+    }
+    for (const dsa::Interval& interval : merged) {
+      EventTotals& start = events_by_pool[buffer.allowed_pools.front()][interval.lower];
+      EventTotals& end = events_by_pool[buffer.allowed_pools.front()][interval.upper];
+      if (start.starting > std::numeric_limits<std::uint64_t>::max() - buffer.size ||
+          end.ending > std::numeric_limits<std::uint64_t>::max() - buffer.size) {
+        throw std::overflow_error("live-byte event total overflow");
+      }
+      start.starting += buffer.size;
+      end.ending += buffer.size;
+    }
+  }
+
+  std::map<dsa::PoolId, std::uint64_t> result;
+  for (const auto& [pool, events] : events_by_pool) {
+    std::uint64_t current = 0;
+    std::uint64_t peak = 0;
+    for (const auto& [time, totals] : events) {
+      static_cast<void>(time);
+      if (totals.ending > current) {
+        throw std::runtime_error("live-byte event sweep underflow");
+      }
+      current -= totals.ending;
+      if (totals.starting > std::numeric_limits<std::uint64_t>::max() - current) {
+        throw std::overflow_error("live-byte event sweep overflow");
+      }
+      current += totals.starting;
+      peak = std::max(peak, current);
+    }
+    result.emplace(pool, peak);
+  }
+  return result;
+}
+
 FeatureStats AnalyzeFeatures(const Instance& instance) {
   FeatureStats stats;
   stats.instance = instance.document.instance;
   stats.profile = dsa::ToString(instance.document.profile);
+  stats.source = instance.source;
+  stats.corpus_namespace = MetadataValue(instance.document, "corpus_namespace");
+  stats.corpus_family = MetadataValue(instance.document, "corpus_family");
+  stats.corpus_source_path = MetadataValue(instance.document, "corpus_source_path");
+  stats.target = MetadataValue(instance.document, "target");
   const dsa::DsaProblem& problem = instance.document.problem;
   stats.buffers = problem.buffers.size();
   stats.pools = problem.pools.size();
+  std::set<std::uint64_t> distinct_sizes;
+  stats.min_buffer_bytes = std::numeric_limits<std::uint64_t>::max();
+  stats.min_alignment = std::numeric_limits<std::uint64_t>::max();
   for (const dsa::Buffer& buffer : problem.buffers) {
+    stats.min_buffer_bytes = std::min(stats.min_buffer_bytes, buffer.size);
+    stats.max_buffer_bytes = std::max(stats.max_buffer_bytes, buffer.size);
+    if (stats.total_buffer_bytes > std::numeric_limits<std::uint64_t>::max() - buffer.size) {
+      throw std::overflow_error("total buffer bytes overflow");
+    }
+    stats.total_buffer_bytes += buffer.size;
+    distinct_sizes.insert(buffer.size);
+    stats.min_alignment = std::min(stats.min_alignment, buffer.alignment);
+    stats.max_alignment = std::max(stats.max_alignment, buffer.alignment);
+    stats.live_intervals += buffer.live_intervals.size();
     if (buffer.alignment > 1) ++stats.aligned_buffers;
     if (buffer.live_intervals.size() > 1) ++stats.multi_interval_buffers;
     if (buffer.allowed_pools.size() > 1) ++stats.flexible_pool_buffers;
   }
+  if (problem.buffers.empty()) {
+    stats.min_buffer_bytes = 0;
+    stats.min_alignment = 0;
+  }
+  stats.distinct_buffer_sizes = distinct_sizes.size();
+  stats.uniform_buffer_size = distinct_sizes.size() <= 1;
+
+  for (std::size_t first = 0; first < problem.buffers.size(); ++first) {
+    for (std::size_t second = first + 1; second < problem.buffers.size(); ++second) {
+      if (!ShareAllowedPool(problem.buffers[first], problem.buffers[second])) continue;
+      if (dsa::HaveTemporalConflict(problem, problem.buffers[first], problem.buffers[second])) {
+        ++stats.temporal_conflicts;
+      } else {
+        ++stats.reuse_candidates;
+      }
+    }
+  }
+
+  const std::map<dsa::PoolId, std::uint64_t> max_live_bytes =
+      MaxLiveBytesByPool(problem, &stats.live_byte_stats_complete);
   for (const dsa::Pool& pool : problem.pools) {
+    const std::string space = MemorySpaceName(pool.name);
+    stats.memory_spaces.push_back(space);
+    stats.pool_capacities.push_back(space + "=" +
+                                    (pool.capacity ? std::to_string(*pool.capacity) : "unbounded"));
+    const auto live = max_live_bytes.find(pool.id);
+    const std::uint64_t live_bytes = live == max_live_bytes.end() ? 0 : live->second;
+    stats.max_live_bytes_by_space.push_back(space + "=" + std::to_string(live_bytes));
+    if (stats.live_byte_stats_complete && pool.capacity && *pool.capacity != 0) {
+      const long double ratio =
+          static_cast<long double>(live_bytes) / static_cast<long double>(*pool.capacity);
+      if (!stats.max_live_capacity_ratio || ratio > *stats.max_live_capacity_ratio) {
+        stats.max_live_capacity_ratio = ratio;
+        stats.tightest_space = space;
+      }
+    }
     stats.reserved_ranges += pool.reserved_ranges.size();
     if (pool.bank_geometry) ++stats.bank_geometries;
   }
@@ -387,6 +541,7 @@ FeatureStats AnalyzeFeatures(const Instance& instance) {
   if (problem.cost_model) stats.reuse_penalties = problem.cost_model->reuse_penalties.size();
   if (problem.pypto_structure) {
     stats.whole_slot_reuse = problem.pypto_structure->whole_slot_reuse;
+    stats.alias_classes = problem.pypto_structure->alias_classes.size();
     stats.pipeline_groups = problem.pypto_structure->pipeline_groups.size();
     for (const dsa::PyptoAliasClass& alias_class : problem.pypto_structure->alias_classes) {
       if (alias_class.members.size() > 1) ++stats.nontrivial_alias_classes;
@@ -396,11 +551,6 @@ FeatureStats AnalyzeFeatures(const Instance& instance) {
     }
   }
   return stats;
-}
-
-std::string MetadataValue(const dsa::StructuredProblemDocument& document, const std::string& key) {
-  const auto found = document.metadata.find(key);
-  return found == document.metadata.end() ? std::string{} : found->second;
 }
 
 Instance LoadStandardInstance(const fs::path& path,
@@ -909,6 +1059,12 @@ std::string Join(const std::vector<std::string>& values, std::string_view separa
   return output.str();
 }
 
+std::string FormatRatio(long double value) {
+  std::ostringstream output;
+  output << std::fixed << std::setprecision(6) << value;
+  return output.str();
+}
+
 std::string OptionalCsv(const std::optional<std::uint64_t>& value) {
   return value ? std::to_string(*value) : std::string{};
 }
@@ -950,22 +1106,54 @@ void WriteSummaryCsv(const fs::path& path, const std::vector<Summary>& summaries
 void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instances) {
   std::ofstream output(path);
   if (!output) throw std::runtime_error("cannot write feature CSV: " + path.string());
-  output << "instance,profile,buffers,pools,aligned_buffers,multi_interval_buffers,"
+  output << "instance,profile,source,corpus_namespace,corpus_family,corpus_source_path,target,"
+            "buffers,pools,memory_spaces,pool_capacities_bytes,min_buffer_bytes,max_buffer_bytes,"
+            "total_buffer_bytes,distinct_buffer_sizes,uniform_buffer_size,min_alignment,"
+            "max_alignment,live_intervals,temporal_conflicts,reuse_candidates,conflict_density,"
+            "max_interval_live_bytes_by_space,live_byte_stats_complete,tightest_space,"
+            "max_live_capacity_ratio,aligned_buffers,multi_interval_buffers,"
             "flexible_pool_buffers,reserved_ranges,bank_geometries,colocations,separations,"
             "pipeline_separations,target_hazard_separations,semantic_no_alias_separations,"
             "temporal_exclusions,pinned_allocations,reuse_penalties,whole_slot_reuse,"
-            "nontrivial_alias_classes,pipeline_groups,depth_shed_pipeline_groups\n";
+            "alias_classes,nontrivial_alias_classes,pipeline_groups,depth_shed_pipeline_groups\n";
+  std::vector<FeatureStats> rows;
   for (const Instance& instance : instances) {
     if (instance.document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation) continue;
-    const FeatureStats stats = AnalyzeFeatures(instance);
-    output << CsvEscape(stats.instance) << ',' << CsvEscape(stats.profile) << ',' << stats.buffers
-           << ',' << stats.pools << ',' << stats.aligned_buffers << ','
-           << stats.multi_interval_buffers << ',' << stats.flexible_pool_buffers << ','
-           << stats.reserved_ranges << ',' << stats.bank_geometries << ',' << stats.colocations
-           << ',' << stats.separations << ',' << stats.pipeline_separations << ','
-           << stats.target_hazard_separations << ',' << stats.semantic_no_alias_separations << ','
-           << stats.temporal_exclusions << ',' << stats.pinned_allocations << ','
-           << stats.reuse_penalties << ',' << (stats.whole_slot_reuse ? "true" : "false") << ','
+    rows.push_back(AnalyzeFeatures(instance));
+  }
+  std::sort(rows.begin(), rows.end(), [](const FeatureStats& first, const FeatureStats& second) {
+    return std::tie(first.instance, first.profile, first.source) <
+           std::tie(second.instance, second.profile, second.source);
+  });
+  for (const FeatureStats& stats : rows) {
+    const std::size_t comparable_pairs = stats.temporal_conflicts + stats.reuse_candidates;
+    const std::string conflict_density =
+        comparable_pairs == 0 ? std::string{}
+                              : FormatRatio(static_cast<long double>(stats.temporal_conflicts) /
+                                            static_cast<long double>(comparable_pairs));
+    output << CsvEscape(stats.instance) << ',' << CsvEscape(stats.profile) << ','
+           << CsvEscape(stats.source) << ',' << CsvEscape(stats.corpus_namespace) << ','
+           << CsvEscape(stats.corpus_family) << ',' << CsvEscape(stats.corpus_source_path) << ','
+           << CsvEscape(stats.target) << ',' << stats.buffers << ',' << stats.pools << ','
+           << CsvEscape(Join(stats.memory_spaces, ";")) << ','
+           << CsvEscape(Join(stats.pool_capacities, ";")) << ',' << stats.min_buffer_bytes << ','
+           << stats.max_buffer_bytes << ',' << stats.total_buffer_bytes << ','
+           << stats.distinct_buffer_sizes << ',' << (stats.uniform_buffer_size ? "true" : "false")
+           << ',' << stats.min_alignment << ',' << stats.max_alignment << ','
+           << stats.live_intervals << ',' << stats.temporal_conflicts << ','
+           << stats.reuse_candidates << ',' << conflict_density << ','
+           << CsvEscape(Join(stats.max_live_bytes_by_space, ";")) << ','
+           << (stats.live_byte_stats_complete ? "true" : "false") << ','
+           << CsvEscape(stats.tightest_space) << ','
+           << (stats.max_live_capacity_ratio ? FormatRatio(*stats.max_live_capacity_ratio)
+                                             : std::string{})
+           << ',' << stats.aligned_buffers << ',' << stats.multi_interval_buffers << ','
+           << stats.flexible_pool_buffers << ',' << stats.reserved_ranges << ','
+           << stats.bank_geometries << ',' << stats.colocations << ',' << stats.separations << ','
+           << stats.pipeline_separations << ',' << stats.target_hazard_separations << ','
+           << stats.semantic_no_alias_separations << ',' << stats.temporal_exclusions << ','
+           << stats.pinned_allocations << ',' << stats.reuse_penalties << ','
+           << (stats.whole_slot_reuse ? "true" : "false") << ',' << stats.alias_classes << ','
            << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
            << stats.depth_shed_pipeline_groups << '\n';
   }

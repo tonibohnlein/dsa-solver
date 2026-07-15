@@ -17,6 +17,34 @@ if(NOT INSTANCE_COUNT EQUAL 478)
   message(FATAL_ERROR "expected 478 PyPTO instances, found ${INSTANCE_COUNT}")
 endif()
 
+set(CORPUS_TABLE "${SOURCE_DIR}/benchmarks/corpus.csv")
+if(NOT EXISTS "${CORPUS_TABLE}")
+  message(FATAL_ERROR "PyPTO corpus statistics table is missing")
+endif()
+file(STRINGS "${CORPUS_TABLE}" CORPUS_TABLE_ROWS)
+list(LENGTH CORPUS_TABLE_ROWS CORPUS_TABLE_ROW_COUNT)
+if(NOT CORPUS_TABLE_ROW_COUNT EQUAL 479)
+  message(FATAL_ERROR
+    "expected a header plus 478 corpus statistics rows, found ${CORPUS_TABLE_ROW_COUNT}")
+endif()
+list(GET CORPUS_TABLE_ROWS 0 CORPUS_TABLE_HEADER)
+foreach(REQUIRED_COLUMN
+    "buffers"
+    "memory_spaces"
+    "pool_capacities_bytes"
+    "min_buffer_bytes"
+    "max_buffer_bytes"
+    "uniform_buffer_size"
+    "temporal_conflicts"
+    "max_live_capacity_ratio"
+    "alias_classes"
+    "pipeline_groups")
+  string(FIND "${CORPUS_TABLE_HEADER}" "${REQUIRED_COLUMN}" COLUMN_INDEX)
+  if(COLUMN_INDEX EQUAL -1)
+    message(FATAL_ERROR "corpus statistics table is missing '${REQUIRED_COLUMN}'")
+  endif()
+endforeach()
+
 set(FAMILIES
   "${PYPTO_LIB_ROOT}/examples"
   "${PYPTO_LIB_ROOT}/models/deepseek"

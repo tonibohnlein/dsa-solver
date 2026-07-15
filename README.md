@@ -140,7 +140,8 @@ The output directory contains:
 - `results.jsonl`: one immutable record per instance, method, and seed;
 - `summary.csv`: long-form per-method aggregation with best objective, median runtime, and compiler
   family/source columns when present;
-- `features.csv`: per-instance structured-constraint occurrence;
+- `features.csv`: per-instance provenance, size distribution, memory-space pressure, conflict graph,
+  and structured-constraint statistics;
 - `report.md`: separate standard-DSA and PyPTO-structured comparison tables, including normalized
   compiler provenance.
 
@@ -181,6 +182,11 @@ PyPTO unit-export fixtures bring the two directories to 478 unique inputs. The
 host-only solver comparison remains recorded in
 [host-corpus-v1](benchmarks/results/host-corpus-v1/report.md); it is not a device
 performance or numerical-correctness claim.
+
+The complete per-instance size, lifetime, memory-space, capacity-pressure, and
+structured-constraint inventory is checked in as
+[`benchmarks/corpus.csv`](benchmarks/corpus.csv); column definitions and the
+UB/L1/L0 mapping are in [`benchmarks/README.md`](benchmarks/README.md).
 
 Do not import the earlier 597-document `b8802dc6` regression archive as a
 published benchmark. That run was essential for finding the DeepSeek-v4
