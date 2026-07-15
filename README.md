@@ -43,6 +43,9 @@ The ordering local search is a research baseline, not yet the intended novel pla
 The next solver will add direct offset/region moves and bounded backtracking behind the same `DsaSolver`
 interface.
 
+See the [documentation index](docs/README.md), especially the consolidated
+[PyPTO DSA definition](docs/pypto_dsa.md).
+
 ## Build and test
 
 ```bash

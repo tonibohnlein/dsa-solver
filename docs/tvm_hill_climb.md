@@ -80,8 +80,8 @@ The next research solver should keep this implementation unchanged as an ablatio
 5. PyPTO-specific moves for alias classes, pipeline separation groups, and eventually buffering-depth
    decisions;
 6. reproducible comparisons on `standard_dsa` against the exact
-   [Google MiniMalloc](https://github.com/google/minimalloc) solver, and on `pypto_structured` against
-   independently validated compiler objectives.
+   [Google MiniMalloc](https://github.com/google/minimalloc) solver, and on
+   `pypto_hard_v1` against independently validated compiler objectives.
 
 For the broader state of the art, [Futureproof Static Memory Planning](https://arxiv.org/abs/2504.04874)
 is especially useful: it frames TVM hill climb, MiniMalloc, production heuristics, and the newer boxing-
