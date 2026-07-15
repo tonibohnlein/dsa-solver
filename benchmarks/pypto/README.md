@@ -1,58 +1,24 @@
-# PyPTO DSA instances
+# PyPTO corpus
 
-Every benchmark input is a schema-v1 JSON file in this directory. Directory
-paths identify source suites and programs; capture method and revision are
-provenance, not separate kinds of DSA problem. A program directory is retained
-only when it contains multiple instances. A single-instance program is encoded
-as `<program>__<kernel>.json` in its parent directory.
-
-```text
-benchmarks/pypto/
-├── system-tests/{examples,runtime}/
-└── unit-tests/memory-planning/
-```
-
-This directory contains 184 unique PyPTO problems:
+This directory contains 165 unique schema-v1 problems:
 
 | Source | Instances |
 | --- | ---: |
-| PyPTO system tests | 179 |
-| PyPTO memory-planning unit fixtures | 5 |
+| System tests | 161 |
+| Memory-planning fixtures | 4 |
 
-Four system-test exports that are structurally identical to PyPTO-Lib model
-instances are stored only under `benchmarks/pypto-lib/`. Repeated observations from the
-same program are likewise represented once. This prevents benchmark results
-from weighting a shared kernel multiple times.
+Paths preserve the source suite and program. Programs with one captured kernel
+use `<program>__<kernel>.json`; directories are kept when a program has several
+instances.
 
-## Instance format
+Each JSON file contains the solver profile, pools, buffers, lifetimes,
+constraints, target, and source/exporter revisions. Structurally duplicate
+captures are stored once, including duplicates shared with PyPTO-Lib.
 
-Each `.json` file is a `StructuredProblemDocument` with:
+Files under `../capture/` specify source coverage for corpus regeneration; they
+are not benchmark instances. Host solver validation also does not establish
+device numerical correctness or performance.
 
-- `schema_version`: currently `1`;
-- `profile`: `pypto_hard_v1` or the experimental `pypto_research_v1`;
-- `problem`: pools, buffers, sizes, alignments, live intervals, and PyPTO hard
-  structure such as semantic alias classes and pipeline groups;
-- `metadata`: target, lifetime ordering, reuse contract, and—on normalized
-  compiler captures—the exact source/exporter repositories, commits, source
-  path, raw-export fingerprint, and canonical problem fingerprint.
-
-The JSON is the solver input. TSV files are not benchmark instances. Current
-capture inventories live in `benchmarks/capture/`; `dsa-corpus` uses them to
-check source coverage and emits a temporary manifest while normalizing raw
-`*.dsa.json` exports.
-
-## Running the corpus
-
-```bash
-./build/dsa-suite \
-  --pypto benchmarks/pypto \
-  --output-dir benchmark-results \
-  --run-label local-pypto \
-  --seeds 0,1,2 \
-  --iterations 2000 \
-  --restarts 4
-```
-
-The compiler-derived problems can be solved and validated on a host. That does
-not by itself certify numerical device correctness or performance of the source
-program; those are separate PyPTO/PyPTO-Lib regression campaigns.
+See [`../README.md`](../README.md) for corpus conventions and
+[`../results/standard-v1/report.md`](../results/standard-v1/report.md) for the
+standard-DSA comparison.

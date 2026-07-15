@@ -1609,7 +1609,7 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
   if (!output) throw std::runtime_error("cannot write Markdown report: " + path.string());
   output << "# Standard DSA benchmark results\n\n"
          << "This presentation aggregates capacity-free, single-pool standard DSA problems by "
-            "source family. Public MiniMalloc "
+            "source corpus. Public MiniMalloc "
             "instances are used directly. PyPTO rows are per-pool projections that retain buffer "
             "sizes and lifetimes but remove compiler-specific constraints, alignment, capacity, "
             "and architecture resources; they are not device-valid PyPTO placements.\n\n"

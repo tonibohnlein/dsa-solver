@@ -1,29 +1,19 @@
-# PyPTO-Lib DSA instances
+# PyPTO-Lib corpus
 
-This directory contains 294 unique schema-v1 DSA problems captured from
-PyPTO-Lib examples and models:
+This directory contains 289 unique schema-v1 problems:
 
-```text
-benchmarks/pypto-lib/
-├── examples/{advanced,beginner,intermediate}/
-└── models/
-    ├── deepseek/{v3_2,v4}/
-    └── qwen3/{14b,32b}/
-```
+| Source | Instances |
+| --- | ---: |
+| Examples | 11 |
+| DeepSeek v3.2/v4 | 165 |
+| Qwen3 14B/32B | 113 |
 
-A program directory is retained only when it contains multiple instances.
-Single-instance programs use `<program>__<kernel>.json` in the parent directory.
-The JSON metadata records the exact source path and producer/source revisions.
+Paths preserve the source model and program. Programs with one captured kernel
+use `<program>__<kernel>.json`; directories are kept when a program has several
+instances. Metadata records the exact source path and producer/source
+revisions.
 
-Run this corpus together with the PyPTO corpus using:
-
-```bash
-./build/dsa-suite \
-  --pypto benchmarks/pypto \
-  --pypto benchmarks/pypto-lib \
-  --output-dir benchmark-results \
-  --run-label local-pypto
-```
-
-Capture inventories in `benchmarks/capture/` are coverage specifications, not
-solver inputs.
+The inventory in `../capture/pypto-lib-6e897cd.tsv` is a coverage specification,
+not a solver input. See [`../README.md`](../README.md) for corpus conventions and
+[`../results/standard-v1/report.md`](../results/standard-v1/report.md) for the
+combined standard-DSA comparison.

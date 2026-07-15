@@ -1,6 +1,6 @@
 # Standard DSA benchmark results
 
-This presentation aggregates capacity-free, single-pool standard DSA problems by source family. Public MiniMalloc instances are used directly. PyPTO rows are per-pool projections that retain buffer sizes and lifetimes but remove compiler-specific constraints, alignment, capacity, and architecture resources; they are not device-valid PyPTO placements.
+This presentation aggregates capacity-free, single-pool standard DSA problems by source corpus. Public MiniMalloc instances are used directly. PyPTO rows are per-pool projections that retain buffer sizes and lifetimes but remove compiler-specific constraints, alignment, capacity, and architecture resources; they are not device-valid PyPTO placements.
 
 Full per-instance results remain in `summary.csv`; raw repetitions are in `results.jsonl`. The tables below are the presentation layer.
 
