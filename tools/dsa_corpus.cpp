@@ -443,6 +443,10 @@ Selection SelectProblem(const dsa::DsaProblem& problem, const ProblemStats& stat
       stats.reserved_ranges != 0) {
     return {true, "hard_constraints"};
   }
+  // Alias provenance and fixed, independent pools do not create a placement
+  // decision when every shareable pair is temporally compatible: all buffers
+  // can start at address zero in their pool.
+  if (stats.temporal_conflicts == 0) return {false, "trivial_no_placement_choice"};
   if (stats.nontrivial_alias_classes != 0) return {true, "semantic_aliases"};
   if (stats.live_intervals > problem.buffers.size()) return {true, "multi_interval"};
   if (problem.pools.size() > 1) return {true, "multi_pool"};

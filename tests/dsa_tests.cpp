@@ -431,8 +431,7 @@ void TestStructuredJsonRoundTripAndProfiles() {
 }
 
 void TestPyptoHardV1RejectsResearchFeatures() {
-  const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
-                                     "pypto" / "unit-tests" / "memory-planning" /
+  const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "tests" / "data" /
                                      "chain_read_before_write_v1.json";
   const dsa::StructuredProblemDocument hard = dsa::ReadStructuredProblemJsonFile(path);
   Require(hard.profile == dsa::BenchmarkProfile::kPyptoHardV1 &&
@@ -482,7 +481,6 @@ void TestPyptoExportedCorpus() {
     std::uint64_t expected_peak;
   };
   const std::vector<CorpusCase> cases = {
-      {"chain_read_before_write_v1.json", "read_before_write_chain", 3, 0, 0, 0, 16'384},
       {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 0, 0, 98'304},
       {"pipeline_stage_separation_v1.json", "pipeline_stage_separation", 2, 1, 1, 0, 32'768},
       {"target_hazard_v1.json", "target_hazard", 3, 1, 0, 0, 8'192},

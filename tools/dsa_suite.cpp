@@ -95,7 +95,6 @@ struct FeatureStats {
   bool uniform_buffer_size = false;
   std::uint64_t min_alignment = 0;
   std::uint64_t max_alignment = 0;
-  std::size_t live_intervals = 0;
   std::size_t temporal_conflicts = 0;
   std::size_t reuse_candidates = 0;
   bool live_byte_stats_complete = true;
@@ -473,7 +472,6 @@ FeatureStats AnalyzeFeatures(const Instance& instance) {
     distinct_sizes.insert(buffer.size);
     stats.min_alignment = std::min(stats.min_alignment, buffer.alignment);
     stats.max_alignment = std::max(stats.max_alignment, buffer.alignment);
-    stats.live_intervals += buffer.live_intervals.size();
     if (buffer.alignment > 1) ++stats.aligned_buffers;
     if (buffer.live_intervals.size() > 1) ++stats.multi_interval_buffers;
     if (buffer.allowed_pools.size() > 1) ++stats.flexible_pool_buffers;
@@ -1109,7 +1107,7 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
   output << "instance,profile,source,corpus_namespace,corpus_family,corpus_source_path,target,"
             "buffers,pools,memory_spaces,pool_capacities_bytes,min_buffer_bytes,max_buffer_bytes,"
             "total_buffer_bytes,distinct_buffer_sizes,uniform_buffer_size,min_alignment,"
-            "max_alignment,live_intervals,temporal_conflicts,reuse_candidates,conflict_density,"
+            "max_alignment,temporal_conflicts,reuse_candidates,conflict_density,"
             "max_interval_live_bytes_by_space,live_byte_stats_complete,tightest_space,"
             "max_live_capacity_ratio,aligned_buffers,multi_interval_buffers,"
             "flexible_pool_buffers,reserved_ranges,bank_geometries,colocations,separations,"
@@ -1140,7 +1138,7 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
            << stats.max_buffer_bytes << ',' << stats.total_buffer_bytes << ','
            << stats.distinct_buffer_sizes << ',' << (stats.uniform_buffer_size ? "true" : "false")
            << ',' << stats.min_alignment << ',' << stats.max_alignment << ','
-           << stats.live_intervals << ',' << stats.temporal_conflicts << ','
+           << stats.temporal_conflicts << ','
            << stats.reuse_candidates << ',' << conflict_density << ','
            << CsvEscape(Join(stats.max_live_bytes_by_space, ";")) << ','
            << (stats.live_byte_stats_complete ? "true" : "false") << ','

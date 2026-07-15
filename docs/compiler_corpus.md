@@ -23,11 +23,14 @@ instance named `kernel`. Raw artifacts stay with the device/build report.
 - `manifest.tsv` indexes every source observation and its representative;
 - `coverage.tsv` compares realized exports with the requested cases.
 
-Every unique shape is classified before it is written. A representative is
-selected when it contains pipeline groups, reuse costs, hard constraints,
-multi-member semantic aliases, multiple intervals/pools, or at least four
-buffers with both temporal conflicts and reuse candidates. Shapes without an
-actual placement choice remain in `manifest.tsv` with
+Every unique shape is classified before it is written. Pipeline groups, reuse
+costs, and explicit hard constraints are always retained. Otherwise, a shape
+with no temporal conflicts is allocation-trivial even if it has multiple fixed
+pools or multi-member alias provenance: every buffer can start at address zero
+in its pool. Among the remaining shapes, multi-member semantic aliases,
+multiple intervals/pools, or at least four buffers with both temporal conflicts
+and reuse candidates are retained. Shapes without an actual placement choice
+remain in `manifest.tsv` with
 `selected=false, selection_reason=trivial_no_placement_choice`; they do not
 enter aggregate solver results. This avoids both silent coverage loss and
 benchmark inflation from allocation-trivial kernels.

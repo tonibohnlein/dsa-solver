@@ -12,46 +12,25 @@
     "buffers": [
       {
         "alignment": 32,
-        "allowed_pools": [
-          1
-        ],
+        "allowed_pools": [2],
         "id": 0,
-        "live_intervals": [
-          {
-            "lower": 7,
-            "upper": 9
-          }
-        ],
+        "live_intervals": [{"lower": 7, "upper": 9}],
         "name": "mem_vec_2",
         "size": 16384
       },
       {
         "alignment": 32,
-        "allowed_pools": [
-          1
-        ],
+        "allowed_pools": [1],
         "id": 1,
-        "live_intervals": [
-          {
-            "lower": 9,
-            "upper": 11
-          }
-        ],
+        "live_intervals": [{"lower": 9, "upper": 11}],
         "name": "mem_vec_3",
         "size": 16384
       },
       {
         "alignment": 32,
-        "allowed_pools": [
-          1
-        ],
+        "allowed_pools": [1],
         "id": 2,
-        "live_intervals": [
-          {
-            "lower": 11,
-            "upper": 13
-          }
-        ],
+        "live_intervals": [{"lower": 11, "upper": 13}],
         "name": "mem_vec_4",
         "size": 16384
       }
@@ -64,10 +43,7 @@
     },
     "objective": {
       "aggregation": "lexicographic",
-      "terms": [
-        "total_peak",
-        "max_peak"
-      ]
+      "terms": ["total_peak", "max_peak"]
     },
     "pools": [
       {
@@ -75,29 +51,20 @@
         "id": 1,
         "name": "Vec",
         "reserved_ranges": []
+      },
+      {
+        "capacity": 131072,
+        "id": 2,
+        "name": "Acc",
+        "reserved_ranges": []
       }
     ],
     "pypto_structure": {
       "whole_slot_reuse": true,
       "alias_classes": [
-        {
-          "buffer": 0,
-          "members": [
-            "tile_a"
-          ]
-        },
-        {
-          "buffer": 1,
-          "members": [
-            "tile_b"
-          ]
-        },
-        {
-          "buffer": 2,
-          "members": [
-            "tile_c"
-          ]
-        }
+        {"buffer": 0, "members": ["tile_a", "tile_a_view"]},
+        {"buffer": 1, "members": ["tile_b"]},
+        {"buffer": 2, "members": ["tile_c"]}
       ],
       "pipeline_groups": []
     }

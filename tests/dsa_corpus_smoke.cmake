@@ -45,7 +45,7 @@ string(REPLACE "\"name\": \"Vec\"" "\"name\": \"RenamedVec\"" DUPLICATE_TEXT
   "${DUPLICATE_TEXT}")
 file(WRITE "${DUPLICATE_INPUT}" "${DUPLICATE_TEXT}")
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/chain_read_before_write_v1.json"
+  "${SOURCE_DIR}/tests/data/chain_read_before_write_v1.json"
   DESTINATION "${INPUT_DIR}/case_c"
 )
 file(RENAME
