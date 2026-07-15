@@ -431,7 +431,8 @@ void TestStructuredJsonRoundTripAndProfiles() {
 
 void TestPyptoHardV1RejectsResearchFeatures() {
   const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
-                                     "pypto" / "chain_read_before_write_v1.json";
+                                     "pypto" / "instances" / "pypto" / "unit-tests" /
+                                     "memory-planning" / "chain_read_before_write_v1.json";
   const dsa::StructuredProblemDocument hard = dsa::ReadStructuredProblemJsonFile(path);
   Require(hard.profile == dsa::BenchmarkProfile::kPyptoHardV1 &&
               dsa::ValidateStructuredProblemDocument(hard).empty(),
@@ -497,8 +498,9 @@ void TestPyptoExportedCorpus() {
   tvm_options.max_attempts = 200;
 
   for (const CorpusCase& corpus_case : cases) {
-    const std::filesystem::path path =
-        std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto" / corpus_case.filename;
+    const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
+                                       "pypto" / "instances" / "pypto" / "unit-tests" /
+                                       "memory-planning" / corpus_case.filename;
     const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
     const dsa::BenchmarkProfile expected_profile = corpus_case.reuse_penalties == 0
                                                        ? dsa::BenchmarkProfile::kPyptoHardV1
@@ -543,7 +545,7 @@ void TestPyptoExportedCorpus() {
 
 void TestEveryPyptoCorpusDocumentIsReplayable() {
   const std::filesystem::path root =
-      std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto";
+      std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" / "pypto" / "instances";
   std::vector<std::filesystem::path> paths;
   for (const std::filesystem::directory_entry& entry :
        std::filesystem::recursive_directory_iterator(root)) {

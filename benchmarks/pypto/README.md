@@ -1,110 +1,65 @@
-# PyPTO exported corpus
+# PyPTO DSA instances
 
-The root schema-v1 fixtures are byte-for-byte outputs of PyPTO's
-pre-memory-reuse DSA exporter. They are compiler instances, not manually reduced
-standard DSA problems. Larger model corpora live below `real/` after
-normalization with `dsa-corpus`; their `problem` is exporter-derived while the
-envelope gains globally unique identity and source provenance.
+Every benchmark input is a schema-v1 JSON file below `instances/`. The directory
+path identifies the source repository and source program; capture method and
+revision are provenance, not separate kinds of DSA problem.
 
-| Instance | PyPTO source | Regression guarded | First-fit peak |
-| --- | --- | --- | ---: |
-| `chain_read_before_write_v1.json` | `test_dsa_export_is_deterministic_pypto_hard_v1` | Reads at a statement precede its result write, so a chain may reuse one slot | 16,384 B |
-| `issue_1908_fragmentation_v1.json` | `test_dsa_pypto_profile_reuses_whole_freed_slots` | PyPTO reuses one whole 64 KiB slot and keeps the other live 32 KiB buffer disjoint | 98,304 B |
-| `pipeline_stage_separation_v1.json` | `test_dsa_export_and_solver_preserve_pipeline_stage_separation` | Disjoint pipeline stages remain separated despite non-overlapping lifetimes | 32,768 B |
-| `target_hazard_v1.json` | `test_dsa_export_preserves_ascend910b_target_hazard_reason` | The Ascend910B split-AIV load+tpop keep-apart edge retains target-hazard provenance | 8,192 B |
-| `capacity_gated_pipeline_cost_v1.json` | `test_dsa_export_preserves_capacity_gated_pipeline_reuse_cost` | Research profile: capacity folds three stages into one residue and exports two uncalibrated reuse costs | 245,760 B |
-
-Run any instance directly:
-
-```bash
-./build/dsa-bench \
-  --input benchmarks/pypto/issue_1908_fragmentation_v1.json \
-  --solver first-fit
+```text
+instances/
+├── pypto-lib/
+│   ├── examples/{advanced,beginner,intermediate}/
+│   └── models/
+│       ├── deepseek/{v3_2,v4}/
+│       └── qwen3/{14b,32b}/
+└── pypto/
+    ├── system-tests/{examples,runtime}/
+    └── unit-tests/memory-planning/
 ```
 
-The source test name is the regeneration contract. Regenerate a document with
-PyPTO's `MemoryPlanner.DSA` and `dsa_export_dir`, review the schema diff, then
-replace the corresponding corpus file. CMake tests parse, validate, solve, and
-independently validate every document listed above.
+The checked-in corpus contains 478 unique problems:
 
-`targets/pypto_lib_6e897cd.tsv` is the current exhaustive PyPTO-Lib capture
-contract. It lists all 61 discovered entry points at commit
-`6e897cd99c28767b22e05f209da3e041f15c3dfc`: 58 capture targets and three explicit
-exclusions. Two exclusions are the SuperscalarNPU-only draft and the extern-only
-CCE driver, neither of which contains an Ascend InCore DSA problem. The third is
-the Qwen3-32B prefill draft, which still uses PyPTO's removed `auto_chunk` API. Its
-`case_id` matches the device-regression artifact directory. Importing fails on
-any missing capture, unexpected excluded export, or unknown case;
-`coverage.tsv` records every decision. The older `pypto_lib_bf89431.tsv` remains
-as immutable provenance for the earlier device campaign.
+| Source | Instances |
+| --- | ---: |
+| PyPTO-Lib examples | 11 |
+| PyPTO-Lib DeepSeek models | 166 |
+| PyPTO-Lib Qwen3 models | 117 |
+| PyPTO system tests | 179 |
+| PyPTO memory-planning unit fixtures | 5 |
 
-`targets/pypto_b8802dc6.tsv` captures the real-device PyPTO kernel gates at the
-adapter-fix revision: explicit planner smoke kernels, col-vector control flow,
-gather whole-slot reuse, and depth-2 pipeline matmul. It complements the five
-byte-for-byte unit-export fixtures rather than pretending four selected system
-tests exhaust PyPTO's entire system-test suite.
+Four system-test exports that are structurally identical to PyPTO-Lib model
+instances are stored only under `pypto-lib/`. Repeated observations from the
+same program are likewise represented once. This prevents benchmark results
+from weighting a shared kernel multiple times.
 
-`targets/pypto_8df2ed4.tsv` carries the same correctness-gate inventory forward
-to the rebased production exporter revision used by the next full capture. The
-PyPTO-Lib inventory supplies model breadth; a broad `tests/st` DSA sweep remains
-a regression gate and raw-observation source, not a claim that every parameter
-combination is an independent benchmark.
+## Instance format
 
-The normalized document metadata preserves:
+Each `.json` file is a `StructuredProblemDocument` with:
 
-- exact source repository, commit, and Python entry point;
-- original exporter instance and relative export filename;
-- model family and case ID;
-- FNV-1a fingerprints of the raw exporter bytes and canonical target/problem;
-- the unchanged PyPTO producer, target, lifetime, and whole-slot contracts.
+- `schema_version`: currently `1`;
+- `profile`: `pypto_hard_v1` or the experimental `pypto_research_v1`;
+- `problem`: pools, buffers, sizes, alignments, live intervals, and PyPTO hard
+  structure such as semantic alias classes and pipeline groups;
+- `metadata`: target, lifetime ordering, reuse contract, and—on normalized
+  compiler captures—the exact source/exporter repositories, commits, source
+  path, raw-export fingerprint, and canonical problem fingerprint.
 
-`manifest.tsv` retains one observation per source/kernel export. Structurally
-identical target/problem shapes map to one representative JSON under
-`documents/`, so aggregate solver tables do not count repeated model reuse as
-independent evidence.
+The JSON is the solver input. TSV files are not benchmark instances. Current
+capture inventories live in `benchmarks/capture/`; `dsa-corpus` uses them to
+check source coverage and emits a temporary manifest while normalizing raw
+`*.dsa.json` exports.
 
-Run `dsa-suite --pypto <normalized-corpus>/documents ...` for solver reports and
-per-instance `features.csv` constraint statistics.
-See `docs/compiler_corpus.md` for ingestion and review rules.
-The suite also generates one standard per-pool relaxation from each structured
-document. Its report places those lower-bound rows beside the public standard
-corpus so every applicable baseline is visible.
+## Running the corpus
 
-## Host-captured comprehensive corpus
+```bash
+./build/dsa-suite \
+  --pypto benchmarks/pypto/instances \
+  --output-dir benchmark-results \
+  --run-label local-pypto \
+  --seeds 0,1,2 \
+  --iterations 2000 \
+  --restarts 4
+```
 
-`host-captured/pypto-lib-6e897cd/` covers all 58 compilable PyPTO-Lib entry
-points in the pinned inventory, including 128 DeepSeek-v4, 36 DeepSeek-v3.2,
-91 Qwen3-14B, and 26 Qwen3-32B meaningful shapes after structural
-deduplication, plus 11 examples. It retains all 1,701 observations in
-`manifest.tsv` and selects 292 solver inputs.
-
-`host-captured/pypto-st-8df2ed4/` retains 461 exports from 65 PyPTO system-test
-files and selects 183 meaningful shapes. Four selected shapes duplicate a
-PyPTO-Lib problem and are removed by `dsa-suite`'s cross-corpus fingerprint
-check, so the combined structured table has 471 rows rather than 475.
-
-Both directories are host compile captures: they prove that the pinned compiler
-constructed and exported the problem, not that the generated program passed on
-an Ascend device. Device-validated regression fixtures remain under `real/`.
-The aggregate comparison is checked in at
-`benchmarks/results/host-corpus-v1/report.md`.
-
-## Checked-in real instances
-
-`real/deepseek-v4-lifetime-hull-8438a916/` contains two structurally distinct
-DeepSeek-v4 `softmax_pool` instances captured while proving the unsafe lifetime
-hole fixed by the conservative-hull diagnostic revision. They are useful
-benchmarks rather than merely failure artifacts: the instances contain 31 and
-35 buffers, respectively, with hundreds of legal reuse candidates and
-mandatory whole-slot alias structure. Both corrected instances retain the same
-peak as the original PyPTO placement.
-
-The workload sources are pinned to PyPTO-Lib `bf89431f`; `producer_commit`
-records the exact diagnostic PyPTO exporter revision `8438a916`. That producer
-commit is provenance for these artifacts, not a public PyPTO release. The
-equivalent production fix is present on the draft PyPTO DSA branch and is
-device-verified separately.
-
-The known-unsafe pre-fix exports are deliberately not benchmark inputs. A
-solver accepting their under-approximated lifetimes would only demonstrate
-conformance to a bad problem statement.
+The compiler-derived problems can be solved and validated on a host. That does
+not by itself certify numerical device correctness or performance of the source
+program; those are separate PyPTO/PyPTO-Lib regression campaigns.

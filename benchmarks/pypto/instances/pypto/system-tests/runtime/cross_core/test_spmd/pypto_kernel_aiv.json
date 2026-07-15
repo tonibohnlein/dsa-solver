@@ -1,0 +1,146 @@
+{
+  "instance": "pypto::tests::st::runtime::cross_core::test_spmd::pypto_kernel_aiv",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "tests__st__runtime__cross_core__test_spmd",
+    "corpus_export_file": "tests__st__runtime__cross_core__test_spmd/spmd_gm_pipe_buffer_128x16/a2a3sim/pypto_kernel_aiv.dsa.json",
+    "corpus_family": "pypto-runtime-cross_core",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "kernel_aiv",
+    "corpus_problem_fingerprint_fnv1a64": "2166c862316f4a87",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_source_fingerprint_fnv1a64": "54e47ba0f40a0347",
+    "corpus_source_path": "tests/st/runtime/cross_core/test_spmd.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 19,
+            "upper": 23
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 23,
+            "upper": 27
+          }
+        ],
+        "name": "mem_vec_6",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 35,
+            "upper": 39
+          }
+        ],
+        "name": "mem_vec_7",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 39,
+            "upper": 40
+          }
+        ],
+        "name": "mem_vec_8",
+        "size": 4096
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": [
+          {
+            "begin": 0,
+            "end": 32768
+          }
+        ]
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "tile_bias__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "tile_out__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "tile_bias__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "tile_out__ssa_v0"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

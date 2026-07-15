@@ -38,7 +38,8 @@ jobs and use one codegen worker per process.
 
 ## 3. PyPTO correctness and system-test capture
 
-First run the four cases in `targets/pypto_8df2ed4.tsv` under DSA and require
+First run the four cases in
+`benchmarks/capture/pypto-adapter-gates-8df2ed4.tsv` under DSA and require
 golden success. Preserve their exports under top-level case IDs `colvec`,
 `gather`, `pipeline`, and `targeted`.
 
@@ -54,7 +55,7 @@ do not enter the accepted corpus until correctness is resolved.
 
 ## 4. PyPTO-Lib exhaustive capture
 
-Use `targets/pypto_lib_6e897cd.tsv` as the source inventory:
+Use `benchmarks/capture/pypto-lib-6e897cd.tsv` as the source inventory:
 
 - 61 discovered entry points total;
 - 58 `capture` targets that must each emit at least one DSA document;
@@ -70,10 +71,9 @@ Run one bounded process per case. Two-device entries require a healthy supported
 pair; if HCCL is environment-blocked, retain the terminal coverage row and rerun
 the compile/export portion without claiming numerical validation.
 
-The checked-in `host-captured` snapshot is the compile/export stage of this
-workflow. It provides comprehensive solver inputs immediately, but it remains
-explicitly distinct from the device-correct accepted corpus required by this
-section.
+The checked-in source-oriented corpus includes the compile/export stage of this
+workflow. Host capture provides solver inputs immediately, but it does not
+replace the device-correct acceptance required by this section.
 
 ## 5. Normalize and audit
 
@@ -100,8 +100,8 @@ Run `dsa-suite` with:
 
 ```bash
 --standard third_party/minimalloc/benchmarks/challenging
---pypto <normalized-pypto>/documents
---pypto <normalized-pypto-lib>/documents
+--pypto <normalized-pypto>/instances
+--pypto <normalized-pypto-lib>/instances
 --seeds 0,1,2
 --iterations 2000
 --restarts 4
@@ -125,5 +125,5 @@ Preserve:
 4. normalized `manifest.tsv` and `coverage.tsv`;
 5. `results.jsonl`, `summary.csv`, `features.csv`, and `report.md`;
 6. golden failures and paired PyPTO/DSA classification logs; and
-7. a proposed checked-in corpus diff containing only unique meaningful
+7. a proposed diff under `benchmarks/pypto/instances` containing only unique meaningful
    device-correct instances.

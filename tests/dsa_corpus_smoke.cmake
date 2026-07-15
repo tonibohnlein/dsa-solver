@@ -12,7 +12,7 @@ file(REMOVE_RECURSE "${INPUT_DIR}" "${OUTPUT_DIR}")
 file(MAKE_DIRECTORY "${INPUT_DIR}/case_a" "${INPUT_DIR}/case_a/second"
   "${INPUT_DIR}/case_b" "${INPUT_DIR}/case_c")
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_a"
 )
 file(RENAME
@@ -20,7 +20,7 @@ file(RENAME
   "${INPUT_DIR}/case_a/pypto_pipeline_stage_separation.dsa.json"
 )
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/target_hazard_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/target_hazard_v1.json"
   DESTINATION "${INPUT_DIR}/case_a/second"
 )
 file(RENAME
@@ -28,7 +28,7 @@ file(RENAME
   "${INPUT_DIR}/case_a/second/pypto_pipeline_stage_separation.dsa.json"
 )
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_b"
 )
 file(RENAME
@@ -45,7 +45,7 @@ string(REPLACE "\"name\": \"Vec\"" "\"name\": \"RenamedVec\"" DUPLICATE_TEXT
   "${DUPLICATE_TEXT}")
 file(WRITE "${DUPLICATE_INPUT}" "${DUPLICATE_TEXT}")
 file(COPY
-  "${SOURCE_DIR}/benchmarks/pypto/chain_read_before_write_v1.json"
+  "${SOURCE_DIR}/benchmarks/pypto/instances/pypto/unit-tests/memory-planning/chain_read_before_write_v1.json"
   DESTINATION "${INPUT_DIR}/case_c"
 )
 file(RENAME
@@ -74,7 +74,7 @@ if(NOT IMPORT_RESULT EQUAL 0)
 endif()
 
 set(DOCUMENT
-  "${OUTPUT_DIR}/documents/models/example/case_a/pypto_pipeline_stage_separation.json"
+  "${OUTPUT_DIR}/instances/models/example/case_a/pypto_pipeline_stage_separation.json"
 )
 if(NOT EXISTS "${DOCUMENT}" OR
    NOT EXISTS "${OUTPUT_DIR}/manifest.tsv" OR
@@ -96,18 +96,18 @@ foreach(EXPECTED
     message(FATAL_ERROR "normalized document is missing '${EXPECTED}'")
   endif()
 endforeach()
-file(MAKE_DIRECTORY "${OUTPUT_DIR}/duplicate-documents")
-file(COPY "${DOCUMENT}" DESTINATION "${OUTPUT_DIR}/duplicate-documents")
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/duplicate-instances")
+file(COPY "${DOCUMENT}" DESTINATION "${OUTPUT_DIR}/duplicate-instances")
 
-file(GLOB_RECURSE NORMALIZED_DOCUMENTS "${OUTPUT_DIR}/documents/*.json")
-list(LENGTH NORMALIZED_DOCUMENTS NORMALIZED_DOCUMENT_COUNT)
-if(NOT NORMALIZED_DOCUMENT_COUNT EQUAL 2)
+file(GLOB_RECURSE NORMALIZED_INSTANCES "${OUTPUT_DIR}/instances/*.json")
+list(LENGTH NORMALIZED_INSTANCES NORMALIZED_INSTANCE_COUNT)
+if(NOT NORMALIZED_INSTANCE_COUNT EQUAL 2)
   message(FATAL_ERROR
-    "dsa-corpus should retain two unique shapes and deduplicate one observation, found ${NORMALIZED_DOCUMENT_COUNT} documents"
+    "dsa-corpus should retain two unique shapes and deduplicate one observation, found ${NORMALIZED_INSTANCE_COUNT} instances"
   )
 endif()
 file(GLOB COLLISION_DOCUMENTS
-  "${OUTPUT_DIR}/documents/models/example/case_a/pypto_pipeline_stage_separation-*.json"
+  "${OUTPUT_DIR}/instances/models/example/case_a/pypto_pipeline_stage_separation-*.json"
 )
 list(LENGTH COLLISION_DOCUMENTS COLLISION_DOCUMENT_COUNT)
 if(NOT COLLISION_DOCUMENT_COUNT EQUAL 1)
@@ -115,6 +115,7 @@ if(NOT COLLISION_DOCUMENT_COUNT EQUAL 1)
 endif()
 file(READ "${OUTPUT_DIR}/manifest.tsv" MANIFEST_TEXT)
 foreach(EXPECTED
+    "instance_path"
     "selected\tselection_reason"
     "pipeline_structure"
     "trivial_no_placement_choice")
@@ -153,8 +154,8 @@ endif()
 execute_process(
   COMMAND "${DSA_SUITE}"
     --standard "${SOURCE_DIR}/tests/data/minimalloc_example.csv"
-    --pypto "${OUTPUT_DIR}/documents"
-    --pypto "${OUTPUT_DIR}/duplicate-documents"
+    --pypto "${OUTPUT_DIR}/instances"
+    --pypto "${OUTPUT_DIR}/duplicate-instances"
     --output-dir "${OUTPUT_DIR}/suite-report"
     --run-label corpus-smoke
     --standard-capacity 12

@@ -1,0 +1,1762 @@
+{
+  "instance": "pypto-lib::models::deepseek::v4::decode_fwd::pypto_ffn_norm",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "models__deepseek__v4__decode_fwd",
+    "corpus_export_file": "models__deepseek__v4__decode_fwd/call-001/pypto_ffn_norm.dsa.json",
+    "corpus_family": "deepseek-v4",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto-lib",
+    "corpus_original_instance": "ffn_norm",
+    "corpus_problem_fingerprint_fnv1a64": "7c71b01d58af42f5",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
+    "corpus_source_fingerprint_fnv1a64": "453a29311ee45870",
+    "corpus_source_path": "models/deepseek/v4/decode_fwd.py",
+    "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
+    "experimental_features": "pipeline_adjacent_reuse_cost",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "reuse_cost_model": "pipeline_adjacent_antidependency_v1",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 67,
+            "upper": 99
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 69,
+            "upper": 73
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 71,
+            "upper": 85
+          }
+        ],
+        "name": "mem_vec_6",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 73,
+            "upper": 75
+          }
+        ],
+        "name": "mem_vec_7",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 75,
+            "upper": 79
+          }
+        ],
+        "name": "mem_vec_8",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 77,
+            "upper": 79
+          }
+        ],
+        "name": "mem_vec_9",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 79,
+            "upper": 83
+          }
+        ],
+        "name": "mem_vec_10",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 83,
+            "upper": 95
+          }
+        ],
+        "name": "mem_vec_11",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 8,
+        "live_intervals": [
+          {
+            "lower": 85,
+            "upper": 87
+          }
+        ],
+        "name": "mem_vec_12",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 9,
+        "live_intervals": [
+          {
+            "lower": 87,
+            "upper": 91
+          }
+        ],
+        "name": "mem_vec_13",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 10,
+        "live_intervals": [
+          {
+            "lower": 89,
+            "upper": 91
+          }
+        ],
+        "name": "mem_vec_14",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 11,
+        "live_intervals": [
+          {
+            "lower": 91,
+            "upper": 95
+          }
+        ],
+        "name": "mem_vec_15",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 12,
+        "live_intervals": [
+          {
+            "lower": 99,
+            "upper": 101
+          }
+        ],
+        "name": "mem_vec_18",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 13,
+        "live_intervals": [
+          {
+            "lower": 101,
+            "upper": 103
+          }
+        ],
+        "name": "mem_vec_19",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 14,
+        "live_intervals": [
+          {
+            "lower": 103,
+            "upper": 105
+          }
+        ],
+        "name": "mem_vec_20",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 15,
+        "live_intervals": [
+          {
+            "lower": 105,
+            "upper": 153
+          }
+        ],
+        "name": "mem_vec_21",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 16,
+        "live_intervals": [
+          {
+            "lower": 109,
+            "upper": 117
+          }
+        ],
+        "name": "mem_vec_22",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 17,
+        "live_intervals": [
+          {
+            "lower": 111,
+            "upper": 121
+          }
+        ],
+        "name": "mem_vec_23",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 18,
+        "live_intervals": [
+          {
+            "lower": 113,
+            "upper": 135
+          }
+        ],
+        "name": "mem_vec_24",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 19,
+        "live_intervals": [
+          {
+            "lower": 115,
+            "upper": 139
+          }
+        ],
+        "name": "mem_vec_25",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 20,
+        "live_intervals": [
+          {
+            "lower": 117,
+            "upper": 123
+          }
+        ],
+        "name": "mem_vec_26",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 21,
+        "live_intervals": [
+          {
+            "lower": 121,
+            "upper": 125
+          }
+        ],
+        "name": "mem_vec_27",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 22,
+        "live_intervals": [
+          {
+            "lower": 123,
+            "upper": 125
+          }
+        ],
+        "name": "mem_vec_28",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 23,
+        "live_intervals": [
+          {
+            "lower": 125,
+            "upper": 127
+          }
+        ],
+        "name": "mem_vec_29",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 24,
+        "live_intervals": [
+          {
+            "lower": 127,
+            "upper": 133
+          }
+        ],
+        "name": "mem_vec_30",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 25,
+        "live_intervals": [
+          {
+            "lower": 129,
+            "upper": 131
+          }
+        ],
+        "name": "mem_vec_31",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 26,
+        "live_intervals": [
+          {
+            "lower": 135,
+            "upper": 141
+          }
+        ],
+        "name": "mem_vec_32",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 27,
+        "live_intervals": [
+          {
+            "lower": 139,
+            "upper": 143
+          }
+        ],
+        "name": "mem_vec_33",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 28,
+        "live_intervals": [
+          {
+            "lower": 141,
+            "upper": 143
+          }
+        ],
+        "name": "mem_vec_34",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 29,
+        "live_intervals": [
+          {
+            "lower": 143,
+            "upper": 145
+          }
+        ],
+        "name": "mem_vec_35",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 30,
+        "live_intervals": [
+          {
+            "lower": 145,
+            "upper": 151
+          }
+        ],
+        "name": "mem_vec_36",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 31,
+        "live_intervals": [
+          {
+            "lower": 147,
+            "upper": 149
+          }
+        ],
+        "name": "mem_vec_37",
+        "size": 8192
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 0,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 1
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 3
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 4
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 5
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 6
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 7
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 2
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 3
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 8
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 9
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 10
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 11
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 3
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 4
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 5
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 6
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 7
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 8
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 8
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 9
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 10
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 11
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 6
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 8
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 9
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 10
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 11
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 6
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 8
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 9
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 10
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 11
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 8
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 9
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 10
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 11
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 8
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 9
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 10
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 11
+        },
+        {
+          "first": 9,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 11
+        },
+        {
+          "first": 10,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 11
+        },
+        {
+          "first": 14,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 15
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 22
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 28
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 18
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 19
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 20
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 16,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 18
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 19
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 21
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 17,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 20
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 21
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 22
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 23
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 24
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 25
+        },
+        {
+          "first": 18,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 26
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 20
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 21
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 22
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 23
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 24
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 25
+        },
+        {
+          "first": 19,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 27
+        },
+        {
+          "first": 20,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 20,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 20,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 20,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 20,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 20,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 23
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 21,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 22,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 22,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 22,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 22,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 22,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 22,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 23,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 23,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 23,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 23,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 23,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 23,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 25
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 26
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 27
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 28
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 29
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 30
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 31
+        },
+        {
+          "first": 27,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 29
+        },
+        {
+          "first": 30,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 31
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "cost_model": {
+      "reuse_penalties": [
+        {
+          "cost": 1,
+          "first": 3,
+          "reason": "generic",
+          "second": 4
+        },
+        {
+          "cost": 1,
+          "first": 6,
+          "reason": "generic",
+          "second": 7
+        },
+        {
+          "cost": 1,
+          "first": 8,
+          "reason": "generic",
+          "second": 9
+        },
+        {
+          "cost": 1,
+          "first": 22,
+          "reason": "generic",
+          "second": 23
+        },
+        {
+          "cost": 1,
+          "first": 23,
+          "reason": "generic",
+          "second": 24
+        },
+        {
+          "cost": 1,
+          "first": 28,
+          "reason": "generic",
+          "second": 29
+        },
+        {
+          "cost": 1,
+          "first": 29,
+          "reason": "generic",
+          "second": 30
+        }
+      ]
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "sq_sum_inline3523__tile",
+            "sq_sum_inline3523__tile"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "rms_x_inline3531__tile"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "tmp_tile"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "t__tile",
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "sq_sum_inline3523__tile"
+          ]
+        },
+        {
+          "buffer": 8,
+          "members": [
+            "rms_x_inline3531__tile"
+          ]
+        },
+        {
+          "buffer": 9,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 10,
+          "members": [
+            "tmp_tile"
+          ]
+        },
+        {
+          "buffer": 11,
+          "members": [
+            "t__tile",
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 12,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 13,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 14,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 15,
+          "members": [
+            "t__tile",
+            "inv_rms_inline3540__tile"
+          ]
+        },
+        {
+          "buffer": 16,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 17,
+          "members": [
+            "t__tile",
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 18,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 19,
+          "members": [
+            "t__tile",
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 20,
+          "members": [
+            "an_x_inline3547__tile"
+          ]
+        },
+        {
+          "buffer": 21,
+          "members": [
+            "an_w_inline3520__tile"
+          ]
+        },
+        {
+          "buffer": 22,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 23,
+          "members": [
+            "an_normed_inline3519__tile"
+          ]
+        },
+        {
+          "buffer": 24,
+          "members": [
+            "an_bf16_inline3530__tile"
+          ]
+        },
+        {
+          "buffer": 25,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 26,
+          "members": [
+            "an_x_inline3547__tile"
+          ]
+        },
+        {
+          "buffer": 27,
+          "members": [
+            "an_w_inline3520__tile"
+          ]
+        },
+        {
+          "buffer": 28,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 29,
+          "members": [
+            "an_normed_inline3519__tile"
+          ]
+        },
+        {
+          "buffer": 30,
+          "members": [
+            "an_bf16_inline3530__tile"
+          ]
+        },
+        {
+          "buffer": 31,
+          "members": [
+            "t__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": [
+        {
+          "depth": 2,
+          "effective_depth": 2,
+          "group": 0,
+          "members": [
+            {
+              "buffer": 1,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 3,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 4,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 5,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 6,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 7,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 0,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 2,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 8,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 9,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 10,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 11,
+              "residue": 1,
+              "stage": 1
+            }
+          ],
+          "pool": 1,
+          "slot_size": 8192
+        },
+        {
+          "depth": 2,
+          "effective_depth": 2,
+          "group": 1,
+          "members": [
+            {
+              "buffer": 16,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 17,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 20,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 21,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 22,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 23,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 24,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 25,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 18,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 19,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 26,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 27,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 28,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 29,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 30,
+              "residue": 1,
+              "stage": 1
+            },
+            {
+              "buffer": 31,
+              "residue": 1,
+              "stage": 1
+            }
+          ],
+          "pool": 1,
+          "slot_size": 8192
+        }
+      ],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_research_v1",
+  "schema_version": 1
+}

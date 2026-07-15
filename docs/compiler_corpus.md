@@ -21,7 +21,7 @@ instance named `kernel`. Raw artifacts stay with the device/build report.
   compiler/exporter repository and commit, original instance, export path,
   family, and raw-byte fingerprint;
 - `manifest.tsv` indexes every source observation and its representative;
-- `coverage.tsv` compares realized documents with the requested cases.
+- `coverage.tsv` compares realized exports with the requested cases.
 
 Every unique shape is classified before it is written. A representative is
 selected when it contains pipeline groups, reuse costs, hard constraints,
@@ -37,7 +37,7 @@ metadata and normalizing non-semantic pool, buffer, alias-member, and pipeline
 group names. Buffer IDs and every solver-visible size, interval, edge, pool,
 group membership, and objective remain part of the fingerprint. The first
 observation in stable path order becomes the representative JSON under
-`documents/`; later identical observations point to it from the manifest.
+`instances/`; later identical observations point to it from the manifest.
 Fingerprint collisions are checked by comparing canonical bytes. This keeps
 source coverage exhaustive without weighting a shared kernel shape once per
 model that happens to reuse it.
@@ -45,7 +45,7 @@ model that happens to reuse it.
 The importer rejects inputs that do not use a PyPTO profile, already-normalized
 inputs, duplicate identities/output paths, unknown cases, invalid target paths,
 and missing target counts. The output directory must be new or empty, preventing
-stale documents from surviving a regeneration.
+stale instances from surviving a regeneration.
 
 ## Artifact layout
 
@@ -61,16 +61,16 @@ corpus/
 ```
 
 The case IDs for PyPTO-Lib commit `6e897cd9` are pinned in
-`benchmarks/pypto/targets/pypto_lib_6e897cd.tsv`. That file inventories all 61
+`benchmarks/capture/pypto-lib-6e897cd.tsv`. That file inventories all 61
 tracked entry points, never ignored `build_output/` debug scripts. An
 extended target row records `eligibility=capture` with a positive minimum, or
 `eligibility=exclude`, a zero minimum, and a reviewable reason. The current
 inventory has 58 captures and three exclusions: a non-Ascend SuperscalarNPU
 draft, an extern-only CCE driver with no InCore DSA allocation, and a Qwen3-32B
-prefill draft that uses the removed `auto_chunk` API.
-The smaller `targets/pypto_b8802dc6.tsv` pins the already device-validated
-PyPTO adapter/kernel gates; it is intentionally described as curated rather
-than exhaustive.
+prefill draft that uses the removed `auto_chunk` API. The focused PyPTO adapter
+gate inventory is `benchmarks/capture/pypto-adapter-gates-8df2ed4.tsv`; the
+broad system-test inventory is
+`benchmarks/capture/pypto-system-tests-8df2ed4.tsv`.
 
 ## Host-only capture
 
@@ -87,16 +87,15 @@ The pinned host capture produced:
 | PyPTO-Lib entry points | 1,701 | 349 | 292 |
 | PyPTO system tests | 461 | 225 | 183 |
 
-The two selected sets share four canonical problems. `dsa-suite` deduplicates
-those fingerprints across input roots, yielding 471 structured problems and 957
-per-pool standard relaxations. A shared problem is still retained in each
-source's manifest so coverage provenance is not lost.
+The two selected sets share four canonical problems. The checked-in corpus keeps
+the PyPTO-Lib model representative and omits the duplicate system-test JSON,
+yielding 471 structured problems and 957 per-pool standard relaxations.
 
 Host capture is suitable for solver benchmarking because solving and validating
 the exported allocation problem does not execute an NPU program. It is not a
-substitute for numerical device validation: the checked-in directories are
-named `host-captured`, and any claim about generated-program correctness must
-come from the separate device campaign. Some PyPTO system tests compile through
+substitute for numerical device validation. Capture mode is not part of the
+instance directory hierarchy; any claim about generated-program correctness
+must come from the separate device campaign. Some PyPTO system tests compile through
 the DSA export and then attempt an unavailable runtime path despite
 `--codegen-only`; their emitted documents are compile-valid observations, not
 whole-test passes.
@@ -107,7 +106,7 @@ whole-test passes.
 ./build/dsa-corpus \
   --input /path/to/device-regression-artifacts/corpus \
   --output /tmp/pypto-lib-corpus \
-  --coverage-targets benchmarks/pypto/targets/pypto_lib_6e897cd.tsv \
+  --coverage-targets benchmarks/capture/pypto-lib-6e897cd.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
   --source-commit 6e897cd99c28767b22e05f209da3e041f15c3dfc \
   --producer-repo https://github.com/tonibohnlein/pypto.git \
@@ -129,7 +128,7 @@ Review before checking in:
 2. `manifest.tsv` covers every observation; representative instances and paths
    are unique, repeated shapes point to an existing representative, and every
    selected/skipped decision has an explicit reason.
-3. Every document retains `producer=pypto`, `solver_input=pre_memory_reuse`, a
+3. Every instance retains `producer=pypto`, `solver_input=pre_memory_reuse`, a
    non-empty target, and `whole_slot_reuse=true`.
 4. `dsa-suite` reports every returned heuristic placement placement-valid.
    Capacity misses remain explicit `best_effort_no_fit` rows rather than being
@@ -144,7 +143,8 @@ Review before checking in:
 
 ## Updating a source revision
 
-Add a new target TSV whose filename includes the short source revision. Do not
+Add a new target TSV under `benchmarks/capture/` whose filename includes the
+short source revision. Do not
 overwrite an older coverage contract with a moving branch. Capture into a fresh
 artifact root, import into a fresh normalized directory, compare manifests and
 problem statistics, then update benchmark baselines deliberately.

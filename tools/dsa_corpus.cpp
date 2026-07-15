@@ -62,7 +62,7 @@ struct ManifestRecord {
   std::string family;
   std::uint64_t devices = 1;
   std::string export_file;
-  std::string document_path;
+  std::string instance_path;
   std::string source_fingerprint;
   std::string problem_fingerprint;
   bool representative = true;
@@ -345,7 +345,8 @@ std::string ReadFile(const fs::path& path) {
 
 std::string Fnv1a64(const std::string& bytes) {
   std::uint64_t hash = UINT64_C(14695981039346656037);
-  for (const unsigned char byte : bytes) {
+  for (const char character : bytes) {
+    const auto byte = static_cast<unsigned char>(character);
     hash ^= byte;
     hash *= UINT64_C(1099511628211);
   }
@@ -357,7 +358,8 @@ std::string Fnv1a64(const std::string& bytes) {
 std::string SanitizeComponent(std::string_view text) {
   std::string output;
   output.reserve(text.size());
-  for (const unsigned char character : text) {
+  for (const char value : text) {
+    const auto character = static_cast<unsigned char>(value);
     const bool safe = (character >= 'a' && character <= 'z') ||
                       (character >= 'A' && character <= 'Z') ||
                       (character >= '0' && character <= '9') || character == '-' ||
@@ -468,7 +470,7 @@ void WriteManifest(const fs::path& path, const Options& options,
   if (!output) throw std::runtime_error("cannot create corpus manifest: " + path.string());
   output << "instance\tcase_id\tsource_repo\tsource_commit\tproducer_repo\tproducer_commit"
             "\tsource_path\tfamily\tdevices"
-            "\texport_file\tdocument_path\tsource_fingerprint_fnv1a64\tpools\tbuffers"
+            "\texport_file\tinstance_path\tsource_fingerprint_fnv1a64\tpools\tbuffers"
             "\tproblem_fingerprint_fnv1a64\trepresentative\tselected\tselection_reason"
             "\talias_classes\tpipeline_groups\tlive_intervals\ttemporal_conflicts"
             "\treuse_candidates\n";
@@ -476,7 +478,7 @@ void WriteManifest(const fs::path& path, const Options& options,
     output << record.instance << '\t' << record.case_id << '\t' << options.source_repo << '\t'
            << options.source_commit << '\t' << options.producer_repo << '\t'
            << options.producer_commit << '\t' << record.source_path << '\t' << record.family << '\t'
-           << record.devices << '\t' << record.export_file << '\t' << record.document_path << '\t'
+           << record.devices << '\t' << record.export_file << '\t' << record.instance_path << '\t'
            << record.source_fingerprint << '\t' << record.pools << '\t' << record.buffers << '\t'
            << record.problem_fingerprint << '\t' << (record.representative ? "true" : "false")
            << '\t' << (record.selected ? "true" : "false") << '\t' << record.selection_reason
@@ -610,10 +612,10 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
       }
 
       if (selected) {
-        relative_output = fs::path("documents") / target.source_path;
+        relative_output = fs::path("instances") / target.source_path;
         relative_output.replace_extension();
         relative_output /= normalized_stem + ".json";
-        ValidateRelativeSourcePath(relative_output, "normalized document path");
+        ValidateRelativeSourcePath(relative_output, "normalized instance path");
         const fs::path output_path = options.output / relative_output;
         if (!output_paths.insert(relative_output).second) {
           throw std::runtime_error("two exports map to the same output path: " +

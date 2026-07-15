@@ -1,3 +1,0 @@
-case_id	source_path	family	devices	minimum_documents
-models__deepseek__v4__prefill_compressor_ratio4	models/deepseek/v4/prefill_compressor_ratio4.py	deepseek-v4	1	1
-models__deepseek__v4__prefill_indexer_compressor	models/deepseek/v4/prefill_indexer_compressor.py	deepseek-v4	1	1

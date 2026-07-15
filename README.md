@@ -124,7 +124,7 @@ the exact MiniMalloc solver with a per-instance timeout:
 ```bash
 ./build/dsa-suite \
   --standard third_party/minimalloc/benchmarks/challenging \
-  --pypto benchmarks/pypto \
+  --pypto benchmarks/pypto/instances \
   --output-dir benchmark-results \
   --run-label local-a-k \
   --standard-capacity 1048576 \
@@ -155,8 +155,8 @@ weighted as solver benchmarks:
 ```bash
 ./build/dsa-corpus \
   --input device-regression-artifacts/corpus \
-  --output benchmarks/pypto/real/pypto-lib-6e897cd \
-  --coverage-targets benchmarks/pypto/targets/pypto_lib_6e897cd.tsv \
+  --output /tmp/pypto-lib-corpus \
+  --coverage-targets benchmarks/capture/pypto-lib-6e897cd.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
   --source-commit 6e897cd99c28767b22e05f209da3e041f15c3dfc \
   --producer-repo https://github.com/tonibohnlein/pypto.git \
@@ -172,13 +172,14 @@ Qwen3 14B/32B are exhaustive at the pinned revision. Import fails if a capture
 target is missing, an excluded target produces a document, or an unlisted case appears. See
 [the corpus workflow](docs/compiler_corpus.md).
 
-The checked-in host capture contains 1,701 PyPTO-Lib observations normalized to
-292 meaningful unique shapes, plus 461 PyPTO system-test observations normalized
-to 183 meaningful shapes. Four shapes occur in both sources, leaving 471 unique
-structured problems and 957 standard per-pool relaxations. The complete solver
-comparison is [host-corpus-v1](benchmarks/results/host-corpus-v1/report.md).
-These are compiler-validated, host-only inputs; the snapshot deliberately does
-not claim numerical device validation.
+The checked-in corpus stores only normalized JSON under
+`benchmarks/pypto/instances`, organized by source repository and program. The
+host captures contain 471 unique meaningful problems after cross-source
+deduplication. Two additional corrected DeepSeek-v4 device captures and five
+PyPTO unit-export fixtures bring the directory to 478 unique inputs. The
+host-only solver comparison remains recorded in
+[host-corpus-v1](benchmarks/results/host-corpus-v1/report.md); it is not a device
+performance or numerical-correctness claim.
 
 Do not import the earlier 597-document `b8802dc6` regression archive as a
 published benchmark. That run was essential for finding the DeepSeek-v4

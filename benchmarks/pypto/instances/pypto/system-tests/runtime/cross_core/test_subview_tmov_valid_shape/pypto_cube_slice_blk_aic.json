@@ -1,0 +1,165 @@
+{
+  "instance": "pypto::tests::st::runtime::cross_core::test_subview_tmov_valid_shape::pypto_cube_slice_blk_aic",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "tests__st__runtime__cross_core__test_subview_tmov_valid_shape",
+    "corpus_export_file": "tests__st__runtime__cross_core__test_subview_tmov_valid_shape/pypto_cube_slice_blk_aic.dsa.json",
+    "corpus_family": "pypto-runtime-cross_core",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "cube_slice_blk_aic",
+    "corpus_problem_fingerprint_fnv1a64": "55464040f16b954a",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_source_fingerprint_fnv1a64": "b913bfa4f3fbc4d8",
+    "corpus_source_path": "tests/st/runtime/cross_core/test_subview_tmov_valid_shape.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 15,
+            "upper": 25
+          }
+        ],
+        "name": "mem_mat_4",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 21,
+            "upper": 27
+          }
+        ],
+        "name": "mem_left_5",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 25,
+            "upper": 27
+          }
+        ],
+        "name": "mem_right_6",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 27,
+            "upper": 29
+          }
+        ],
+        "name": "mem_acc_7",
+        "size": 2048
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 524288,
+        "id": 2,
+        "name": "Mat",
+        "reserved_ranges": [
+          {
+            "begin": 0,
+            "end": 32768
+          }
+        ]
+      },
+      {
+        "capacity": 65536,
+        "id": 3,
+        "name": "Left",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 4,
+        "name": "Right",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 131072,
+        "id": 5,
+        "name": "Acc",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "w_s__tile",
+            "w_s__tile_t"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "x_f__tile_Left"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "w_s__tile_t_Right"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "acc__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

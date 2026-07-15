@@ -1,0 +1,5 @@
+case_id	source_path	family	devices	minimum_documents	eligibility	reason
+colvec	tests/st/runtime/ops/test_memory_planner_ptoas.py	control-flow	1	1	capture	-
+gather	tests/st/runtime/ops/test_gather.py	data-movement	1	1	capture	-
+pipeline	tests/st/runtime/ops/test_matmul.py	pipeline-matmul	1	2	capture	-
+targeted	tests/st/runtime/ops/test_memory_planner_ptoas.py	planner-smoke	1	4	capture	-
