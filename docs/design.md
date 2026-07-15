@@ -17,6 +17,13 @@ The portable core is:
 - address non-overlap for buffers whose live sets intersect;
 - peak minimization or fit-under-capacity.
 
+Schema v1 stores a bound program/architecture pair. The proposed corpus layer
+separates lowered program structure from versioned architecture resources and
+binds them before invoking a solver; see
+[`architecture_binding.md`](architecture_binding.md). This distinction is
+necessary because target-dependent lowering can change the DSA graph itself,
+not just its capacities.
+
 Compiler extensions are explicit constraints or costs:
 
 - colocations encode semantic must-alias;
