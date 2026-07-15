@@ -28,6 +28,13 @@ MiniMalloc A--K one-MiB capacity, 2,000 ordering-search candidates per seed,
 and a 60-second exact-solver budget per instance. This is the long-form
 quality/runtime table; `baseline` remains the quicker CI-style snapshot.
 
+`host-corpus-v1` is the comprehensive host-compiled comparison at PyPTO
+`8df2ed4` and PyPTO-Lib `6e897cd`. It contains 12 public standard problems, 471
+deduplicated structured compiler problems, and 957 generated per-pool standard
+relaxations. Every returned heuristic placement is independently
+placement-valid; capacity misses remain explicit `best_effort_no_fit` rows.
+The snapshot is not a device-performance or numerical-correctness claim.
+
 New PyPTO or `pypto-lib` corpus entries should record public source revisions, target, memory pool, schema
 version, and a content hash in structured-problem metadata. Do not publish instances derived from private
 workloads or containing machine-specific paths.

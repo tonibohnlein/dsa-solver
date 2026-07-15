@@ -512,6 +512,7 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
                                          std::map<std::string, std::size_t>* coverage_counts) {
   std::vector<ManifestRecord> records;
   std::set<fs::path> output_paths;
+  std::set<std::string> normalized_instances;
   std::map<std::string, RepresentativeDocument> representative_by_fingerprint;
   for (const InputDocument& input : inputs) {
     CoverageTarget target;
@@ -580,8 +581,17 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
     } else {
       representative = true;
       selected = selection.selected;
-      normalized_instance =
-          options.corpus_namespace + "::" + SourceIdentity(target.source_path) + "::" + export_stem;
+      const std::string instance_prefix =
+          options.corpus_namespace + "::" + SourceIdentity(target.source_path) + "::";
+      std::string normalized_stem = export_stem;
+      normalized_instance = instance_prefix + normalized_stem;
+      if (!normalized_instances.insert(normalized_instance).second) {
+        normalized_stem += "-" + problem_fingerprint;
+        normalized_instance = instance_prefix + normalized_stem;
+        if (!normalized_instances.insert(normalized_instance).second) {
+          throw std::runtime_error("duplicate normalized corpus identity: " + normalized_instance);
+        }
+      }
       document.instance = normalized_instance;
       document.metadata["corpus_case_id"] = input.case_id;
       document.metadata["corpus_export_file"] = input.relative_path.generic_string();
@@ -602,7 +612,7 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
       if (selected) {
         relative_output = fs::path("documents") / target.source_path;
         relative_output.replace_extension();
-        relative_output /= export_stem + ".json";
+        relative_output /= normalized_stem + ".json";
         ValidateRelativeSourcePath(relative_output, "normalized document path");
         const fs::path output_path = options.output / relative_output;
         if (!output_paths.insert(relative_output).second) {

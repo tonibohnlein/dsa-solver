@@ -16,6 +16,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -449,11 +450,19 @@ Instance LoadPyptoInstance(const fs::path& path) {
 
 std::vector<Instance> LoadInstances(const Options& options) {
   std::vector<Instance> instances;
+  std::set<std::string> compiler_problem_fingerprints;
+  std::size_t duplicate_compiler_problems = 0;
   for (const fs::path& path : DiscoverFiles(options.standard_roots, {".csv", ".json"})) {
     instances.push_back(LoadStandardInstance(path, options.standard_capacity));
   }
   for (const fs::path& path : DiscoverFiles(options.pypto_roots, {".json"})) {
     Instance structured = LoadPyptoInstance(path);
+    const std::string fingerprint =
+        MetadataValue(structured.document, "corpus_problem_fingerprint_fnv1a64");
+    if (!fingerprint.empty() && !compiler_problem_fingerprints.insert(fingerprint).second) {
+      ++duplicate_compiler_problems;
+      continue;
+    }
     instances.push_back(structured);
     if (!options.build_core_relaxations) continue;
     try {
@@ -465,6 +474,10 @@ std::vector<Instance> LoadInstances(const Options& options) {
       std::cerr << "dsa-suite: lower bounds unavailable for " << structured.document.instance
                 << ": " << error.what() << '\n';
     }
+  }
+  if (duplicate_compiler_problems != 0) {
+    std::cerr << "dsa-suite: skipped " << duplicate_compiler_problems
+              << " repeated compiler problem shapes across corpus inputs\n";
   }
   std::sort(instances.begin(), instances.end(), [](const Instance& first, const Instance& second) {
     return std::tie(first.document.profile, first.document.instance) <

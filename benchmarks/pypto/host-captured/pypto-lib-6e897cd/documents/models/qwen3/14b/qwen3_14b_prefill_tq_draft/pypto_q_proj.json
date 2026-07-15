@@ -1,0 +1,265 @@
+{
+  "instance": "pypto-lib::models::qwen3::14b::qwen3_14b_prefill_tq_draft::pypto_q_proj",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "models__qwen3__14b__qwen3_14b_prefill_tq_draft",
+    "corpus_export_file": "models__qwen3__14b__qwen3_14b_prefill_tq_draft/call-001/pypto_q_proj.dsa.json",
+    "corpus_family": "qwen3-14b",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto-lib",
+    "corpus_original_instance": "q_proj",
+    "corpus_problem_fingerprint_fnv1a64": "7d606c606270cf7d",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
+    "corpus_source_fingerprint_fnv1a64": "a66ceb3f7802385f",
+    "corpus_source_path": "models/qwen3/14b/qwen3_14b_prefill_tq_draft.py",
+    "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 21,
+            "upper": 25
+          }
+        ],
+        "name": "mem_mat_3",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 23,
+            "upper": 27
+          }
+        ],
+        "name": "mem_mat_4",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 25,
+            "upper": 29
+          }
+        ],
+        "name": "mem_left_5",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 27,
+            "upper": 29
+          }
+        ],
+        "name": "mem_right_6",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 29,
+            "upper": 45
+          }
+        ],
+        "name": "mem_acc_7",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 33,
+            "upper": 37
+          }
+        ],
+        "name": "mem_mat_8",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 35,
+            "upper": 39
+          }
+        ],
+        "name": "mem_mat_9",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 37,
+            "upper": 41
+          }
+        ],
+        "name": "mem_left_10",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 8,
+        "live_intervals": [
+          {
+            "lower": 39,
+            "upper": 41
+          }
+        ],
+        "name": "mem_right_11",
+        "size": 16384
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 524288,
+        "id": 2,
+        "name": "Mat",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 3,
+        "name": "Left",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 4,
+        "name": "Right",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 131072,
+        "id": 5,
+        "name": "Acc",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "tile_a_inline167__tile"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "tile_w_inline166__tile"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "tile_a_inline167__tile_Left"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "tile_w_inline166__tile_Right"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "q_acc_inline199__tile",
+            "q_acc_inline199__tile"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "tile_a_i_inline208__tile"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "tile_w_i_inline203__tile"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "tile_a_i_inline208__tile_Left"
+          ]
+        },
+        {
+          "buffer": 8,
+          "members": [
+            "tile_w_i_inline203__tile_Right"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

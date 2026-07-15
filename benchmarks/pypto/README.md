@@ -28,10 +28,11 @@ replace the corresponding corpus file. CMake tests parse, validate, solve, and
 independently validate every document listed above.
 
 `targets/pypto_lib_6e897cd.tsv` is the current exhaustive PyPTO-Lib capture
-contract. It lists all 61 runnable entry points at commit
-`6e897cd99c28767b22e05f209da3e041f15c3dfc`: 59 capture targets and two explicit
-exclusions. The exclusions are the SuperscalarNPU-only draft and the extern-only
-CCE driver, neither of which contains an Ascend InCore DSA problem. Its
+contract. It lists all 61 discovered entry points at commit
+`6e897cd99c28767b22e05f209da3e041f15c3dfc`: 58 capture targets and three explicit
+exclusions. Two exclusions are the SuperscalarNPU-only draft and the extern-only
+CCE driver, neither of which contains an Ascend InCore DSA problem. The third is
+the Qwen3-32B prefill draft, which still uses PyPTO's removed `auto_chunk` API. Its
 `case_id` matches the device-regression artifact directory. Importing fails on
 any missing capture, unexpected excluded export, or unknown case;
 `coverage.tsv` records every decision. The older `pypto_lib_bf89431.tsv` remains
@@ -68,6 +69,25 @@ See `docs/compiler_corpus.md` for ingestion and review rules.
 The suite also generates one standard per-pool relaxation from each structured
 document. Its report places those lower-bound rows beside the public standard
 corpus so every applicable baseline is visible.
+
+## Host-captured comprehensive corpus
+
+`host-captured/pypto-lib-6e897cd/` covers all 58 compilable PyPTO-Lib entry
+points in the pinned inventory, including 128 DeepSeek-v4, 36 DeepSeek-v3.2,
+91 Qwen3-14B, and 26 Qwen3-32B meaningful shapes after structural
+deduplication, plus 11 examples. It retains all 1,701 observations in
+`manifest.tsv` and selects 292 solver inputs.
+
+`host-captured/pypto-st-8df2ed4/` retains 461 exports from 65 PyPTO system-test
+files and selects 183 meaningful shapes. Four selected shapes duplicate a
+PyPTO-Lib problem and are removed by `dsa-suite`'s cross-corpus fingerprint
+check, so the combined structured table has 471 rows rather than 475.
+
+Both directories are host compile captures: they prove that the pinned compiler
+constructed and exported the problem, not that the generated program passed on
+an Ascend device. Device-validated regression fixtures remain under `real/`.
+The aggregate comparison is checked in at
+`benchmarks/results/host-corpus-v1/report.md`.
 
 ## Checked-in real instances
 

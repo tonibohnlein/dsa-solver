@@ -584,7 +584,20 @@ void TestEveryPyptoCorpusDocumentIsReplayable() {
     Require(document.problem.pypto_structure.has_value() &&
                 document.problem.pypto_structure->whole_slot_reuse,
             "PyPTO corpus document lost the whole-slot reuse contract: " + path.string());
-    static_cast<void>(SolveAndValidate(document.problem, dsa::FirstFitSolver()));
+    const dsa::DsaResult first_fit = dsa::FirstFitSolver().Solve(document.problem);
+    Require(first_fit.solution.has_value(),
+            "first-fit returned no placement for corpus document: " + path.string());
+    Require(first_fit.status == dsa::SolveStatus::kFeasible ||
+                first_fit.status == dsa::SolveStatus::kBestEffortNoFit,
+            "first-fit returned an invalid status for corpus document: " + path.string());
+    dsa::DsaProblem placement_problem = document.problem;
+    if (first_fit.status == dsa::SolveStatus::kBestEffortNoFit) {
+      for (dsa::Pool& pool : placement_problem.pools) pool.capacity.reset();
+    }
+    const std::vector<std::string> placement_errors =
+        dsa::ValidateSolution(placement_problem, *first_fit.solution);
+    Require(placement_errors.empty(),
+            "first-fit returned an invalid placement for corpus document: " + path.string());
   }
 }
 

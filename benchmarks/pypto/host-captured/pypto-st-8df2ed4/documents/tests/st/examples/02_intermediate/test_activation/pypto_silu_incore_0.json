@@ -1,0 +1,191 @@
+{
+  "instance": "pypto::tests::st::examples::02_intermediate::test_activation::pypto_silu_incore_0",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "tests__st__examples__02_intermediate__test_activation",
+    "corpus_export_file": "tests__st__examples__02_intermediate__test_activation/pypto_silu_incore_0.dsa.json",
+    "corpus_family": "pypto-examples-02_intermediate",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "silu_incore_0",
+    "corpus_problem_fingerprint_fnv1a64": "167c8e27ced64849",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_source_fingerprint_fnv1a64": "bc360a393ae01aa5",
+    "corpus_source_path": "tests/st/examples/02_intermediate/test_activation.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 13,
+            "upper": 23
+          }
+        ],
+        "name": "mem_vec_2",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 15,
+            "upper": 17
+          }
+        ],
+        "name": "mem_vec_3",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 17,
+            "upper": 19
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 19,
+            "upper": 21
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 21,
+            "upper": 23
+          }
+        ],
+        "name": "mem_vec_6",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 23,
+            "upper": 25
+          }
+        ],
+        "name": "mem_vec_7",
+        "size": 16384
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 3,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 4
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "tile_x__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "x_neg__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "exp_neg__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "denom__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "sigmoid__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "result__ssa_v0"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

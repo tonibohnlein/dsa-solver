@@ -56,9 +56,9 @@ do not enter the accepted corpus until correctness is resolved.
 
 Use `targets/pypto_lib_6e897cd.tsv` as the source inventory:
 
-- 61 runnable entry points total;
-- 59 `capture` targets that must each emit at least one DSA document;
-- two reviewed exclusions with zero expected documents.
+- 61 discovered entry points total;
+- 58 `capture` targets that must each emit at least one DSA document;
+- three reviewed exclusions with zero expected documents.
 
 The execution wrapper must reproduce direct script execution by prepending the
 script directory to `sys.path`, propagate `MemoryPlanner.DSA` and a case-local
@@ -69,6 +69,11 @@ unless the inventory explicitly classifies it that way.
 Run one bounded process per case. Two-device entries require a healthy supported
 pair; if HCCL is environment-blocked, retain the terminal coverage row and rerun
 the compile/export portion without claiming numerical validation.
+
+The checked-in `host-captured` snapshot is the compile/export stage of this
+workflow. It provides comprehensive solver inputs immediately, but it remains
+explicitly distinct from the device-correct accepted corpus required by this
+section.
 
 ## 5. Normalize and audit
 

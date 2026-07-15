@@ -59,4 +59,4 @@ models__qwen3__14b__test_paged_attention_cce	models/qwen3/14b/test_paged_attenti
 models__qwen3__14b__topk_select	models/qwen3/14b/topk_select.py	qwen3-14b	1	1	capture	-
 models__qwen3__32b__qwen3_32b_decode	models/qwen3/32b/qwen3_32b_decode.py	qwen3-32b	1	1	capture	-
 models__qwen3__32b__qwen3_32b_decode_4d	models/qwen3/32b/qwen3_32b_decode_4d.py	qwen3-32b	1	1	capture	-
-models__qwen3__32b__qwen3_32b_prefill_draft	models/qwen3/32b/qwen3_32b_prefill_draft.py	qwen3-32b	1	1	capture	-
+models__qwen3__32b__qwen3_32b_prefill_draft	models/qwen3/32b/qwen3_32b_prefill_draft.py	qwen3-32b	1	0	exclude	incompatible_removed_auto_chunk_api

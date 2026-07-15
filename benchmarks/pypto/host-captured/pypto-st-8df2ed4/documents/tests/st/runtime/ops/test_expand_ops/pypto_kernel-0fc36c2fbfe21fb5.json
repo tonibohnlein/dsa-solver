@@ -1,0 +1,128 @@
+{
+  "instance": "pypto::tests::st::runtime::ops::test_expand_ops::pypto_kernel-0fc36c2fbfe21fb5",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "corpus_case_id": "tests__st__runtime__ops__test_expand_ops",
+    "corpus_export_file": "tests__st__runtime__ops__test_expand_ops/row_expand_expdif_fp32/a2a3sim/pypto_kernel.dsa.json",
+    "corpus_family": "pypto-runtime-ops",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "kernel",
+    "corpus_problem_fingerprint_fnv1a64": "0fc36c2fbfe21fb5",
+    "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "corpus_source_fingerprint_fnv1a64": "312a3d58428ff529",
+    "corpus_source_path": "tests/st/runtime/ops/test_expand_ops.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 7,
+            "upper": 11
+          }
+        ],
+        "name": "mem_vec_3",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 9,
+            "upper": 11
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 128
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 11,
+            "upper": 13
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 8192
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 2
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "total_peak",
+        "max_peak"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "ta__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "tv__ssa_v0"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "tc__ssa_v0"
+          ]
+        }
+      ],
+      "pipeline_groups": [],
+      "whole_slot_reuse": true
+    }
+  },
+  "profile": "pypto_hard_v1",
+  "schema_version": 1
+}

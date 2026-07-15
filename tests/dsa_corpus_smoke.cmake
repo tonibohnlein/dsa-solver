@@ -9,7 +9,8 @@ endif()
 set(INPUT_DIR "${BINARY_DIR}/corpus-import-input")
 set(OUTPUT_DIR "${BINARY_DIR}/corpus-import-output")
 file(REMOVE_RECURSE "${INPUT_DIR}" "${OUTPUT_DIR}")
-file(MAKE_DIRECTORY "${INPUT_DIR}/case_a" "${INPUT_DIR}/case_b" "${INPUT_DIR}/case_c")
+file(MAKE_DIRECTORY "${INPUT_DIR}/case_a" "${INPUT_DIR}/case_a/second"
+  "${INPUT_DIR}/case_b" "${INPUT_DIR}/case_c")
 file(COPY
   "${SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json"
   DESTINATION "${INPUT_DIR}/case_a"
@@ -17,6 +18,14 @@ file(COPY
 file(RENAME
   "${INPUT_DIR}/case_a/pipeline_stage_separation_v1.json"
   "${INPUT_DIR}/case_a/pypto_pipeline_stage_separation.dsa.json"
+)
+file(COPY
+  "${SOURCE_DIR}/benchmarks/pypto/target_hazard_v1.json"
+  DESTINATION "${INPUT_DIR}/case_a/second"
+)
+file(RENAME
+  "${INPUT_DIR}/case_a/second/target_hazard_v1.json"
+  "${INPUT_DIR}/case_a/second/pypto_pipeline_stage_separation.dsa.json"
 )
 file(COPY
   "${SOURCE_DIR}/benchmarks/pypto/pipeline_stage_separation_v1.json"
@@ -87,13 +96,22 @@ foreach(EXPECTED
     message(FATAL_ERROR "normalized document is missing '${EXPECTED}'")
   endif()
 endforeach()
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/duplicate-documents")
+file(COPY "${DOCUMENT}" DESTINATION "${OUTPUT_DIR}/duplicate-documents")
 
 file(GLOB_RECURSE NORMALIZED_DOCUMENTS "${OUTPUT_DIR}/documents/*.json")
 list(LENGTH NORMALIZED_DOCUMENTS NORMALIZED_DOCUMENT_COUNT)
-if(NOT NORMALIZED_DOCUMENT_COUNT EQUAL 1)
+if(NOT NORMALIZED_DOCUMENT_COUNT EQUAL 2)
   message(FATAL_ERROR
-    "dsa-corpus should deduplicate two identical observations, found ${NORMALIZED_DOCUMENT_COUNT} documents"
+    "dsa-corpus should retain two unique shapes and deduplicate one observation, found ${NORMALIZED_DOCUMENT_COUNT} documents"
   )
+endif()
+file(GLOB COLLISION_DOCUMENTS
+  "${OUTPUT_DIR}/documents/models/example/case_a/pypto_pipeline_stage_separation-*.json"
+)
+list(LENGTH COLLISION_DOCUMENTS COLLISION_DOCUMENT_COUNT)
+if(NOT COLLISION_DOCUMENT_COUNT EQUAL 1)
+  message(FATAL_ERROR "dsa-corpus did not disambiguate the same export stem by fingerprint")
 endif()
 file(READ "${OUTPUT_DIR}/manifest.tsv" MANIFEST_TEXT)
 foreach(EXPECTED
@@ -107,8 +125,8 @@ foreach(EXPECTED
 endforeach()
 string(REGEX MATCHALL "\n[^\n]+" MANIFEST_ROWS "${MANIFEST_TEXT}")
 list(LENGTH MANIFEST_ROWS MANIFEST_ROW_COUNT)
-if(NOT MANIFEST_ROW_COUNT EQUAL 3)
-  message(FATAL_ERROR "dsa-corpus manifest should retain all three source observations")
+if(NOT MANIFEST_ROW_COUNT EQUAL 4)
+  message(FATAL_ERROR "dsa-corpus manifest should retain all four source observations")
 endif()
 file(READ "${OUTPUT_DIR}/coverage.tsv" COVERAGE_TEXT)
 foreach(EXPECTED
@@ -136,6 +154,7 @@ execute_process(
   COMMAND "${DSA_SUITE}"
     --standard "${SOURCE_DIR}/benchmarks/standard/freed_region_subdivision_v1.json"
     --pypto "${OUTPUT_DIR}/documents"
+    --pypto "${OUTPUT_DIR}/duplicate-documents"
     --output-dir "${OUTPUT_DIR}/suite-report"
     --run-label corpus-smoke
     --standard-capacity 12

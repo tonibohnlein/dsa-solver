@@ -166,12 +166,21 @@ weighted as solver benchmarks:
   --namespace pypto-lib
 ```
 
-The current target contract inventories all 61 runnable entry points: 59 must
-produce DSA documents and two are explicitly excluded because they have no
-Ascend InCore DSA problem. DeepSeek v3.2/v4 and Qwen3 14B/32B are exhaustive at
-the pinned revision. Import fails if a capture target is missing, an excluded
-target produces a document, or an unlisted case appears. See
+The current target contract inventories all 61 discovered entry points: 58 must
+produce DSA documents and three are explicitly excluded. Two exclusions have no
+Ascend InCore DSA problem; the third still uses the `auto_chunk` API removed from
+the pinned PyPTO revision and cannot currently compile. DeepSeek v3.2/v4 and
+Qwen3 14B/32B are exhaustive at the pinned revision. Import fails if a capture
+target is missing, an excluded target produces a document, or an unlisted case appears. See
 [the corpus workflow](docs/compiler_corpus.md).
+
+The checked-in host capture contains 1,701 PyPTO-Lib observations normalized to
+292 meaningful unique shapes, plus 461 PyPTO system-test observations normalized
+to 183 meaningful shapes. Four shapes occur in both sources, leaving 471 unique
+structured problems and 957 standard per-pool relaxations. The complete solver
+comparison is [host-corpus-v1](benchmarks/results/host-corpus-v1/report.md).
+These are compiler-validated, host-only inputs; the snapshot deliberately does
+not claim numerical device validation.
 
 Do not import the earlier 597-document `b8802dc6` regression archive as a
 published benchmark. That run was essential for finding the DeepSeek-v4

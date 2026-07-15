@@ -62,14 +62,44 @@ corpus/
 
 The case IDs for PyPTO-Lib commit `6e897cd9` are pinned in
 `benchmarks/pypto/targets/pypto_lib_6e897cd.tsv`. That file inventories all 61
-tracked runnable entry points, never ignored `build_output/` debug scripts. An
+tracked entry points, never ignored `build_output/` debug scripts. An
 extended target row records `eligibility=capture` with a positive minimum, or
 `eligibility=exclude`, a zero minimum, and a reviewable reason. The current
-inventory has 59 captures and two exclusions: a non-Ascend SuperscalarNPU draft
-and an extern-only CCE driver with no InCore DSA allocation.
+inventory has 58 captures and three exclusions: a non-Ascend SuperscalarNPU
+draft, an extern-only CCE driver with no InCore DSA allocation, and a Qwen3-32B
+prefill draft that uses the removed `auto_chunk` API.
 The smaller `targets/pypto_b8802dc6.tsv` pins the already device-validated
 PyPTO adapter/kernel gates; it is intentionally described as curated rather
 than exhaustive.
+
+## Host-only capture
+
+`tools/capture_pypto_program.py` loads one PyPTO-Lib entry point with its script
+directory on `sys.path`, forces `MemoryPlanner.DSA`, selects a simulator target,
+and stops after compiler code generation. It patches only the public golden
+runner boundary; `--direct-pass-context` handles programs that compile without
+that runner. Use one process and one codegen worker when sweeping the inventory.
+
+The pinned host capture produced:
+
+| Source | Raw observations | Unique shapes | Selected meaningful |
+| --- | ---: | ---: | ---: |
+| PyPTO-Lib entry points | 1,701 | 349 | 292 |
+| PyPTO system tests | 461 | 225 | 183 |
+
+The two selected sets share four canonical problems. `dsa-suite` deduplicates
+those fingerprints across input roots, yielding 471 structured problems and 957
+per-pool standard relaxations. A shared problem is still retained in each
+source's manifest so coverage provenance is not lost.
+
+Host capture is suitable for solver benchmarking because solving and validating
+the exported allocation problem does not execute an NPU program. It is not a
+substitute for numerical device validation: the checked-in directories are
+named `host-captured`, and any claim about generated-program correctness must
+come from the separate device campaign. Some PyPTO system tests compile through
+the DSA export and then attempt an unavailable runtime path despite
+`--codegen-only`; their emitted documents are compile-valid observations, not
+whole-test passes.
 
 ## Import
 
@@ -94,15 +124,16 @@ mixing producer revisions.
 
 Review before checking in:
 
-1. `coverage.tsv` has exactly 61 rows: 59 `covered` and two reviewed `excluded`,
+1. `coverage.tsv` has exactly 61 rows: 58 `covered` and three reviewed `excluded`,
    with no `missing` or `unexpected` row.
 2. `manifest.tsv` covers every observation; representative instances and paths
    are unique, repeated shapes point to an existing representative, and every
    selected/skipped decision has an explicit reason.
 3. Every document retains `producer=pypto`, `solver_input=pre_memory_reuse`, a
    non-empty target, and `whole_slot_reuse=true`.
-4. `dsa-suite` reports every available heuristic feasible and
-   placement-valid.
+4. `dsa-suite` reports every returned heuristic placement placement-valid.
+   Capacity misses remain explicit `best_effort_no_fit` rows rather than being
+   discarded or mislabeled feasible.
    Review `features.csv` and the report's feature-occurrence table; zero-count
    features cannot support structured-search claims.
    The standard table must include both public standard inputs and generated
