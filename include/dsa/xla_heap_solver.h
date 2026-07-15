@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+// Independently written behavioral reimplementation of OpenXLA's
+// GlobalDecreasingSizeBestFitHeap spatial policy. No OpenXLA source is
+// vendored or linked; see NOTICE and docs/xla_heap.md.
+
 #ifndef DSA_XLA_HEAP_SOLVER_H_
 #define DSA_XLA_HEAP_SOLVER_H_
 

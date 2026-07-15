@@ -31,6 +31,10 @@ OpenXLA is licensed under Apache License 2.0. No OpenXLA source is vendored or
 linked; the exact scope and deliberate differences are documented in
 [`docs/xla_heap.md`](docs/xla_heap.md).
 
+The OpenXLA name is used only to identify the provenance of the published
+policy. This project is not affiliated with or endorsed by the OpenXLA
+project.
+
 ## JSON for Modern C++
 
 `third_party/json` pins nlohmann/json. It is licensed under the MIT License; its complete license

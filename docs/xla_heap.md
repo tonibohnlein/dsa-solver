@@ -18,6 +18,8 @@ OpenXLA commit
 OpenXLA is Apache-2.0 licensed. This repository does not vendor or link XLA.
 The implementation uses dsa-solver's model, placement validation, and data
 structures; `NOTICE` and `THIRD_PARTY_NOTICES.md` retain attribution.
+The OpenXLA name identifies the provenance of the published policy only; this
+project is not affiliated with or endorsed by the OpenXLA project.
 
 ## Frozen policy
 
