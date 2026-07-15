@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -67,6 +68,7 @@ struct Options {
   bool run_minimalloc = true;
   bool build_core_relaxations = true;
   bool standard_only = false;
+  bool report_only = false;
   std::string run_label = "local";
 };
 
@@ -231,6 +233,7 @@ void PrintHelp() {
       << "  --no-minimalloc                 Do not execute the exact baseline\n"
       << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
       << "  --standard-only                 Project PyPTO pools to capacity-free standard DSA\n"
+      << "  --report-only                   Rebuild the report from existing results.jsonl\n"
       << "  --help                           Show this help\n";
 }
 
@@ -275,6 +278,8 @@ Options ParseOptions(int argc, char** argv) {
       options.build_core_relaxations = false;
     } else if (option == "--standard-only") {
       options.standard_only = true;
+    } else if (option == "--report-only") {
+      options.report_only = true;
     } else {
       UsageError("unknown option '" + option + "'");
     }
@@ -297,6 +302,9 @@ Options ParseOptions(int argc, char** argv) {
   }
   if (options.standard_only && !options.build_core_relaxations && !options.pypto_roots.empty()) {
     UsageError("--standard-only requires core projections for --pypto inputs");
+  }
+  if (options.report_only && !options.standard_only) {
+    UsageError("--report-only currently requires --standard-only");
   }
   return options;
 }
@@ -1153,6 +1161,66 @@ Json RecordJson(const RunRecord& record, const Options& options) {
   return json;
 }
 
+template <typename T>
+std::optional<T> OptionalJsonValue(const Json& json, std::string_view key) {
+  const auto value = json.find(std::string(key));
+  if (value == json.end() || value->is_null()) return std::nullopt;
+  return value->get<T>();
+}
+
+RunRecord RunRecordFromJson(const Json& json) {
+  RunRecord record;
+  record.instance = json.at("instance").get<std::string>();
+  record.profile = json.at("profile").get<std::string>();
+  record.source = json.at("source").get<std::string>();
+  record.method = json.at("method").get<std::string>();
+  record.comparison_scope = json.at("comparison_scope").get<std::string>();
+  record.status = json.at("status").get<std::string>();
+  record.relaxed_from = OptionalJsonValue<std::string>(json, "relaxed_from");
+  record.seed = OptionalJsonValue<std::uint64_t>(json, "seed");
+  record.capacity = OptionalJsonValue<std::uint64_t>(json, "capacity");
+  record.peak = OptionalJsonValue<std::uint64_t>(json, "peak");
+  record.total_peak = OptionalJsonValue<std::uint64_t>(json, "total_peak");
+  record.capacity_overflow = OptionalJsonValue<std::uint64_t>(json, "capacity_overflow");
+  record.reuse_cost = OptionalJsonValue<std::uint64_t>(json, "reuse_cost");
+  record.bank_cost = OptionalJsonValue<std::uint64_t>(json, "bank_cost");
+  record.backtracks = OptionalJsonValue<std::uint64_t>(json, "backtracks");
+  record.runtime_us = json.at("runtime_us").get<std::uint64_t>();
+  record.buffers = json.at("buffers").get<std::size_t>();
+  record.placement_valid = json.at("placement_valid").get<bool>();
+  record.solution_valid = json.at("solution_valid").get<bool>();
+  record.structurally_compatible = json.at("structurally_compatible").get<bool>();
+  record.objective_compatible = json.at("objective_compatible").get<bool>();
+  record.certified_optimal = json.at("certified_optimal").get<bool>();
+  record.target = OptionalJsonValue<std::string>(json, "target").value_or("");
+  record.features = json.at("features").get<std::vector<std::string>>();
+  record.relaxed_features = json.at("relaxed_features").get<std::vector<std::string>>();
+  record.diagnostics = json.at("diagnostics").get<std::vector<std::string>>();
+  record.objective_score = json.at("objective_score").get<std::vector<std::uint64_t>>();
+  record.metadata = json.at("metadata").get<std::map<std::string, std::string>>();
+  return record;
+}
+
+std::vector<RunRecord> ReadRawResults(const fs::path& path) {
+  std::ifstream input(path);
+  if (!input) throw std::runtime_error("cannot read raw results: " + path.string());
+  std::vector<RunRecord> records;
+  std::string line;
+  std::size_t line_number = 0;
+  while (std::getline(input, line)) {
+    ++line_number;
+    if (line.empty()) continue;
+    try {
+      records.push_back(RunRecordFromJson(Json::parse(line)));
+    } catch (const std::exception& error) {
+      throw std::runtime_error("invalid raw result at " + path.string() + ':' +
+                               std::to_string(line_number) + ": " + error.what());
+    }
+  }
+  if (records.empty()) throw std::runtime_error("raw results are empty: " + path.string());
+  return records;
+}
+
 std::string CsvEscape(std::string_view value) {
   if (value.find_first_of(",\"\n\r") == std::string_view::npos) return std::string(value);
   std::string result = "\"";
@@ -1437,36 +1505,103 @@ void WriteFeatureOccurrenceReport(std::ostream& output, const std::vector<Instan
   output << '\n';
 }
 
-std::string StandardOrigin(const dsa::StructuredProblemDocument& document) {
+bool HasPrefix(std::string_view value, std::string_view prefix) {
+  return value.size() >= prefix.size() && value.substr(0, prefix.size()) == prefix;
+}
+
+std::string StandardBenchmarkFamily(const dsa::StructuredProblemDocument& document) {
   if (MetadataValue(document, "standard_origin") != "pypto_projection") return "MiniMalloc";
   constexpr std::string_view kPyptoLibPrefix = "pypto-lib::";
-  const bool is_pypto_lib =
-      document.instance.compare(0, kPyptoLibPrefix.size(), kPyptoLibPrefix) == 0;
-  std::string origin = is_pypto_lib ? "PyPTO-Lib" : "PyPTO";
+  const bool is_pypto_lib = HasPrefix(document.instance, kPyptoLibPrefix);
   const std::string family = MetadataValue(document, "corpus_family");
-  const std::string pool = MetadataValue(document, "source_pool_name");
-  if (!family.empty()) origin += "/" + family;
-  if (!pool.empty()) origin += "/" + pool;
-  return origin;
-}
-
-std::string StandardPeakCell(const Summary* summary, bool exact) {
-  if (summary == nullptr || !summary->best) return "—";
-  const RunRecord& best = *summary->best;
-  if (!HasUsableSolution(best)) return MarkdownEscape(best.status);
-  std::string cell = std::to_string(*best.peak);
-  if (exact && !best.certified_optimal) cell += "†";
-  return cell;
-}
-
-std::string StandardRuntimeCell(const Summary* summary, bool exact) {
-  if (summary == nullptr || !summary->best) return "—";
-  if (summary->best->status == "not_run" || summary->best->status == "unavailable") {
-    return MarkdownEscape(summary->best->status);
+  if (is_pypto_lib) {
+    if (family == "deepseek-v3_2") return "PyPTO-Lib / DeepSeek v3.2";
+    if (family == "deepseek-v4") return "PyPTO-Lib / DeepSeek v4";
+    if (family == "qwen3-14b") return "PyPTO-Lib / Qwen3 14B";
+    if (family == "qwen3-32b") return "PyPTO-Lib / Qwen3 32B";
+    return "PyPTO-Lib / " + (family.empty() ? std::string("other") : family);
   }
-  std::string cell = FormatRuntime(summary->median_runtime_us);
-  if (exact && !summary->best->certified_optimal) cell += "†";
-  return cell;
+  if (HasPrefix(family, "pypto-examples-")) return "PyPTO / examples";
+  if (family == "pypto-runtime-control_flow") return "PyPTO / control flow";
+  if (family == "pypto-runtime-cross_core") return "PyPTO / cross-core";
+  if (family == "pypto-runtime-framework_and_models") return "PyPTO / framework and models";
+  if (family == "pypto-runtime-ops") return "PyPTO / operations";
+  return "PyPTO / " + (family.empty() ? std::string("regression fixtures") : family);
+}
+
+struct StandardAggregateCell {
+  std::size_t quality_instances = 0;
+  std::size_t wins = 0;
+  long double log_peak_ratio_sum = 0.0L;
+  std::size_t runtime_instances = 0;
+  long double log_runtime_us_sum = 0.0L;
+};
+
+struct StandardAggregateGroup {
+  std::string name;
+  std::size_t instances = 0;
+  std::size_t proven_optima = 0;
+  std::map<std::string, StandardAggregateCell> by_method;
+};
+
+void AccumulateStandardInstance(
+    StandardAggregateGroup* group, const Instance& instance, const std::vector<Summary>& summaries,
+    const std::vector<std::pair<std::string_view, std::string_view>>& methods) {
+  ++group->instances;
+  const std::string profile = dsa::ToString(instance.document.profile);
+  const Summary* exact = FindSummary(summaries, instance.document.instance, profile, kMiniMalloc);
+  if (exact != nullptr && exact->certified_optimal) ++group->proven_optima;
+
+  std::optional<std::uint64_t> reference_peak;
+  for (const auto& [label, method] : methods) {
+    static_cast<void>(label);
+    const Summary* summary = FindSummary(summaries, instance.document.instance, profile, method);
+    if (summary == nullptr || !summary->best || !HasUsableSolution(*summary->best)) continue;
+    if (!reference_peak || *summary->best->peak < *reference_peak) {
+      reference_peak = summary->best->peak;
+    }
+  }
+
+  for (const auto& [label, method] : methods) {
+    static_cast<void>(label);
+    const Summary* summary = FindSummary(summaries, instance.document.instance, profile, method);
+    if (summary == nullptr || !summary->best) continue;
+    StandardAggregateCell& cell = group->by_method[std::string(method)];
+    if (reference_peak && *reference_peak != 0 && HasUsableSolution(*summary->best)) {
+      const long double ratio = static_cast<long double>(*summary->best->peak) /
+                                static_cast<long double>(*reference_peak);
+      cell.log_peak_ratio_sum += std::log(ratio);
+      ++cell.quality_instances;
+      if (*summary->best->peak == *reference_peak) ++cell.wins;
+    }
+    if (summary->median_runtime_us != 0 && summary->best->status != "not_run" &&
+        summary->best->status != "unavailable") {
+      cell.log_runtime_us_sum += std::log(static_cast<long double>(summary->median_runtime_us));
+      ++cell.runtime_instances;
+    }
+  }
+}
+
+std::string FormatAggregateRatio(const StandardAggregateCell* cell) {
+  if (cell == nullptr || cell->quality_instances == 0) return "—";
+  const long double geometric_mean =
+      std::exp(cell->log_peak_ratio_sum / static_cast<long double>(cell->quality_instances));
+  std::ostringstream output;
+  output << std::fixed << std::setprecision(5) << geometric_mean;
+  return output.str();
+}
+
+std::string FormatAggregateQuality(const StandardAggregateCell* cell) {
+  if (cell == nullptr || cell->quality_instances == 0) return "—";
+  return FormatAggregateRatio(cell) + " (" + std::to_string(cell->wins) + '/' +
+         std::to_string(cell->quality_instances) + ')';
+}
+
+std::string FormatAggregateRuntime(const StandardAggregateCell* cell) {
+  if (cell == nullptr || cell->runtime_instances == 0) return "—";
+  const long double geometric_mean =
+      std::exp(cell->log_runtime_us_sum / static_cast<long double>(cell->runtime_instances));
+  return FormatRuntime(static_cast<std::uint64_t>(std::llround(geometric_mean)));
 }
 
 void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& instances,
@@ -1474,13 +1609,13 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
   std::ofstream output(path);
   if (!output) throw std::runtime_error("cannot write Markdown report: " + path.string());
   output << "# Standard DSA benchmark results\n\n"
-         << "Every row is a capacity-free, single-pool standard DSA problem. Public MiniMalloc "
+         << "This presentation aggregates capacity-free, single-pool standard DSA problems by "
+            "source family. Public MiniMalloc "
             "instances are used directly. PyPTO rows are per-pool projections that retain buffer "
             "sizes and lifetimes but remove compiler-specific constraints, alignment, capacity, "
             "and architecture resources; they are not device-valid PyPTO placements.\n\n"
-         << "Raw per-run records are in `results.jsonl`; `summary.csv` is the authoritative "
-            "long-form aggregation. Peak values are bytes. A dagger (`†`) marks a feasible "
-            "MiniMalloc result whose optimality was not proved before the timeout.\n\n"
+         << "Full per-instance results remain in `summary.csv`; raw repetitions are in "
+            "`results.jsonl`. The tables below are the presentation layer.\n\n"
          << "Configuration: run label `" << MarkdownEscape(options.run_label) << "`; seeds `";
   for (std::size_t index = 0; index < options.seeds.size(); ++index) {
     if (index != 0) output << ',';
@@ -1525,47 +1660,117 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
       {"MiniMalloc exact", kMiniMalloc}, {"First fit", kFirstFit},       {"XLA heap", kXlaHeap},
       {"TVM hill climb", kTvmHillClimb}, {"Local search", kLocalSearch},
   };
-  auto write_header = [&]() {
-    output << "| Instance | Origin | Buffers";
+  std::map<std::string, StandardAggregateGroup> groups;
+  StandardAggregateGroup overall;
+  overall.name = "Overall";
+  StandardAggregateGroup compiler_overall;
+  compiler_overall.name = "All PyPTO projections";
+  for (const Instance& instance : instances) {
+    const std::string family = StandardBenchmarkFamily(instance.document);
+    StandardAggregateGroup& group = groups[family];
+    group.name = family;
+    AccumulateStandardInstance(&group, instance, summaries, methods);
+    AccumulateStandardInstance(&overall, instance, summaries, methods);
+    if (family != "MiniMalloc") {
+      AccumulateStandardInstance(&compiler_overall, instance, summaries, methods);
+    }
+  }
+
+  auto write_quality_header = [&]() {
+    output << "| Instance family | N | Proven";
     for (const auto& [label, method] : methods) {
       static_cast<void>(method);
       output << " | " << label;
     }
-    output << " |\n| --- | --- | ---:";
+    output << " |\n| --- | ---: | ---:";
+    for (std::size_t index = 0; index < methods.size(); ++index) output << " | ---:";
+    output << " |\n";
+  };
+  auto write_runtime_header = [&]() {
+    output << "| Instance family | N";
+    for (const auto& [label, method] : methods) {
+      static_cast<void>(method);
+      output << " | " << label;
+    }
+    output << " |\n| --- | ---:";
     for (std::size_t index = 0; index < methods.size(); ++index) output << " | ---:";
     output << " |\n";
   };
 
-  output << "## Peak memory (bytes)\n\n";
-  write_header();
-  for (const Instance& instance : instances) {
-    const dsa::StructuredProblemDocument& document = instance.document;
-    const std::string profile = dsa::ToString(document.profile);
-    output << "| " << MarkdownEscape(document.instance) << " | "
-           << MarkdownEscape(StandardOrigin(document)) << " | " << document.problem.buffers.size();
+  auto write_quality_row = [&](const StandardAggregateGroup& group) {
+    output << "| " << MarkdownEscape(group.name) << " | " << group.instances << " | "
+           << group.proven_optima << '/' << group.instances;
     for (const auto& [label, method] : methods) {
       static_cast<void>(label);
+      const auto cell = group.by_method.find(std::string(method));
       output << " | "
-             << StandardPeakCell(FindSummary(summaries, document.instance, profile, method),
-                                 method == kMiniMalloc);
+             << FormatAggregateQuality(cell == group.by_method.end() ? nullptr : &cell->second);
     }
     output << " |\n";
+  };
+
+  const StandardAggregateCell& compiler_first_fit =
+      compiler_overall.by_method.at(std::string(kFirstFit));
+  const StandardAggregateCell& compiler_xla = compiler_overall.by_method.at(std::string(kXlaHeap));
+  const StandardAggregateCell& compiler_tvm =
+      compiler_overall.by_method.at(std::string(kTvmHillClimb));
+  const StandardAggregateCell& compiler_local =
+      compiler_overall.by_method.at(std::string(kLocalSearch));
+  const StandardAggregateGroup& minimalloc_group = groups.at("MiniMalloc");
+  output << "## Highlights\n\n"
+         << "- MiniMalloc certified " << overall.proven_optima << '/' << overall.instances
+         << " reference peaks: all " << compiler_overall.instances
+         << " PyPTO projections, but only " << minimalloc_group.proven_optima << '/'
+         << minimalloc_group.instances << " public MiniMalloc cases under the bounded timeout.\n"
+         << "- On PyPTO projections, TVM hill climb and local search match the reference on "
+         << compiler_tvm.wins << '/' << compiler_tvm.quality_instances << " and "
+         << compiler_local.wins << '/' << compiler_local.quality_instances
+         << " instances; first fit reaches " << compiler_first_fit.wins << '/'
+         << compiler_first_fit.quality_instances << " and XLA reaches " << compiler_xla.wins << '/'
+         << compiler_xla.quality_instances << ".\n"
+         << "- The public MiniMalloc family remains discriminating: TVM hill climb has a "
+            "geometric-mean peak ratio of "
+         << FormatAggregateRatio(&minimalloc_group.by_method.at(std::string(kTvmHillClimb)))
+         << ", versus "
+         << FormatAggregateRatio(&minimalloc_group.by_method.at(std::string(kLocalSearch)))
+         << " for local search.\n\n";
+
+  output << "## Solution quality\n\n"
+         << "Each solver cell is `geometric-mean peak / reference peak (wins/N)`. The reference "
+            "is the lowest independently validated peak found for that instance; the `Proven` "
+            "column reports how often MiniMalloc certified that reference as optimal. Lower is "
+            "better, `1.000` is ideal, and a win includes ties.\n\n";
+  write_quality_header();
+  write_quality_row(overall);
+  write_quality_row(compiler_overall);
+  for (const auto& [name, group] : groups) {
+    static_cast<void>(name);
+    write_quality_row(group);
   }
 
   output << "\n## Runtime\n\n";
-  write_header();
-  for (const Instance& instance : instances) {
-    const dsa::StructuredProblemDocument& document = instance.document;
-    const std::string profile = dsa::ToString(document.profile);
-    output << "| " << MarkdownEscape(document.instance) << " | "
-           << MarkdownEscape(StandardOrigin(document)) << " | " << document.problem.buffers.size();
+  output << "Each cell is the geometric mean of per-instance runtime. First fit and XLA use the "
+            "median of "
+         << options.deterministic_repetitions
+         << " repetitions per instance; stochastic searches use the median of "
+         << options.seeds.size()
+         << " seeds; MiniMalloc is one bounded run. Runtime is machine-dependent.\n\n";
+  write_runtime_header();
+  auto write_runtime_row = [&](const StandardAggregateGroup& group) {
+    output << "| " << MarkdownEscape(group.name) << " | " << group.instances;
     for (const auto& [label, method] : methods) {
       static_cast<void>(label);
+      const auto cell = group.by_method.find(std::string(method));
       output << " | "
-             << StandardRuntimeCell(FindSummary(summaries, document.instance, profile, method),
-                                    method == kMiniMalloc);
+             << FormatAggregateRuntime(cell == group.by_method.end() ? nullptr : &cell->second);
     }
     output << " |\n";
+  };
+  write_runtime_row(overall);
+  write_runtime_row(compiler_overall);
+  for (const auto& [name, group] : groups) {
+    static_cast<void>(name);
+    write_runtime_row(group);
   }
 }
 
@@ -1724,6 +1929,29 @@ void WriteOutputs(const Options& options, const std::vector<Instance>& instances
   }
 }
 
+void RewriteStandardReport(const Options& options, const std::vector<Instance>& instances) {
+  const fs::path raw_path = options.output_dir / "results.jsonl";
+  const std::vector<RunRecord> records = ReadRawResults(raw_path);
+  std::set<std::pair<std::string, std::string>> expected;
+  for (const Instance& instance : instances) {
+    expected.emplace(instance.document.instance, dsa::ToString(instance.document.profile));
+  }
+  std::set<std::pair<std::string, std::string>> actual;
+  for (const RunRecord& record : records) {
+    if (record.capacity) {
+      throw std::runtime_error("--report-only found a capacity-bearing result for " +
+                               record.instance);
+    }
+    actual.emplace(record.instance, record.profile);
+  }
+  if (actual != expected) {
+    throw std::runtime_error("--report-only inputs do not match the instance set in results.jsonl");
+  }
+  const fs::path report_path = options.output_dir / "report.md";
+  WriteStandardOnlyReport(report_path, instances, Summarize(records), options);
+  std::cout << "dsa-suite: rebuilt " << report_path << " from " << raw_path << '\n';
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1731,6 +1959,10 @@ int main(int argc, char** argv) {
     const Options options = ParseOptions(argc, argv);
     const std::vector<Instance> instances = LoadInstances(options);
     std::cout << "dsa-suite: loaded " << instances.size() << " benchmark documents" << std::endl;
+    if (options.report_only) {
+      RewriteStandardReport(options, instances);
+      return 0;
+    }
     const std::vector<RunRecord> records = ExecuteSuite(instances, options);
     WriteOutputs(options, instances, records);
     return 0;

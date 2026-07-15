@@ -22,7 +22,7 @@ rows after rejecting 474 no-choice pools and 120 duplicates.
 
 The snapshot contains:
 
-- `report.md`: separate peak-memory and runtime tables;
+- `report.md`: compact per-family quality and runtime aggregates;
 - `summary.csv`: long-form best-peak and median-runtime aggregation;
 - `results.jsonl`: authoritative per-run results, status, validation, seed, and
   configuration metadata.
@@ -31,7 +31,15 @@ The PyPTO-derived rows are standard-DSA algorithm benchmarks, not device-valid
 PyPTO placements or claims about `pypto_hard_v1`. Structured PyPTO comparisons
 will be added only after that problem variant is finalized.
 
+The quality presentation reports the geometric mean of each solver's peak
+divided by the best validated peak for each instance, plus its win count. The
+same table exposes how many references MiniMalloc proved optimal. This avoids
+calling an uncertified timeout result an optimum while retaining every detailed
+instance and repetition in the CSV and JSONL backups.
+
 Runtime is machine-dependent. Regenerate the complete snapshot using the exact
 command recorded in `standard-v1/report.md`; review raw and aggregated changes
-together. A timed-out MiniMalloc run may retain a feasible peak, but the report
-marks it as uncertified rather than calling it optimal.
+together. Append `--report-only` to rebuild only the presentation from the
+existing JSONL without executing solvers. A timed-out MiniMalloc run may retain
+a feasible peak, but the report marks it as uncertified rather than calling it
+optimal.

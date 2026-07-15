@@ -36,6 +36,39 @@ if(EXISTS "${OUTPUT_DIR}/features.csv")
   message(FATAL_ERROR "standard-only suite should not duplicate corpus features.csv")
 endif()
 
+file(SHA256 "${OUTPUT_DIR}/results.jsonl" RAW_RESULTS_BEFORE)
+execute_process(
+  COMMAND "${DSA_SUITE}"
+    --standard "${SOURCE_DIR}/tests/data/minimalloc_example.csv"
+    --pypto "${SOURCE_DIR}/benchmarks/pypto-lib/examples/intermediate/layer_norm__pypto_layer_norm_rows.json"
+    --output-dir "${OUTPUT_DIR}"
+    --run-label standard-smoke
+    --seeds 0,1
+    --iterations 20
+    --restarts 2
+    --stagnation 10
+    --deterministic-repetitions 2
+    --minimalloc-timeout-ms 1000
+    --standard-only
+    --report-only
+    --no-minimalloc
+  RESULT_VARIABLE REPORT_RESULT
+  OUTPUT_VARIABLE REPORT_OUTPUT
+  ERROR_VARIABLE REPORT_ERROR
+)
+if(NOT REPORT_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "standard-only report rebuild failed (${REPORT_RESULT})\n${REPORT_OUTPUT}\n${REPORT_ERROR}"
+  )
+endif()
+if(REPORT_OUTPUT MATCHES "\\[suite\\]")
+  message(FATAL_ERROR "report-only mode unexpectedly executed a solver")
+endif()
+file(SHA256 "${OUTPUT_DIR}/results.jsonl" RAW_RESULTS_AFTER)
+if(NOT RAW_RESULTS_BEFORE STREQUAL RAW_RESULTS_AFTER)
+  message(FATAL_ERROR "report-only mode modified raw benchmark results")
+endif()
+
 file(READ "${OUTPUT_DIR}/results.jsonl" RAW_RESULTS)
 if(RAW_RESULTS MATCHES "\"profile\":\"pypto_")
   message(FATAL_ERROR "standard-only suite retained a structured PyPTO profile")
@@ -52,11 +85,14 @@ foreach(METHOD first_fit xla_heap tvm_hill_climb local_search)
 endforeach()
 
 file(READ "${OUTPUT_DIR}/report.md" REPORT)
-foreach(EXPECTED "## Peak memory" "## Runtime" "--standard-only" "PyPTO")
+foreach(EXPECTED "## Solution quality" "## Runtime" "geometric-mean peak" "Overall" "--standard-only" "PyPTO")
   if(NOT REPORT MATCHES "${EXPECTED}")
     message(FATAL_ERROR "standard-only report is missing: ${EXPECTED}")
   endif()
 endforeach()
 if(REPORT MATCHES "PyPTO structured DSA")
   message(FATAL_ERROR "standard-only report contains the deferred PyPTO comparison")
+endif()
+if(REPORT MATCHES "\\| pypto-lib::")
+  message(FATAL_ERROR "standard-only presentation leaked per-instance result rows")
 endif()
