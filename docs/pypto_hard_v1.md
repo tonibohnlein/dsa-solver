@@ -46,8 +46,7 @@ The final condition is PyPTO's current `whole_slot_v1` address-reuse contract.
 Two lifetime-disjoint buffers may share an equal base, with the slot extent
 equal to the larger size, or remain completely disjoint. Partial overlap at
 different bases is forbidden because the current downstream dependency path
-does not safely represent arbitrary sub-slot tenancy. Consequently hard-v1
-does not yet implement the full freed-region subdivision requested by #1908.
+does not safely represent arbitrary sub-slot tenancy.
 
 Mandatory semantic aliases are materialized before export and become one
 buffer identity. Alias-class entries name the collapsed IR values; they are

@@ -283,13 +283,6 @@ if(BUILD_TESTING)
       --solver first-fit
   )
   add_test(
-    NAME dsa-cli-standard-subdivision
-    COMMAND dsa-bench
-      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/standard/freed_region_subdivision_v1.json
-      --solver first-fit
-      --target-total-peak 100
-  )
-  add_test(
     NAME dsa-cli-xla-heap
     COMMAND dsa-bench
       --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example.csv

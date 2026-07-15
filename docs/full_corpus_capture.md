@@ -100,7 +100,6 @@ Run `dsa-suite` with:
 
 ```bash
 --standard third_party/minimalloc/benchmarks/challenging
---standard benchmarks/standard
 --pypto <normalized-pypto>/documents
 --pypto <normalized-pypto-lib>/documents
 --seeds 0,1,2

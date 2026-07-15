@@ -9,7 +9,6 @@ Regenerate from the repository root:
 ```bash
 ./build/dsa-suite \
   --standard 'third_party/minimalloc/benchmarks/challenging' \
-  --standard 'benchmarks/standard' \
   --pypto 'benchmarks/pypto' \
   --output-dir 'benchmarks/results/complete-v1' \
   --run-label 'complete-v1' \
@@ -64,7 +63,6 @@ Rows include public standard instances and compiler-derived per-pool core relaxa
 | I.1048576.csv | public standard | 374 | 1048576 | 1048576 (optimal; 4.70 s) | 1478656 (+41.02%; 2.48 ms) [best_effort_no_fit] | 1478656 (+41.02%; 2.48 ms) [best_effort_no_fit] | 1303552 (+24.32%; 10.92 s) [best_effort_no_fit] | 1292288 (+23.24%; 6.37 s) [best_effort_no_fit] |
 | J.1048576.csv | public standard | 409 | 1048576 | timeout | 1303552 (5.30 ms) [best_effort_no_fit] | 1333248 (5.42 ms) [best_effort_no_fit] | 1157120 (22.05 s) [best_effort_no_fit] | 1230848 (9.94 s) [best_effort_no_fit] |
 | K.1048576.csv | public standard | 454 | 1048576 | 1048576 (optimal; 750.13 ms) | 1352704 (+29.00%; 3.29 ms) [best_effort_no_fit] | 1397760 (+33.30%; 3.38 ms) [best_effort_no_fit] | 1285120 (+22.56%; 8.46 s) [best_effort_no_fit] | 1316864 (+25.59%; 6.42 s) [best_effort_no_fit] |
-| freed_region_subdivision | public standard | 3 | 100 | 100 (optimal; 11 us) | 100 (+0.00%; 20 us) | 100 (+0.00%; 8 us) | 100 (+0.00%; 270 us) | 100 (+0.00%; 3.41 ms) |
 | capacity_gated_pipeline_cost::pool=1 | core relaxation of capacity_gated_pipeline_cost | 3 | 245760 | 245760 (optimal; 22 us) | 245760 (+0.00%; 5 us) | 245760 (+0.00%; 3 us) | 245760 (+0.00%; 217 us) | 245760 (+0.00%; 3.49 ms) |
 | issue_1908_fragmentation::pool=1 | core relaxation of issue_1908_fragmentation | 4 | 245760 | 65536 (optimal; 12 us) | 65536 (+0.00%; 6 us) | 65536 (+0.00%; 3 us) | 65536 (+0.00%; 299 us) | 65536 (+0.00%; 4.55 ms) |
 | pipeline_stage_separation::pool=1 | core relaxation of pipeline_stage_separation | 2 | 245760 | 16384 (optimal; 6 us) | 16384 (+0.00%; 3 us) | 16384 (+0.00%; 2 us) | 16384 (+0.00%; 150 us) | 16384 (+0.00%; 2.52 ms) |

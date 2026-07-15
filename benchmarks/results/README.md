@@ -18,8 +18,8 @@ root with the command recorded at the top of its report. Review changes to raw r
 tables together.
 
 `complete-v1` is the current combined comparison. It covers the MiniMalloc A--K
-challenge corpus, the standard freed-region regression, every checked-in sound
-PyPTO document, and a generated standard core relaxation for each PyPTO pool.
+challenge corpus, every checked-in sound PyPTO document, and a generated
+standard core relaxation for each PyPTO pool.
 The trivial MiniMalloc example remains a parser/CLI fixture and is deliberately
 excluded from the research table.
 
@@ -29,7 +29,7 @@ and a 60-second exact-solver budget per instance. This is the long-form
 quality/runtime table; `baseline` remains the quicker CI-style snapshot.
 
 `host-corpus-v1` is the comprehensive host-compiled comparison at PyPTO
-`8df2ed4` and PyPTO-Lib `6e897cd`. It contains 12 public standard problems, 471
+`8df2ed4` and PyPTO-Lib `6e897cd`. It contains 11 public standard problems, 471
 deduplicated structured compiler problems, and 957 generated per-pool standard
 relaxations. Every returned heuristic placement is independently
 placement-valid; capacity misses remain explicit `best_effort_no_fit` rows.

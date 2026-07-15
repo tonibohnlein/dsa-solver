@@ -10,7 +10,6 @@ H.1048576.csv,standard_dsa,316,1,0,0,0,0,0,0,0,0,0,0,0,0,0,false,0,0,0
 I.1048576.csv,standard_dsa,374,1,0,0,0,0,0,0,0,0,0,0,0,0,0,false,0,0,0
 J.1048576.csv,standard_dsa,409,1,0,0,0,0,0,0,0,0,0,0,0,0,0,false,0,0,0
 K.1048576.csv,standard_dsa,454,1,0,0,0,0,0,0,0,0,0,0,0,0,0,false,0,0,0
-freed_region_subdivision,standard_dsa,3,1,0,0,0,0,0,0,0,0,0,0,0,0,0,false,0,0,0
 issue_1908_fragmentation,pypto_hard_v1,4,1,4,0,0,0,0,0,0,0,0,0,0,0,0,true,0,0,0
 pipeline_stage_separation,pypto_hard_v1,2,1,2,0,0,0,0,0,1,1,0,0,0,0,0,true,0,1,0
 pypto-lib::models::deepseek::v4::prefill_compressor_ratio4::pypto_prefill_c4_softmax_pool,pypto_hard_v1,31,1,31,0,0,0,0,0,0,0,0,0,0,0,0,true,5,0,0

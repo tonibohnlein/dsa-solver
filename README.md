@@ -117,15 +117,13 @@ bound, not a valid PyPTO placement. See [the schema-v1 contract](docs/structured
 
 ## Run reproducible benchmark suites
 
-`dsa-suite` accepts repeatable files or directories. This command runs the complete checked-in
-standard suite (the official MiniMalloc A–K challenge corpus and the freed-region
-subdivision regression), the checked-in PyPTO exporter corpus, three seeds for stochastic methods, and
+`dsa-suite` accepts repeatable files or directories. This command runs the official MiniMalloc A–K
+challenge corpus, the checked-in PyPTO exporter corpus, three seeds for stochastic methods, and
 the exact MiniMalloc solver with a per-instance timeout:
 
 ```bash
 ./build/dsa-suite \
   --standard third_party/minimalloc/benchmarks/challenging \
-  --standard benchmarks/standard \
   --pypto benchmarks/pypto \
   --output-dir benchmark-results \
   --run-label local-a-k \

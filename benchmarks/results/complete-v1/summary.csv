@@ -64,11 +64,6 @@ capacity_gated_pipeline_cost::pool=1,pypto_core_relaxation,benchmarks/pypto/capa
 capacity_gated_pipeline_cost::pool=1,pypto_core_relaxation,benchmarks/pypto/capacity_gated_pipeline_cost_v1.json,,,minimalloc_exact,core_lower_bound,optimal,1,1,1,1,,245760,245760,0,0,22,true,245760,Ascend950,,capacity_gated_pipeline_cost
 capacity_gated_pipeline_cost::pool=1,pypto_core_relaxation,benchmarks/pypto/capacity_gated_pipeline_cost_v1.json,,,tvm_hill_climb,core_lower_bound,feasible,3,3,3,3,1,245760,245760,0,0,217,false,245760,Ascend950,,capacity_gated_pipeline_cost
 capacity_gated_pipeline_cost::pool=1,pypto_core_relaxation,benchmarks/pypto/capacity_gated_pipeline_cost_v1.json,,,xla_heap,core_lower_bound,feasible,1,1,1,1,,245760,245760,0,0,3,false,245760,Ascend950,,capacity_gated_pipeline_cost
-freed_region_subdivision,standard_dsa,benchmarks/standard/freed_region_subdivision_v1.json,,,first_fit,direct_standard,feasible,1,1,1,1,,100,100,0,0,20,false,100,,,
-freed_region_subdivision,standard_dsa,benchmarks/standard/freed_region_subdivision_v1.json,,,local_search,direct_standard,feasible,3,3,3,3,2,100,100,0,0,3412,false,100,,,
-freed_region_subdivision,standard_dsa,benchmarks/standard/freed_region_subdivision_v1.json,,,minimalloc_exact,direct_standard,optimal,1,1,1,1,,100,100,0,0,11,true,100,,,
-freed_region_subdivision,standard_dsa,benchmarks/standard/freed_region_subdivision_v1.json,,,tvm_hill_climb,direct_standard,feasible,3,3,3,3,1,100,100,0,0,270,false,100,,,
-freed_region_subdivision,standard_dsa,benchmarks/standard/freed_region_subdivision_v1.json,,,xla_heap,direct_standard,feasible,1,1,1,1,,100,100,0,0,8,false,100,,,
 issue_1908_fragmentation,pypto_hard_v1,benchmarks/pypto/issue_1908_fragmentation_v1.json,,,first_fit,pypto_hard,feasible,1,1,1,1,,98304,98304,0,0,9,false,245760,Ascend950,whole_slot_reuse;alias_classes=4,
 issue_1908_fragmentation,pypto_hard_v1,benchmarks/pypto/issue_1908_fragmentation_v1.json,,,local_search,pypto_hard,feasible,3,3,3,3,2,98304,98304,0,0,5265,false,245760,Ascend950,whole_slot_reuse;alias_classes=4,
 issue_1908_fragmentation,pypto_hard_v1,benchmarks/pypto/issue_1908_fragmentation_v1.json,,,pypto_structured_search,pypto_hard,feasible,3,3,3,3,2,98304,98304,0,0,5230,false,245760,Ascend950,whole_slot_reuse;alias_classes=4,

@@ -9,7 +9,6 @@ Regenerate from the repository root:
 ```bash
 ./build/dsa-suite \
   --standard 'third_party/minimalloc/benchmarks/challenging' \
-  --standard 'benchmarks/standard' \
   --pypto 'benchmarks/pypto/host-captured/pypto-lib-6e897cd/documents' \
   --pypto 'benchmarks/pypto/host-captured/pypto-st-8df2ed4/documents' \
   --output-dir 'benchmarks/results/host-corpus-v1' \
@@ -65,7 +64,6 @@ Rows include public standard instances and compiler-derived per-pool core relaxa
 | I.1048576.csv | public standard | 374 | 1048576 | timeout | 1478656 (1.96 ms) [best_effort_no_fit] | 1478656 (1.92 ms) [best_effort_no_fit] | 1303552 (7.10 s) [best_effort_no_fit] | 1292288 (3.93 s) [best_effort_no_fit] |
 | J.1048576.csv | public standard | 409 | 1048576 | timeout | 1303552 (3.26 ms) [best_effort_no_fit] | 1333248 (3.21 ms) [best_effort_no_fit] | 1157120 (13.61 s) [best_effort_no_fit] | 1230848 (6.37 s) [best_effort_no_fit] |
 | K.1048576.csv | public standard | 454 | 1048576 | 1048576 (optimal; 447.97 ms) | 1352704 (+29.00%; 2.29 ms) [best_effort_no_fit] | 1397760 (+33.30%; 2.14 ms) [best_effort_no_fit] | 1285120 (+22.56%; 5.32 s) [best_effort_no_fit] | 1316864 (+25.59%; 4.35 s) [best_effort_no_fit] |
-| freed_region_subdivision | public standard | 3 | 100 | 100 (optimal; 12 us) | 100 (+0.00%; 16 us) | 100 (+0.00%; 3 us) | 100 (+0.00%; 171 us) | 100 (+0.00%; 2.19 ms) |
 | pypto-lib::examples::advanced::allreduce::pypto_reduce_step::pool=1 | core relaxation of pypto-lib::examples::advanced::allreduce::pypto_reduce_step | 3 | 188416 | 2048 (optimal; 27 us) | 2048 (+0.00%; 4 us) | 2048 (+0.00%; 2 us) | 2048 (+0.00%; 174 us) | 2048 (+0.00%; 2.32 ms) |
 | pypto-lib::examples::advanced::gemm_eltwise::pypto_gemm_eltwise_tile_aic::pool=2 | core relaxation of pypto-lib::examples::advanced::gemm_eltwise::pypto_gemm_eltwise_tile_aic | 2 | 524288 | 20480 (optimal; 9 us) | 20480 (+0.00%; 2 us) | 20480 (+0.00%; 1 us) | 20480 (+0.00%; 160 us) | 20480 (+0.00%; 1.59 ms) |
 | pypto-lib::examples::advanced::gemm_eltwise::pypto_gemm_eltwise_tile_aic::pool=3 | core relaxation of pypto-lib::examples::advanced::gemm_eltwise::pypto_gemm_eltwise_tile_aic | 2 | 65536 | 4096 (optimal; 5 us) | 4096 (+0.00%; 1 us) | 4096 (+0.00%; 1 us) | 4096 (+0.00%; 101 us) | 4096 (+0.00%; 1.60 ms) |

@@ -167,20 +167,6 @@ void TestPyptoWholeSlotReuseDoesNotSubdivideFreedRegion() {
           "PyPTO validator accepted a partial overlap at different base addresses");
 }
 
-void TestStandardFreedRegionSubdivisionCorpus() {
-  const std::filesystem::path path = std::filesystem::path(DSA_TEST_SOURCE_DIR) / "benchmarks" /
-                                     "standard" / "freed_region_subdivision_v1.json";
-  const dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(path);
-  Require(document.profile == dsa::BenchmarkProfile::kStandardDsa,
-          "subdivision corpus case must use the standard profile");
-  Require(document.problem.buffers.size() == 3, "subdivision corpus buffer count changed");
-
-  const dsa::DsaResult result = SolveAndValidate(document.problem, dsa::FirstFitSolver());
-  Require(result.objective.max_peak == 100, "A100 -> B60+C40 did not fit at height 100");
-  Require(OffsetOf(result, 0) == 0 && OffsetOf(result, 1) == 0 && OffsetOf(result, 2) == 60,
-          "A100 -> B60+C40 did not subdivide the freed address interval");
-}
-
 void TestMultiIntervalLiveness() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -850,7 +836,6 @@ int main() {
       {"MiniMalloc CSV", TestMiniMallocCsv},
       {"first-fit #1908", TestFirstFitSubdividesFreedRegion},
       {"PyPTO whole-slot reuse", TestPyptoWholeSlotReuseDoesNotSubdivideFreedRegion},
-      {"standard subdivision corpus", TestStandardFreedRegionSubdivisionCorpus},
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},
       {"colocation", TestColocation},

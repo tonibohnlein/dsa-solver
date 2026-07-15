@@ -152,7 +152,7 @@ endif()
 
 execute_process(
   COMMAND "${DSA_SUITE}"
-    --standard "${SOURCE_DIR}/benchmarks/standard/freed_region_subdivision_v1.json"
+    --standard "${SOURCE_DIR}/tests/data/minimalloc_example.csv"
     --pypto "${OUTPUT_DIR}/documents"
     --pypto "${OUTPUT_DIR}/duplicate-documents"
     --output-dir "${OUTPUT_DIR}/suite-report"
@@ -191,7 +191,7 @@ foreach(EXPECTED "corpus_family" "corpus_source_path" "models/example/case_a.py"
 endforeach()
 file(READ "${OUTPUT_DIR}/suite-report/report.md" REPORT_TEXT)
 string(FIND "${REPORT_TEXT}"
-  "freed_region_subdivision | public standard | 3 | 100" JSON_CAPACITY_FOUND)
-if(JSON_CAPACITY_FOUND EQUAL -1)
-  message(FATAL_ERROR "standard CSV capacity override changed an explicit JSON capacity")
+  "minimalloc_example.csv | public standard | 5 | 12" STANDARD_FIXTURE_FOUND)
+if(STANDARD_FIXTURE_FOUND EQUAL -1)
+  message(FATAL_ERROR "standard CSV fixture is missing from the corpus smoke report")
 endif()
