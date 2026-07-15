@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "architecture_id": "Ascend910B",
+  "supported_lowering_abis": [
+    "pypto-a2a3-v1",
+    "pypto-capacity-portable-v1"
+  ],
+  "metadata": {
+    "alignment_source": "include/pypto/ir/memory_allocator_policy.h",
+    "backend_source": "src/backend/common/soc.cpp",
+    "producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
+    "producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "pto_target_arch": "a2a3"
+  },
+  "memory_spaces": [
+    {
+      "logical_space": "Vec",
+      "usable_capacity": 188416,
+      "physical_capacity": 196608,
+      "minimum_alignment": 32,
+      "reserved_ranges": []
+    },
+    {
+      "logical_space": "Mat",
+      "usable_capacity": 524288,
+      "physical_capacity": 524288,
+      "minimum_alignment": 32,
+      "reserved_ranges": []
+    },
+    {
+      "logical_space": "Left",
+      "usable_capacity": 65536,
+      "physical_capacity": 65536,
+      "minimum_alignment": 32,
+      "reserved_ranges": []
+    },
+    {
+      "logical_space": "Right",
+      "usable_capacity": 65536,
+      "physical_capacity": 65536,
+      "minimum_alignment": 32,
+      "reserved_ranges": []
+    },
+    {
+      "logical_space": "Acc",
+      "usable_capacity": 131072,
+      "physical_capacity": 131072,
+      "minimum_alignment": 32,
+      "reserved_ranges": []
+    }
+  ]
+}

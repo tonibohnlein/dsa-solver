@@ -2,10 +2,12 @@
 
 ## Status
 
-This document proposes the next benchmark representation. Schema v1 remains a
-fully bound solver input: its pool capacities and target metadata are embedded
-in each JSON document. The proposal separates reusable program structure from
-architecture resources without changing what solvers ultimately consume.
+The architecture binder is implemented by `dsa-bind` and the C++
+`BindArchitecture` API. Schema v1 remains the final, fully bound solver input;
+the binder also uses that envelope for an unbound program, with capacities set
+to `null` and target metadata omitted. Versioned architecture resources live in
+`architectures/` and are validated against
+`schemas/dsa-architecture-v1.schema.json`.
 
 ## Three identities, not one filename
 
@@ -33,8 +35,8 @@ different target-dependent lowerings of the same source program.
 
 An architecture-unbound program variant contains:
 
-- buffers, sizes, and stable logical memory spaces (`UB`, `L1`, `L0A`, `L0B`,
-  `L0C`);
+- buffers, sizes, and stable PyPTO logical memory spaces (`Vec`, `Mat`, `Left`,
+  `Right`, `Acc`), corresponding to UB, L1, L0A, L0B, and L0C;
 - half-open live intervals in the fixed compiler schedule;
 - semantic alignment requirements that do not come from the target;
 - separations, alias identities, and pipeline structure;
@@ -44,6 +46,14 @@ An architecture-unbound program variant contains:
 
 Numeric pool IDs are serialization-local. Fingerprints use logical space names
 so harmless ID renumbering does not create a new program.
+
+Concretely, an unbound program must:
+
+- use a PyPTO profile and pass the normal structured-problem validation;
+- have `capacity: null` for every pool and no architecture bank geometry;
+- contain a non-empty `metadata.lowering_abi`;
+- omit `target`, architecture identity, and binding fingerprints;
+- use a unique, non-empty logical name for each pool.
 
 ## Architecture specification
 
@@ -71,7 +81,10 @@ PyPTO commit `8df2ed4b`, the backend contract is:
 
 The UB limits are deliberately below physical capacity because the backend
 reserves the top region. Architecture specifications must pin this provenance
-instead of copying unversioned constants from product literature.
+instead of copying unversioned constants from product literature. Both current
+specifications use the compiler's 32-byte default allocation policy from
+`include/pypto/ir/memory_allocator_policy.h`; this is distinct from descriptive
+SoC memory alignment fields that the planner does not currently apply.
 
 ## Binding
 
@@ -86,8 +99,31 @@ instead of copying unversioned constants from product literature.
 6. attach both fingerprints and architecture provenance;
 7. validate the resulting bound `StructuredProblemDocument`.
 
-The output is the existing solver-facing shape. Solvers do not need awareness
-of source programs or architecture catalogs.
+The output is the existing solver-facing shape. The binder appends
+`@<architecture_id>` to the instance name and records
+`program_fingerprint_fnv1a64`, `architecture_fingerprint_fnv1a64`,
+`architecture_id`, and `target`. Solvers do not need awareness of source
+programs or architecture catalogs.
+
+The program fingerprint excludes source-only metadata, target resources, and
+serialization-local pool IDs. The architecture fingerprint canonicalizes ABI
+and memory-space ordering. Both are deterministic 64-bit FNV-1a hexadecimal
+identifiers for benchmark identity and deduplication, not cryptographic content
+authentication.
+
+## Command-line use
+
+```bash
+./build/dsa-bind \
+  --program tests/data/pypto_unbound_program_v1.json \
+  --architecture architectures/ascend950-v1.json \
+  --output /tmp/program-ascend950.json
+```
+
+The checked-in portable test graph declares
+`pypto-capacity-portable-v1`, which both specifications support. A real a2a3
+capture should declare `pypto-a2a3-v1`; binding that graph to Ascend 950 is
+rejected unless independent compiler evidence justifies a compatible ABI.
 
 ## When capacity-only rebinding is valid
 
@@ -124,20 +160,18 @@ Separability ends when the model permits flexible pool assignment, shared
 capacity, a global event budget, or a decision such as pipeline depth that
 simultaneously changes requirements in several pools.
 
-## Corpus and reporting changes
+## Remaining corpus and reporting work
 
-A staged implementation should:
+A staged integration should:
 
-1. add versioned 910B and 950 architecture specifications with pinned PyPTO
-   provenance;
-2. generate an architecture-free fingerprint alongside the existing bound
-   problem fingerprint;
-3. represent suite inputs as `(program, architecture)` bindings;
-4. report `workload_id`, `program_fingerprint`, and `architecture_id` as
+1. make the PyPTO exporter emit architecture-free program variants alongside
+   its existing bound captures;
+2. represent suite inputs as `(program, architecture)` bindings;
+3. report `workload_id`, `program_fingerprint`, and `architecture_id` as
    separate columns;
-5. compile each workload for both targets and compare architecture-free
+4. compile each workload for both targets and compare architecture-free
    fingerprints before deciding whether one program variant can be shared;
-6. keep counterfactual capacity sweeps in a separate benchmark profile.
+5. keep counterfactual capacity sweeps in a separate benchmark profile.
 
 This avoids duplicating identical allocation graphs while preventing a
 capacity edit from being mistaken for a target-correct compiler capture.

@@ -20,6 +20,7 @@
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/io/minimalloc_csv.h"
+#include "dsa/model/architecture.h"
 #include "dsa/model/structured_problem.h"
 #include "dsa/model/validator.h"
 
@@ -821,6 +822,135 @@ void TestPyptoStructuredSearchUsesStructureAndObjective() {
           "PyPTO structured search silently accepted an unstructured problem");
 }
 
+void TestArchitectureBinding() {
+  const std::filesystem::path source_dir = DSA_TEST_SOURCE_DIR;
+  const dsa::StructuredProblemDocument program =
+      dsa::ReadStructuredProblemJsonFile(source_dir / "tests/data/pypto_unbound_program_v1.json");
+  const dsa::ArchitectureSpec ascend_910b =
+      dsa::ReadArchitectureSpecJsonFile(source_dir / "architectures/ascend910b-v1.json");
+  const dsa::ArchitectureSpec ascend_950 =
+      dsa::ReadArchitectureSpecJsonFile(source_dir / "architectures/ascend950-v1.json");
+
+  Require(dsa::ValidateUnboundProgram(program).empty(),
+          "portable test program does not satisfy the unbound contract");
+  Require(dsa::ValidateArchitectureSpec(ascend_910b).empty(),
+          "Ascend 910B architecture specification is invalid");
+  Require(dsa::ValidateArchitectureSpec(ascend_950).empty(),
+          "Ascend 950 architecture specification is invalid");
+
+  const std::string program_fingerprint = dsa::FingerprintUnboundProgram(program);
+  const std::string ascend_910b_fingerprint = dsa::FingerprintArchitectureSpec(ascend_910b);
+  const std::string ascend_950_fingerprint = dsa::FingerprintArchitectureSpec(ascend_950);
+  Require(program_fingerprint.size() == 16, "program fingerprint is not FNV-1a-64 hex");
+  Require(ascend_910b_fingerprint.size() == 16, "architecture fingerprint is not FNV-1a-64 hex");
+  Require(ascend_910b_fingerprint != ascend_950_fingerprint,
+          "different architecture specifications have the same fingerprint");
+
+  dsa::StructuredProblemDocument renumbered = program;
+  renumbered.problem.pools[0].id = 42;
+  renumbered.problem.pools[1].id = 7;
+  renumbered.problem.buffers[0].allowed_pools = {42};
+  renumbered.problem.buffers[1].allowed_pools = {42};
+  renumbered.problem.buffers[2].allowed_pools = {7};
+  std::reverse(renumbered.problem.pools.begin(), renumbered.problem.pools.end());
+  Require(dsa::FingerprintUnboundProgram(renumbered) == program_fingerprint,
+          "serialization-local pool IDs changed the program fingerprint");
+
+  dsa::StructuredProblemDocument pipeline_program = program;
+  pipeline_program.problem.pypto_structure->pipeline_groups.push_back(
+      {3, 1, 32768, 2, 2, {{0, 0, 0}, {1, 1, 1}}});
+  dsa::StructuredProblemDocument renumbered_pipeline_program = renumbered;
+  renumbered_pipeline_program.problem.pypto_structure->pipeline_groups.push_back(
+      {3, 42, 32768, 2, 2, {{0, 0, 0}, {1, 1, 1}}});
+  Require(dsa::FingerprintUnboundProgram(pipeline_program) ==
+              dsa::FingerprintUnboundProgram(renumbered_pipeline_program),
+          "pipeline-group pool IDs changed the program fingerprint");
+
+  dsa::ArchitectureSpec reordered_architecture = ascend_910b;
+  std::reverse(reordered_architecture.supported_lowering_abis.begin(),
+               reordered_architecture.supported_lowering_abis.end());
+  std::reverse(reordered_architecture.memory_spaces.begin(),
+               reordered_architecture.memory_spaces.end());
+  Require(dsa::FingerprintArchitectureSpec(reordered_architecture) == ascend_910b_fingerprint,
+          "architecture array ordering changed its fingerprint");
+
+  const dsa::StructuredProblemDocument bound_910b = dsa::BindArchitecture(program, ascend_910b);
+  const dsa::StructuredProblemDocument bound_950 = dsa::BindArchitecture(program, ascend_950);
+  const dsa::Pool* vector_910b = bound_910b.problem.FindPool(1);
+  const dsa::Pool* accumulator_910b = bound_910b.problem.FindPool(5);
+  const dsa::Pool* vector_950 = bound_950.problem.FindPool(1);
+  const dsa::Pool* accumulator_950 = bound_950.problem.FindPool(5);
+  Require(vector_910b != nullptr && vector_910b->capacity == 188416,
+          "Ascend 910B UB capacity was not bound");
+  Require(accumulator_910b != nullptr && accumulator_910b->capacity == 131072,
+          "Ascend 910B L0C capacity was not bound");
+  Require(vector_950 != nullptr && vector_950->capacity == 245760,
+          "Ascend 950 UB capacity was not bound");
+  Require(accumulator_950 != nullptr && accumulator_950->capacity == 262144,
+          "Ascend 950 L0C capacity was not bound");
+  Require(bound_910b.problem.buffers[0].alignment == 32 &&
+              bound_910b.problem.buffers[1].alignment == 64 &&
+              bound_910b.problem.buffers[2].alignment == 32,
+          "architecture alignment was not combined with program alignment");
+  Require(bound_910b.metadata.at("program_fingerprint_fnv1a64") == program_fingerprint &&
+              bound_950.metadata.at("program_fingerprint_fnv1a64") == program_fingerprint,
+          "paired bindings did not retain one program identity");
+  Require(bound_910b.metadata.at("architecture_id") == "Ascend910B" &&
+              bound_950.metadata.at("architecture_id") == "Ascend950",
+          "bound documents lost their architecture identity");
+  Require(bound_910b.instance == program.instance + "@Ascend910B",
+          "bound instance name does not identify the architecture");
+  Require(dsa::ValidateStructuredProblemDocument(bound_910b).empty(),
+          "Ascend 910B binding is not a valid structured problem");
+  Require(dsa::ValidateStructuredProblemDocument(bound_950).empty(),
+          "Ascend 950 binding is not a valid structured problem");
+  SolveAndValidate(bound_910b.problem, dsa::FirstFitSolver());
+  SolveAndValidate(bound_950.problem, dsa::FirstFitSolver());
+
+  Require(!dsa::ValidateUnboundProgram(bound_910b).empty(),
+          "bound document was accepted as an unbound program");
+  bool rejected_bound_input = false;
+  try {
+    static_cast<void>(dsa::BindArchitecture(bound_910b, ascend_910b));
+  } catch (const std::invalid_argument&) {
+    rejected_bound_input = true;
+  }
+  Require(rejected_bound_input, "binder silently rebound an already-bound document");
+
+  dsa::StructuredProblemDocument a2a3_program = program;
+  a2a3_program.metadata["lowering_abi"] = "pypto-a2a3-v1";
+  static_cast<void>(dsa::BindArchitecture(a2a3_program, ascend_910b));
+  bool rejected_incompatible_abi = false;
+  try {
+    static_cast<void>(dsa::BindArchitecture(a2a3_program, ascend_950));
+  } catch (const std::invalid_argument&) {
+    rejected_incompatible_abi = true;
+  }
+  Require(rejected_incompatible_abi,
+          "binder silently accepted an architecture-incompatible lowering ABI");
+
+  dsa::ArchitectureSpec incomplete_architecture = ascend_910b;
+  incomplete_architecture.memory_spaces.erase(
+      std::remove_if(
+          incomplete_architecture.memory_spaces.begin(),
+          incomplete_architecture.memory_spaces.end(),
+          [](const dsa::ArchitectureMemorySpace& space) { return space.logical_space == "Acc"; }),
+      incomplete_architecture.memory_spaces.end());
+  bool rejected_missing_space = false;
+  try {
+    static_cast<void>(dsa::BindArchitecture(program, incomplete_architecture));
+  } catch (const std::invalid_argument&) {
+    rejected_missing_space = true;
+  }
+  Require(rejected_missing_space,
+          "binder silently accepted an architecture without a required logical space");
+
+  dsa::ArchitectureSpec invalid_architecture = ascend_910b;
+  invalid_architecture.memory_spaces.front().usable_capacity = 0;
+  Require(!dsa::ValidateArchitectureSpec(invalid_architecture).empty(),
+          "architecture validator accepted a zero usable capacity");
+}
+
 void TestFlexiblePoolAssignmentIsExplicitlyUnsupported() {
   dsa::DsaProblem problem;
   problem.pools = {{0, "left", 64, {}, std::nullopt}, {1, "right", 64, {}, std::nullopt}};
@@ -858,6 +988,7 @@ int main() {
       {"solver capabilities", TestSolverCapabilityMatching},
       {"XLA spatial best fit", TestXlaSpatialBestFitConformance},
       {"PyPTO structured search", TestPyptoStructuredSearchUsesStructureAndObjective},
+      {"architecture binding", TestArchitectureBinding},
       {"invalid problem", TestInvalidProblemIsReported},
       {"flexible pools", TestFlexiblePoolAssignmentIsExplicitlyUnsupported},
   };

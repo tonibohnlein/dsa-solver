@@ -11,6 +11,14 @@ The C++ envelope is `dsa::StructuredProblemDocument`; the machine-readable contr
 [`schemas/dsa-problem-v1.schema.json`](../schemas/dsa-problem-v1.schema.json). JSON readers reject unknown
 schema versions so a document's semantics cannot change silently.
 
+The same envelope can represent an architecture-free PyPTO program before it
+becomes a solver input: every pool capacity is `null`, architecture-derived
+bank geometry and target metadata are absent, and `metadata.lowering_abi` is
+present. `dsa-bind` validates that restricted form and materializes a normal
+bound document using a versioned
+[`dsa-architecture-v1`](../schemas/dsa-architecture-v1.schema.json)
+specification. See [program and architecture binding](architecture_binding.md).
+
 ## Top-level envelope
 
 ```json

@@ -17,9 +17,9 @@ The portable core is:
 - address non-overlap for buffers whose live sets intersect;
 - peak minimization or fit-under-capacity.
 
-Schema v1 stores a bound program/architecture pair. The proposed corpus layer
+Schema v1 stores a bound program/architecture pair. The architecture binder
 separates lowered program structure from versioned architecture resources and
-binds them before invoking a solver; see
+materializes an ordinary solver input; see
 [`architecture_binding.md`](architecture_binding.md). This distinction is
 necessary because target-dependent lowering can change the DSA graph itself,
 not just its capacities.

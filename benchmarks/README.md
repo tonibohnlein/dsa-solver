@@ -42,14 +42,21 @@ the document's pools; it is a pressure indicator, not a solved placement peak.
 The full per-instance table remains [`corpus.csv`](corpus.csv). This compact
 summary is intentionally small enough to review in the repository:
 
-| Origin | Instances | Buffers (min-max) | Pools (min-max) | With pipeline groups | Research profile |
+| Origin | Instances | Buffers (min-max) | With reuse candidates | With pipeline groups | Experimental reuse cost |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| PyPTO-Lib examples | 11 | 3-19 | 1-4 | 2 | 0 |
-| PyPTO-Lib DeepSeek | 165 | 2-123 | 1-4 | 61 | 51 |
-| PyPTO-Lib Qwen3 | 113 | 2-250 | 1-4 | 47 | 35 |
-| PyPTO system tests | 161 | 2-66 | 1-4 | 3 | 0 |
-| PyPTO unit fixtures | 4 | 2-4 | 1 | 2 | 1 |
-| **Total** | **454** | **2-250** | **1-4** | **115** | **87** |
+| PyPTO-Lib examples | 11 | 3-19 | 10 | 2 | 0 |
+| PyPTO-Lib DeepSeek | 165 | 2-123 | 156 | 61 | 51 |
+| PyPTO-Lib Qwen3 | 113 | 2-250 | 110 | 47 | 35 |
+| PyPTO system tests | 161 | 2-66 | 124 | 3 | 0 |
+| PyPTO unit fixtures | 4 | 2-4 | 4 | 2 | 1 |
+| **Total** | **454** | **2-250** | **404** | **115** | **87** |
+
+“Experimental reuse cost” counts `pypto_research_v1` documents. They retain
+the production hard constraints but add an uncalibrated pairwise cost for
+sharing an address across selected buffers. The separate profile prevents that
+cost from being mistaken for a device-correctness requirement. In the current
+corpus every research-profile document has such a cost overlay, so the two
+counts coincide.
 
 The checked-in target mix is currently 451 Ascend 910B captures and three
 Ascend 950 unit fixtures. It is not yet a paired cross-architecture corpus.
@@ -108,5 +115,5 @@ example, 950 has a larger L0C and can choose a different matmul tiling, while
 cross-core and write-back lowering also differ. Capacity-only rebinding is an
 actual target case only when the lowered program fingerprint is unchanged.
 Otherwise each target needs its own lowered program variant. See
-[`architecture_binding.md`](../docs/architecture_binding.md) for the proposed
+[`architecture_binding.md`](../docs/architecture_binding.md) for the implemented
 separation and binding contract.

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.6.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.7.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -16,6 +16,8 @@ if(NOT EXISTS "${DSA_NLOHMANN_JSON_INCLUDE_DIR}/nlohmann/json.hpp")
 endif()
 
 add_library(dsa_solver
+  src/dsa/model/architecture.cpp
+  src/dsa/model/architecture.h
   src/dsa/model/model.cpp
   src/dsa/model/model.h
   src/dsa/model/structured_json.cpp
@@ -60,6 +62,7 @@ target_include_directories(dsa_solver
 # Keep the original flat dsa/*.h include paths available to existing consumers
 # while the source tree and preferred API use dsa/{model,algorithms,io}/*.h.
 set(DSA_COMPATIBILITY_HEADERS
+  src/dsa/model/architecture.h
   src/dsa/model/model.h
   src/dsa/model/structured_problem.h
   src/dsa/model/validator.h
@@ -96,6 +99,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa-bench PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 elseif(MSVC)
   target_compile_options(dsa-bench PRIVATE /W4 /permissive-)
+endif()
+
+add_executable(dsa-bind tools/dsa_bind.cpp)
+target_link_libraries(dsa-bind PRIVATE dsa::solver)
+set_target_properties(dsa-bind PROPERTIES
+  CXX_EXTENSIONS OFF
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED YES
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(dsa-bind PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+elseif(MSVC)
+  target_compile_options(dsa-bind PRIVATE /W4 /permissive-)
 endif()
 
 add_executable(dsa-corpus tools/dsa_corpus.cpp)
@@ -329,9 +345,18 @@ if(BUILD_TESTING)
       -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/pypto_corpus_layout.cmake
   )
+  add_test(
+    NAME dsa-architecture-binding-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_BIND=$<TARGET_FILE:dsa-bind>
+      -DDSA_BENCH=$<TARGET_FILE:dsa-bench>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_bind_smoke.cmake
+  )
 endif()
 
-install(TARGETS dsa_solver dsa-bench dsa-corpus dsa-suite
+install(TARGETS dsa_solver dsa-bench dsa-bind dsa-corpus dsa-suite
   EXPORT dsa-solver-targets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -349,8 +374,12 @@ install(
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dsa
 )
 install(
-  FILES schemas/dsa-problem-v1.schema.json
+  FILES schemas/dsa-problem-v1.schema.json schemas/dsa-architecture-v1.schema.json
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/schemas
+)
+install(
+  DIRECTORY architectures/
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/architectures
 )
 install(
   FILES LICENSE NOTICE THIRD_PARTY_NOTICES.md

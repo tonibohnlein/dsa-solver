@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "profile": "pypto_hard_v1",
+  "instance": "portable_two_space_program",
+  "metadata": {
+    "address_reuse_contract": "whole_slot_v1",
+    "lifetime_ordering": "pypto_read_before_write",
+    "lowering_abi": "pypto-capacity-portable-v1",
+    "producer": "dsa-solver-test",
+    "solver_input": "pre_memory_reuse"
+  },
+  "problem": {
+    "pools": [
+      {
+        "id": 1,
+        "name": "Vec",
+        "capacity": null,
+        "reserved_ranges": []
+      },
+      {
+        "id": 5,
+        "name": "Acc",
+        "capacity": null,
+        "reserved_ranges": []
+      }
+    ],
+    "buffers": [
+      {
+        "id": 0,
+        "name": "vector_input",
+        "size": 16384,
+        "alignment": 1,
+        "live_intervals": [{"lower": 0, "upper": 4}],
+        "allowed_pools": [1]
+      },
+      {
+        "id": 1,
+        "name": "vector_output",
+        "size": 32768,
+        "alignment": 64,
+        "live_intervals": [{"lower": 2, "upper": 6}],
+        "allowed_pools": [1]
+      },
+      {
+        "id": 2,
+        "name": "accumulator",
+        "size": 65536,
+        "alignment": 1,
+        "live_intervals": [{"lower": 4, "upper": 8}],
+        "allowed_pools": [5]
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "separations": [],
+      "temporal_exclusions": [],
+      "pinned_allocations": []
+    },
+    "pypto_structure": {
+      "whole_slot_reuse": true,
+      "alias_classes": [
+        {"buffer": 0, "members": ["vector_input"]},
+        {"buffer": 1, "members": ["vector_output"]},
+        {"buffer": 2, "members": ["accumulator"]}
+      ],
+      "pipeline_groups": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": ["total_peak", "max_peak"]
+    }
+  }
+}

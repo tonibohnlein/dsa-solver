@@ -30,6 +30,8 @@ The project is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE
   validates solutions, and writes raw JSONL, aggregated CSV, and Markdown tables.
 - A native `dsa-corpus` importer that turns raw compiler export trees into uniquely identified,
   provenance-rich benchmark corpora and fails closed on missing coverage targets.
+- A native `dsa-bind` architecture binder with versioned Ascend 910B/950 resource specifications,
+  lowering-ABI checks, and stable program/architecture fingerprints.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
 - A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by all built-in solvers in CTest.
 - Explicit standard, PyPTO hard-v1, PyPTO research-v1, legacy structured, and sound core-relaxation profiles.
@@ -115,6 +117,31 @@ Run the explicitly relaxed standard-DSA lower bound for one source pool:
 The relaxation strips compiler constraints and records each removed feature in the result. It is a lower
 bound, not a valid PyPTO placement. See [the schema-v1 contract](docs/structured_problem_schema_v1.md).
 
+## Bind a program to an architecture
+
+An architecture-free PyPTO program uses the regular structured-problem JSON,
+but leaves every pool capacity `null`, omits target metadata, and declares a
+`metadata.lowering_abi`. `dsa-bind` combines it with a versioned architecture
+specification and writes an ordinary solver input:
+
+```bash
+./build/dsa-bind \
+  --program tests/data/pypto_unbound_program_v1.json \
+  --architecture architectures/ascend910b-v1.json \
+  --output /tmp/program-ascend910b.json
+
+./build/dsa-bench \
+  --input /tmp/program-ascend910b.json \
+  --solver first-fit
+```
+
+Binding supplies usable capacity, minimum alignment, reserved ranges, and
+optional bank geometry. It fails if the architecture lacks a required logical
+space or does not support the program's lowering ABI. The output records stable
+program and architecture fingerprints, allowing reports to compare a genuine
+`(lowered program, architecture)` pair without treating a capacity edit as a
+new compiler capture. See [the binding contract](docs/architecture_binding.md).
+
 ## Run reproducible benchmark suites
 
 `dsa-suite` accepts repeatable files or directories. This command runs the official MiniMalloc A–K
@@ -176,9 +203,8 @@ target is missing, an excluded target produces a document, or an unlisted case a
 
 The checked-in corpus stores normalized JSON directly under
 `benchmarks/pypto` and `benchmarks/pypto-lib`, organized by source program. The
-host captures contain 471 unique meaningful problems after cross-source
-deduplication. Two additional corrected DeepSeek-v4 device captures and five
-PyPTO unit-export fixtures bring the two directories to 478 unique inputs. The
+two directories contain 454 unique meaningful problems after structural
+deduplication and removal of no-choice instances. The
 host-only solver comparison remains recorded in
 [host-corpus-v1](benchmarks/results/host-corpus-v1/report.md); it is not a device
 performance or numerical-correctness claim.
