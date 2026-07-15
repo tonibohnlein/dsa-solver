@@ -827,9 +827,9 @@ void TestArchitectureBinding() {
   const dsa::StructuredProblemDocument program =
       dsa::ReadStructuredProblemJsonFile(source_dir / "tests/data/pypto_unbound_program_v1.json");
   const dsa::ArchitectureSpec ascend_910b =
-      dsa::ReadArchitectureSpecJsonFile(source_dir / "architectures/ascend910b-v1.json");
+      dsa::ReadArchitectureSpecJsonFile(source_dir / "benchmarks/architectures/ascend910b-v1.json");
   const dsa::ArchitectureSpec ascend_950 =
-      dsa::ReadArchitectureSpecJsonFile(source_dir / "architectures/ascend950-v1.json");
+      dsa::ReadArchitectureSpecJsonFile(source_dir / "benchmarks/architectures/ascend950-v1.json");
 
   Require(dsa::ValidateUnboundProgram(program).empty(),
           "portable test program does not satisfy the unbound contract");

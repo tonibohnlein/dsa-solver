@@ -6,7 +6,7 @@ The architecture binder is implemented by `dsa-bind` and the C++
 `BindArchitecture` API. Schema v1 remains the final, fully bound solver input;
 the binder also uses that envelope for an unbound program, with capacities set
 to `null` and target metadata omitted. Versioned architecture resources live in
-`architectures/` and are validated against
+`benchmarks/architectures/` and are validated against
 `schemas/dsa-architecture-v1.schema.json`.
 
 ## Three identities, not one filename
@@ -116,7 +116,7 @@ authentication.
 ```bash
 ./build/dsa-bind \
   --program tests/data/pypto_unbound_program_v1.json \
-  --architecture architectures/ascend950-v1.json \
+  --architecture benchmarks/architectures/ascend950-v1.json \
   --output /tmp/program-ascend950.json
 ```
 

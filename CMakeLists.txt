@@ -378,7 +378,7 @@ install(
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/schemas
 )
 install(
-  DIRECTORY architectures/
+  DIRECTORY benchmarks/architectures/
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/architectures
 )
 install(

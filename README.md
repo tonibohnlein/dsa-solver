@@ -127,7 +127,7 @@ specification and writes an ordinary solver input:
 ```bash
 ./build/dsa-bind \
   --program tests/data/pypto_unbound_program_v1.json \
-  --architecture architectures/ascend910b-v1.json \
+  --architecture benchmarks/architectures/ascend910b-v1.json \
   --output /tmp/program-ascend910b.json
 
 ./build/dsa-bench \

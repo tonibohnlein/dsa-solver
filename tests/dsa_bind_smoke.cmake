@@ -5,7 +5,7 @@ set(BOUND_PROBLEM "${BINARY_DIR}/dsa-bind-smoke.json")
 execute_process(
   COMMAND "${DSA_BIND}"
     --program "${SOURCE_DIR}/tests/data/pypto_unbound_program_v1.json"
-    --architecture "${SOURCE_DIR}/architectures/ascend910b-v1.json"
+    --architecture "${SOURCE_DIR}/benchmarks/architectures/ascend910b-v1.json"
     --output "${BOUND_PROBLEM}"
   RESULT_VARIABLE BIND_RESULT
   OUTPUT_VARIABLE BIND_OUTPUT
