@@ -21,8 +21,8 @@
 #include <utility>
 #include <vector>
 
-#include "dsa/structured_problem.h"
-#include "dsa/validator.h"
+#include "dsa/model/structured_problem.h"
+#include "dsa/model/validator.h"
 
 namespace {
 

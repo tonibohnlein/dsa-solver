@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "dsa/solver.h"
+#include "dsa/algorithms/solver.h"
 
 namespace dsa {
 

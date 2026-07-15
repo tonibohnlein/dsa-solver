@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "dsa/structured_problem.h"
+#include "dsa/model/structured_problem.h"
 
 namespace dsa {
 namespace {

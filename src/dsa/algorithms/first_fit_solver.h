@@ -1,7 +1,7 @@
 #ifndef DSA_FIRST_FIT_SOLVER_H_
 #define DSA_FIRST_FIT_SOLVER_H_
 
-#include "dsa/solver.h"
+#include "dsa/algorithms/solver.h"
 
 namespace dsa {
 

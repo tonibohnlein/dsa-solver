@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "dsa/model.h"
+#include "dsa/model/model.h"
 
 namespace dsa::detail {
 

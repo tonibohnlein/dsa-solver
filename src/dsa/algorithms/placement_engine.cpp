@@ -1,4 +1,4 @@
-#include "detail/placement_engine.h"
+#include "dsa/algorithms/placement_engine.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "dsa/validator.h"
+#include "dsa/model/validator.h"
 
 namespace dsa::detail {
 namespace {

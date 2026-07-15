@@ -16,18 +16,29 @@ if(NOT EXISTS "${DSA_NLOHMANN_JSON_INCLUDE_DIR}/nlohmann/json.hpp")
 endif()
 
 add_library(dsa_solver
-  src/first_fit_solver.cpp
-  src/local_search_solver.cpp
-  src/minimalloc_csv.cpp
-  src/model.cpp
-  src/placement_engine.cpp
-  src/pypto_structured_search_solver.cpp
-  src/solver.cpp
-  src/structured_json.cpp
-  src/structured_problem.cpp
-  src/tvm_hill_climb_solver.cpp
-  src/validator.cpp
-  src/xla_heap_solver.cpp
+  src/dsa/model/model.cpp
+  src/dsa/model/model.h
+  src/dsa/model/structured_json.cpp
+  src/dsa/model/structured_problem.cpp
+  src/dsa/model/structured_problem.h
+  src/dsa/model/validator.cpp
+  src/dsa/model/validator.h
+  src/dsa/algorithms/first_fit_solver.cpp
+  src/dsa/algorithms/first_fit_solver.h
+  src/dsa/algorithms/local_search_solver.cpp
+  src/dsa/algorithms/local_search_solver.h
+  src/dsa/algorithms/placement_engine.cpp
+  src/dsa/algorithms/placement_engine.h
+  src/dsa/algorithms/pypto_structured_search_solver.cpp
+  src/dsa/algorithms/pypto_structured_search_solver.h
+  src/dsa/algorithms/solver.cpp
+  src/dsa/algorithms/solver.h
+  src/dsa/algorithms/tvm_hill_climb_solver.cpp
+  src/dsa/algorithms/tvm_hill_climb_solver.h
+  src/dsa/algorithms/xla_heap_solver.cpp
+  src/dsa/algorithms/xla_heap_solver.h
+  src/dsa/io/minimalloc_csv.cpp
+  src/dsa/io/minimalloc_csv.h
 )
 add_library(dsa::solver ALIAS dsa_solver)
 set_target_properties(dsa_solver PROPERTIES
@@ -39,12 +50,35 @@ set_target_properties(dsa_solver PROPERTIES
 )
 target_include_directories(dsa_solver
   PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${DSA_NLOHMANN_JSON_INCLUDE_DIR}
 )
+
+# Keep the original flat dsa/*.h include paths available to existing consumers
+# while the source tree and preferred API use dsa/{model,algorithms,io}/*.h.
+set(DSA_COMPATIBILITY_HEADERS
+  src/dsa/model/model.h
+  src/dsa/model/structured_problem.h
+  src/dsa/model/validator.h
+  src/dsa/algorithms/first_fit_solver.h
+  src/dsa/algorithms/local_search_solver.h
+  src/dsa/algorithms/pypto_structured_search_solver.h
+  src/dsa/algorithms/solver.h
+  src/dsa/algorithms/tvm_hill_climb_solver.h
+  src/dsa/algorithms/xla_heap_solver.h
+  src/dsa/io/minimalloc_csv.h
+)
+foreach(HEADER IN LISTS DSA_COMPATIBILITY_HEADERS)
+  get_filename_component(HEADER_NAME "${HEADER}" NAME)
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/${HEADER}"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/dsa/${HEADER_NAME}"
+    COPYONLY
+  )
+endforeach()
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa_solver PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 elseif(MSVC)
@@ -165,6 +199,23 @@ if(BUILD_TESTING)
     target_compile_options(dsa-tests PRIVATE /W4 /permissive-)
   endif()
   add_test(NAME dsa-unit-tests COMMAND dsa-tests)
+
+  add_executable(dsa-header-layout-smoke tests/header_layout_smoke.cpp)
+  target_link_libraries(dsa-header-layout-smoke PRIVATE dsa::solver)
+  set_target_properties(dsa-header-layout-smoke PROPERTIES
+    CXX_EXTENSIONS OFF
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED YES
+  )
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(
+      dsa-header-layout-smoke PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+  elseif(MSVC)
+    target_compile_options(dsa-header-layout-smoke PRIVATE /W4 /permissive-)
+  endif()
+  add_test(NAME dsa-header-layout-smoke COMMAND dsa-header-layout-smoke)
+
   add_test(
     NAME dsa-cli-local-search
     COMMAND dsa-bench
@@ -287,7 +338,17 @@ install(TARGETS dsa_solver dsa-bench dsa-corpus dsa-suite
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+  DIRECTORY src/dsa/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dsa
+  FILES_MATCHING
+  PATTERN "*.h"
+  PATTERN "placement_engine.h" EXCLUDE
+)
+install(
+  FILES ${DSA_COMPATIBILITY_HEADERS}
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dsa
+)
 install(
   FILES schemas/dsa-problem-v1.schema.json
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/schemas

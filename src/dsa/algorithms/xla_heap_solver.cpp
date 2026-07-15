@@ -3,13 +3,13 @@
 // GlobalDecreasingSizeBestFitHeap spatial policy. No OpenXLA source is
 // vendored or linked; see NOTICE and docs/xla_heap.md.
 
-#include "dsa/xla_heap_solver.h"
+#include "dsa/algorithms/xla_heap_solver.h"
 
 #include <string>
 #include <vector>
 
-#include "detail/placement_engine.h"
-#include "dsa/validator.h"
+#include "dsa/algorithms/placement_engine.h"
+#include "dsa/model/validator.h"
 
 namespace dsa {
 

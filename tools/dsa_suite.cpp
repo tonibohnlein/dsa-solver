@@ -25,14 +25,14 @@
 #include <utility>
 #include <vector>
 
-#include "dsa/first_fit_solver.h"
-#include "dsa/local_search_solver.h"
-#include "dsa/minimalloc_csv.h"
-#include "dsa/pypto_structured_search_solver.h"
-#include "dsa/structured_problem.h"
-#include "dsa/tvm_hill_climb_solver.h"
-#include "dsa/validator.h"
-#include "dsa/xla_heap_solver.h"
+#include "dsa/algorithms/first_fit_solver.h"
+#include "dsa/algorithms/local_search_solver.h"
+#include "dsa/algorithms/pypto_structured_search_solver.h"
+#include "dsa/algorithms/tvm_hill_climb_solver.h"
+#include "dsa/algorithms/xla_heap_solver.h"
+#include "dsa/io/minimalloc_csv.h"
+#include "dsa/model/structured_problem.h"
+#include "dsa/model/validator.h"
 
 #ifdef DSA_HAVE_MINIMALLOC
 #include "absl/status/status.h"

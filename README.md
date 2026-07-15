@@ -200,6 +200,24 @@ certified, never as valid structured placements. Schema v1 declines the lower-bo
 exclusions, flexible pool assignment, colocations, or overlapping intervals within one buffer. See the
 checked-in [complete-v1 snapshot](benchmarks/results/complete-v1/report.md).
 
+## Source layout
+
+Public headers live beside their implementations under `src/dsa/`:
+
+```text
+src/dsa/
+  model/       problem representation, structured format, validation
+  algorithms/  solver interface, placement engine, and solver implementations
+  io/          MiniMalloc CSV interchange
+```
+
+New code should include structured paths such as
+`dsa/model/structured_problem.h` and
+`dsa/algorithms/local_search_solver.h`. CMake also generates and installs the
+original flat `dsa/*.h` paths as compatibility headers, so existing consumers
+such as the PyPTO adapter do not need an immediate source migration. The flat
+paths contain no separate implementation or hand-maintained forwarding layer.
+
 ## Model boundary
 
 MiniMalloc CSV uses half-open lifetimes `[lower, upper)`. PyPTO records statement-level definition and

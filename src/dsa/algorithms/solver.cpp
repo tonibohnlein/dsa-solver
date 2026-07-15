@@ -1,4 +1,4 @@
-#include "dsa/solver.h"
+#include "dsa/algorithms/solver.h"
 
 #include <algorithm>
 #include <string>

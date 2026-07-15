@@ -4,7 +4,7 @@
 // Behavioral reimplementation of Apache TVM USMP's hill-climb policy. See
 // NOTICE and docs/tvm_hill_climb.md for provenance and deliberate differences.
 
-#include "dsa/tvm_hill_climb_solver.h"
+#include "dsa/algorithms/tvm_hill_climb_solver.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -16,8 +16,8 @@
 #include <utility>
 #include <vector>
 
-#include "detail/placement_engine.h"
-#include "dsa/validator.h"
+#include "dsa/algorithms/placement_engine.h"
+#include "dsa/model/validator.h"
 
 namespace dsa {
 namespace {

@@ -1,4 +1,4 @@
-#include "dsa/local_search_solver.h"
+#include "dsa/algorithms/local_search_solver.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "detail/placement_engine.h"
-#include "dsa/validator.h"
+#include "dsa/algorithms/placement_engine.h"
+#include "dsa/model/validator.h"
 
 namespace dsa {
 namespace {

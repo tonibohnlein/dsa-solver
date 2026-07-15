@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <optional>
 
-#include "dsa/solver.h"
+#include "dsa/algorithms/solver.h"
 
 namespace dsa {
 
