@@ -197,7 +197,7 @@ void PrintHelp() {
       << "Output and budgets:\n"
       << "  --output-dir DIR                Write results, summary, features, and report files\n"
       << "  --run-label TEXT                Stable label stored in the report\n"
-      << "  --standard-capacity BYTES       Capacity/upper bound for standard instances\n"
+      << "  --standard-capacity BYTES       Capacity/upper bound for standard CSV inputs\n"
       << "  --seeds N[,N...]                Search seeds (default: 0,1,2)\n"
       << "  --iterations N                  Local/TVM search budget (default: 2000)\n"
       << "  --restarts N                    Local-search restarts (default: 4)\n"
@@ -419,7 +419,7 @@ Instance LoadStandardInstance(const fs::path& path,
     instance.document.metadata["source_format"] = "minimalloc_csv";
     instance.document.problem = std::move(csv.problem);
   }
-  if (capacity_override) {
+  if (capacity_override && path.extension() != ".json") {
     if (instance.document.problem.pools.size() != 1) {
       throw std::runtime_error("standard capacity override requires exactly one pool");
     }
@@ -1176,18 +1176,30 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
             "valid structured placements. Only certified relaxation optima are shown as bounds; a "
             "timeout is never reported as a certified optimum.\n\n";
   WriteFeatureOccurrenceReport(output, instances);
-  output << "## MiniMalloc standard DSA\n\n"
-         << "| Instance | Buffers | Capacity | MiniMalloc exact | First fit | XLA heap | TVM hill "
-            "climb | Local search |\n"
-         << "| --- | ---: | ---: | --- | --- | --- | --- | --- |\n";
+  output
+      << "## Standard DSA\n\n"
+      << "Rows include public standard instances and compiler-derived per-pool core relaxations. "
+         "A relaxation is a standard DSA problem and supports direct algorithm comparison, but its "
+         "result is only a lower bound for the corresponding structured PyPTO instance.\n\n"
+      << "| Instance | Origin | Buffers | Capacity | MiniMalloc exact | First fit | XLA heap | TVM "
+         "hill climb | Local search |\n"
+      << "| --- | --- | ---: | ---: | --- | --- | --- | --- | --- |\n";
 
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
-    if (document.profile != dsa::BenchmarkProfile::kStandardDsa) continue;
+    if (document.profile != dsa::BenchmarkProfile::kStandardDsa &&
+        document.profile != dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
+      continue;
+    }
     const std::string profile = dsa::ToString(document.profile);
     const Summary* exact = FindSummary(summaries, document.instance, profile, kMiniMalloc);
-    output << "| " << MarkdownEscape(document.instance) << " | " << document.problem.buffers.size()
-           << " | ";
+    output << "| " << MarkdownEscape(document.instance) << " | ";
+    if (document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
+      output << "core relaxation of " << MarkdownEscape(document.relaxed_from.value_or("unknown"));
+    } else {
+      output << "public standard";
+    }
+    output << " | " << document.problem.buffers.size() << " | ";
     if (document.problem.pools.front().capacity) {
       output << *document.problem.pools.front().capacity;
     } else {
@@ -1211,9 +1223,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
   output << "\n## PyPTO structured DSA\n\n"
          << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
             "lower bound | "
-            "First fit | TVM hill "
+            "First fit | XLA heap | TVM hill "
             "climb | Local search | PyPTO structured search |\n"
-         << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- |\n";
+         << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |\n";
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
     if (!dsa::IsPyptoProfile(document.profile)) continue;
@@ -1226,6 +1238,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << MarkdownEscape(Join(ProblemFeatures(document.problem), "; ")) << " | "
            << CoreLowerBoundCell(summaries, document.instance) << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), nullptr,
+                            true)
+           << " | "
+           << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), nullptr,
                             true)
            << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kTvmHillClimb),

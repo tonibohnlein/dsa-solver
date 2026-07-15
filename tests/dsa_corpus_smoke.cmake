@@ -110,6 +110,15 @@ list(LENGTH MANIFEST_ROWS MANIFEST_ROW_COUNT)
 if(NOT MANIFEST_ROW_COUNT EQUAL 3)
   message(FATAL_ERROR "dsa-corpus manifest should retain all three source observations")
 endif()
+file(READ "${OUTPUT_DIR}/coverage.tsv" COVERAGE_TEXT)
+foreach(EXPECTED
+    "eligibility\treason"
+    "case_external\tmodels/example/external.py\texample\t1\t0\texclude\textern_only_no_incore_dsa\t0\texcluded")
+  string(FIND "${COVERAGE_TEXT}" "${EXPECTED}" FOUND)
+  if(FOUND EQUAL -1)
+    message(FATAL_ERROR "corpus coverage is missing '${EXPECTED}'")
+  endif()
+endforeach()
 
 execute_process(
   COMMAND "${DSA_BENCH}" --input "${DOCUMENT}" --solver first-fit
@@ -125,9 +134,11 @@ endif()
 
 execute_process(
   COMMAND "${DSA_SUITE}"
+    --standard "${SOURCE_DIR}/benchmarks/standard/freed_region_subdivision_v1.json"
     --pypto "${OUTPUT_DIR}/documents"
     --output-dir "${OUTPUT_DIR}/suite-report"
     --run-label corpus-smoke
+    --standard-capacity 12
     --seeds 0
     --iterations 10
     --restarts 1
@@ -159,3 +170,9 @@ foreach(EXPECTED "corpus_family" "corpus_source_path" "models/example/case_a.py"
     message(FATAL_ERROR "corpus suite summary is missing '${EXPECTED}'")
   endif()
 endforeach()
+file(READ "${OUTPUT_DIR}/suite-report/report.md" REPORT_TEXT)
+string(FIND "${REPORT_TEXT}"
+  "freed_region_subdivision | public standard | 3 | 100" JSON_CAPACITY_FOUND)
+if(JSON_CAPACITY_FOUND EQUAL -1)
+  message(FATAL_ERROR "standard CSV capacity override changed an explicit JSON capacity")
+endif()

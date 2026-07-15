@@ -117,13 +117,15 @@ bound, not a valid PyPTO placement. See [the schema-v1 contract](docs/structured
 
 ## Run reproducible benchmark suites
 
-`dsa-suite` accepts repeatable files or directories. This command runs the official MiniMalloc A–K
-corpus, the checked-in PyPTO exporter corpus, three seeds for stochastic methods, and the exact
-MiniMalloc solver with a per-instance timeout:
+`dsa-suite` accepts repeatable files or directories. This command runs the complete checked-in
+standard suite (the official MiniMalloc A–K challenge corpus and the freed-region
+subdivision regression), the checked-in PyPTO exporter corpus, three seeds for stochastic methods, and
+the exact MiniMalloc solver with a per-instance timeout:
 
 ```bash
 ./build/dsa-suite \
   --standard third_party/minimalloc/benchmarks/challenging \
+  --standard benchmarks/standard \
   --pypto benchmarks/pypto \
   --output-dir benchmark-results \
   --run-label local-a-k \
@@ -139,6 +141,7 @@ The output directory contains:
 - `results.jsonl`: one immutable record per instance, method, and seed;
 - `summary.csv`: long-form per-method aggregation with best objective, median runtime, and compiler
   family/source columns when present;
+- `features.csv`: per-instance structured-constraint occurrence;
 - `report.md`: separate standard-DSA and PyPTO-structured comparison tables, including normalized
   compiler provenance.
 
@@ -154,18 +157,21 @@ weighted as solver benchmarks:
 ```bash
 ./build/dsa-corpus \
   --input device-regression-artifacts/corpus \
-  --output benchmarks/pypto/real/pypto-lib-bf89431 \
-  --coverage-targets benchmarks/pypto/targets/pypto_lib_bf89431.tsv \
+  --output benchmarks/pypto/real/pypto-lib-6e897cd \
+  --coverage-targets benchmarks/pypto/targets/pypto_lib_6e897cd.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
-  --source-commit bf89431fc73902caf594893888de84d06c3bf435 \
+  --source-commit 6e897cd99c28767b22e05f209da3e041f15c3dfc \
   --producer-repo https://github.com/tonibohnlein/pypto.git \
-  --producer-commit 1890b9e2aa92ea1f2e2a335d10190cc0f5bf1ad7 \
+  --producer-commit 8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1 \
   --namespace pypto-lib
 ```
 
-The checked-in target contract covers all 11 runnable examples and all 45 runnable model programs at
-that PyPTO-Lib revision: DeepSeek v3.2/v4 and Qwen3 14B/32B are exhaustive. Import fails if any target
-has no DSA document or if an unlisted case appears. See [the corpus workflow](docs/compiler_corpus.md).
+The current target contract inventories all 61 runnable entry points: 59 must
+produce DSA documents and two are explicitly excluded because they have no
+Ascend InCore DSA problem. DeepSeek v3.2/v4 and Qwen3 14B/32B are exhaustive at
+the pinned revision. Import fails if a capture target is missing, an excluded
+target produces a document, or an unlisted case appears. See
+[the corpus workflow](docs/compiler_corpus.md).
 
 Do not import the earlier 597-document `b8802dc6` regression archive as a
 published benchmark. That run was essential for finding the DeepSeek-v4
@@ -183,7 +189,7 @@ optimality gap. On PyPTO inputs, MiniMalloc runs only on generated per-pool core
 results are reported as lower bounds only when the projection is sound and the relaxation optimum is
 certified, never as valid structured placements. Schema v1 declines the lower-bound column for temporal
 exclusions, flexible pool assignment, colocations, or overlapping intervals within one buffer. See the
-checked-in [baseline snapshot](benchmarks/results/baseline/report.md).
+checked-in [complete-v1 snapshot](benchmarks/results/complete-v1/report.md).
 
 ## Model boundary
 

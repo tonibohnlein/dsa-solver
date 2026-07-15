@@ -34,6 +34,8 @@ struct CoverageTarget {
   std::string family;
   std::uint64_t devices = 1;
   std::uint64_t minimum_documents = 1;
+  bool capture = true;
+  std::string exclusion_reason;
 };
 
 struct Options {
@@ -116,11 +118,11 @@ void PrintHelp() {
       << "  --producer-repo TEXT            Compiler/exporter repository\n"
       << "  --producer-commit SHA           Exact compiler/exporter revision\n\n"
       << "Coverage:\n"
-      << "  --coverage-targets FILE         TSV of required case IDs and source paths\n"
+      << "  --coverage-targets FILE         TSV inventory of captured and excluded cases\n"
       << "  --help                          Show this help\n\n"
       << "Input directories must place each case below a top-level case_id directory. "
-         "When a coverage TSV is supplied, every input case must be listed and every target's "
-         "minimum document count must be met.\n";
+         "When a coverage TSV is supplied, every input case must be listed, every capture target's "
+         "minimum document count must be met, and excluded targets must produce no documents.\n";
 }
 
 std::uint64_t ParseUnsigned(std::string_view text, const std::string& context) {
@@ -213,7 +215,9 @@ std::map<std::string, CoverageTarget> ReadCoverageTargets(const fs::path& path) 
   std::string line;
   if (!std::getline(input, line)) throw std::runtime_error("coverage target TSV is empty");
   if (!line.empty() && line.back() == '\r') line.pop_back();
-  if (line != "case_id\tsource_path\tfamily\tdevices\tminimum_documents") {
+  const bool extended =
+      line == "case_id\tsource_path\tfamily\tdevices\tminimum_documents\teligibility\treason";
+  if (!extended && line != "case_id\tsource_path\tfamily\tdevices\tminimum_documents") {
     throw std::runtime_error("coverage target TSV has an unexpected header: " + line);
   }
 
@@ -224,9 +228,11 @@ std::map<std::string, CoverageTarget> ReadCoverageTargets(const fs::path& path) 
     if (!line.empty() && line.back() == '\r') line.pop_back();
     if (line.empty()) continue;
     const std::vector<std::string> fields = SplitTsv(line);
-    if (fields.size() != 5) {
+    const std::size_t expected_fields = extended ? 7 : 5;
+    if (fields.size() != expected_fields) {
       throw std::runtime_error("coverage target line " + std::to_string(line_number) +
-                               " must contain exactly five tab-separated fields");
+                               " must contain exactly " + std::to_string(expected_fields) +
+                               " tab-separated fields");
     }
     CoverageTarget target;
     target.case_id = fields[0];
@@ -234,12 +240,28 @@ std::map<std::string, CoverageTarget> ReadCoverageTargets(const fs::path& path) 
     target.family = fields[2];
     target.devices = ParseUnsigned(fields[3], "coverage target devices");
     target.minimum_documents = ParseUnsigned(fields[4], "coverage target minimum_documents");
+    if (extended) {
+      if (fields[5] == "capture") {
+        target.capture = true;
+      } else if (fields[5] == "exclude") {
+        target.capture = false;
+      } else {
+        throw std::runtime_error("coverage target eligibility must be 'capture' or 'exclude'");
+      }
+      target.exclusion_reason = fields[6] == "-" ? std::string{} : fields[6];
+    }
     ValidateTsvField(target.case_id, "coverage target case_id");
     ValidateRelativeSourcePath(target.source_path, "coverage target source_path");
     ValidateTsvField(target.family, "coverage target family");
     if (target.devices == 0) throw std::runtime_error("coverage target devices must be positive");
-    if (target.minimum_documents == 0) {
-      throw std::runtime_error("coverage target minimum_documents must be positive");
+    if (target.capture && target.minimum_documents == 0) {
+      throw std::runtime_error("capture target minimum_documents must be positive");
+    }
+    if (!target.capture && target.minimum_documents != 0) {
+      throw std::runtime_error("excluded target minimum_documents must be zero");
+    }
+    if (!target.capture && target.exclusion_reason.empty()) {
+      throw std::runtime_error("excluded target must provide a reason");
     }
     if (!targets.emplace(target.case_id, target).second) {
       throw std::runtime_error("duplicate coverage target case_id '" + target.case_id + "'");
@@ -468,13 +490,19 @@ void WriteCoverage(const fs::path& path, const std::map<std::string, CoverageTar
                    const std::map<std::string, std::size_t>& counts) {
   std::ofstream output(path);
   if (!output) throw std::runtime_error("cannot create coverage report: " + path.string());
-  output << "case_id\tsource_path\tfamily\tdevices\tminimum_documents\tdocuments\tstatus\n";
+  output << "case_id\tsource_path\tfamily\tdevices\tminimum_documents\teligibility\treason"
+            "\tdocuments\tstatus\n";
   for (const auto& [case_id, target] : targets) {
     const auto found = counts.find(case_id);
     const std::size_t count = found == counts.end() ? 0 : found->second;
     output << case_id << '\t' << target.source_path.generic_string() << '\t' << target.family
-           << '\t' << target.devices << '\t' << target.minimum_documents << '\t' << count << '\t'
-           << (count >= target.minimum_documents ? "covered" : "missing") << '\n';
+           << '\t' << target.devices << '\t' << target.minimum_documents << '\t'
+           << (target.capture ? "capture" : "exclude") << '\t'
+           << (target.exclusion_reason.empty() ? "-" : target.exclusion_reason) << '\t' << count
+           << '\t'
+           << (!target.capture ? (count == 0 ? "excluded" : "unexpected")
+                               : (count >= target.minimum_documents ? "covered" : "missing"))
+           << '\n';
   }
 }
 
@@ -494,6 +522,10 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
                                  input.case_id);
       }
       target = target_it->second;
+      if (!target.capture) {
+        throw std::runtime_error("excluded case_id unexpectedly produced a DSA document: " +
+                                 input.case_id);
+      }
     } else {
       target.case_id = input.case_id;
       target.source_path = fs::path(input.case_id + ".py");
@@ -612,6 +644,11 @@ void CheckCoverage(const std::map<std::string, CoverageTarget>& targets,
   for (const auto& [case_id, target] : targets) {
     const auto found = counts.find(case_id);
     const std::size_t count = found == counts.end() ? 0 : found->second;
+    if (!target.capture) {
+      if (count != 0)
+        missing.push_back(case_id + " (excluded, found " + std::to_string(count) + ")");
+      continue;
+    }
     if (count < target.minimum_documents) {
       missing.push_back(case_id + " (required " + std::to_string(target.minimum_documents) +
                         ", found " + std::to_string(count) + ")");

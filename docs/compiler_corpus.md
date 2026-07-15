@@ -60,9 +60,13 @@ corpus/
     pypto_decode_layer.dsa.json
 ```
 
-The case IDs for PyPTO-Lib commit `bf89431f` are pinned in
-`benchmarks/pypto/targets/pypto_lib_bf89431.tsv`. That file is generated from
-tracked runnable sources, never from ignored `build_output/` debug scripts.
+The case IDs for PyPTO-Lib commit `6e897cd9` are pinned in
+`benchmarks/pypto/targets/pypto_lib_6e897cd.tsv`. That file inventories all 61
+tracked runnable entry points, never ignored `build_output/` debug scripts. An
+extended target row records `eligibility=capture` with a positive minimum, or
+`eligibility=exclude`, a zero minimum, and a reviewable reason. The current
+inventory has 59 captures and two exclusions: a non-Ascend SuperscalarNPU draft
+and an extern-only CCE driver with no InCore DSA allocation.
 The smaller `targets/pypto_b8802dc6.tsv` pins the already device-validated
 PyPTO adapter/kernel gates; it is intentionally described as curated rather
 than exhaustive.
@@ -73,11 +77,11 @@ than exhaustive.
 ./build/dsa-corpus \
   --input /path/to/device-regression-artifacts/corpus \
   --output /tmp/pypto-lib-corpus \
-  --coverage-targets benchmarks/pypto/targets/pypto_lib_bf89431.tsv \
+  --coverage-targets benchmarks/pypto/targets/pypto_lib_6e897cd.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
-  --source-commit bf89431fc73902caf594893888de84d06c3bf435 \
+  --source-commit 6e897cd99c28767b22e05f209da3e041f15c3dfc \
   --producer-repo https://github.com/tonibohnlein/pypto.git \
-  --producer-commit 1890b9e2aa92ea1f2e2a335d10190cc0f5bf1ad7 \
+  --producer-commit 8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1 \
   --namespace pypto-lib
 ```
 
@@ -90,7 +94,8 @@ mixing producer revisions.
 
 Review before checking in:
 
-1. `coverage.tsv` has only `covered` rows and exactly 56 cases.
+1. `coverage.tsv` has exactly 61 rows: 59 `covered` and two reviewed `excluded`,
+   with no `missing` or `unexpected` row.
 2. `manifest.tsv` covers every observation; representative instances and paths
    are unique, repeated shapes point to an existing representative, and every
    selected/skipped decision has an explicit reason.
@@ -100,6 +105,8 @@ Review before checking in:
    placement-valid.
    Review `features.csv` and the report's feature-occurrence table; zero-count
    features cannot support structured-search claims.
+   The standard table must include both public standard inputs and generated
+   per-pool core relaxations; relaxation results remain lower bounds.
 5. Large or redundant corpora are measured before committing; keep complete
    source coverage, but record repeated problem shapes rather than silently
    weighting aggregate results as independent evidence.

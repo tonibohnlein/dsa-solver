@@ -27,18 +27,27 @@ PyPTO's `MemoryPlanner.DSA` and `dsa_export_dir`, review the schema diff, then
 replace the corresponding corpus file. CMake tests parse, validate, solve, and
 independently validate every document listed above.
 
-`targets/pypto_lib_bf89431.tsv` is the coverage contract for the first real
-PyPTO-Lib corpus. It lists every tracked runnable entry point at commit
-`bf89431fc73902caf594893888de84d06c3bf435`: 11 examples, 38 DeepSeek models,
-and 7 Qwen3 models. Its `case_id` matches the device-regression artifact
-directory. Importing with this target file fails on any missing or unknown case;
-`coverage.tsv` records the realized document count per entry point.
+`targets/pypto_lib_6e897cd.tsv` is the current exhaustive PyPTO-Lib capture
+contract. It lists all 61 runnable entry points at commit
+`6e897cd99c28767b22e05f209da3e041f15c3dfc`: 59 capture targets and two explicit
+exclusions. The exclusions are the SuperscalarNPU-only draft and the extern-only
+CCE driver, neither of which contains an Ascend InCore DSA problem. Its
+`case_id` matches the device-regression artifact directory. Importing fails on
+any missing capture, unexpected excluded export, or unknown case;
+`coverage.tsv` records every decision. The older `pypto_lib_bf89431.tsv` remains
+as immutable provenance for the earlier device campaign.
 
 `targets/pypto_b8802dc6.tsv` captures the real-device PyPTO kernel gates at the
 adapter-fix revision: explicit planner smoke kernels, col-vector control flow,
 gather whole-slot reuse, and depth-2 pipeline matmul. It complements the five
 byte-for-byte unit-export fixtures rather than pretending four selected system
 tests exhaust PyPTO's entire system-test suite.
+
+`targets/pypto_8df2ed4.tsv` carries the same correctness-gate inventory forward
+to the rebased production exporter revision used by the next full capture. The
+PyPTO-Lib inventory supplies model breadth; a broad `tests/st` DSA sweep remains
+a regression gate and raw-observation source, not a claim that every parameter
+combination is an independent benchmark.
 
 The normalized document metadata preserves:
 
@@ -56,6 +65,9 @@ independent evidence.
 Run `dsa-suite --pypto <normalized-corpus>/documents ...` for solver reports and
 per-instance `features.csv` constraint statistics.
 See `docs/compiler_corpus.md` for ingestion and review rules.
+The suite also generates one standard per-pool relaxation from each structured
+document. Its report places those lower-bound rows beside the public standard
+corpus so every applicable baseline is visible.
 
 ## Checked-in real instances
 

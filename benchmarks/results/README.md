@@ -17,6 +17,12 @@ that its machine-dependent runtimes are universally representative. Regenerate i
 root with the command recorded at the top of its report. Review changes to raw records and the generated
 tables together.
 
+`complete-v1` is the current combined comparison. It covers the MiniMalloc A--K
+challenge corpus, the standard freed-region regression, every checked-in sound
+PyPTO document, and a generated standard core relaxation for each PyPTO pool.
+The trivial MiniMalloc example remains a parser/CLI fixture and is deliberately
+excluded from the research table.
+
 `minimalloc-1mib-xla` is the longer standard-DSA comparison. It uses the
 MiniMalloc A--K one-MiB capacity, 2,000 ordering-search candidates per seed,
 and a 60-second exact-solver budget per instance. This is the long-form
