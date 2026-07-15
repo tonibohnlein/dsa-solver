@@ -154,7 +154,7 @@ The current peak objective uses the vector of independent pool peaks through
 `sum_p H_p` and `max_p H_p`. Minimizing every `H_p` independently minimizes
 both aggregates. Thus a four-pool matmul document is an exact composition of
 four per-pool problems, although an individual pool may still carry PyPTO
-alignment, whole-slot, or separation constraints beyond standard DSA.
+alignment or separation constraints beyond the literature profile.
 
 Separability ends when the model permits flexible pool assignment, shared
 capacity, a global event budget, or a decision such as pipeline depth that

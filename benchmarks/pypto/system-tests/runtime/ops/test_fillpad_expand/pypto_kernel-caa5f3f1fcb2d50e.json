@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_fillpad_expand::pypto_kernel-caa5f3f1fcb2d50e",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_fillpad_expand",
     "corpus_export_file": "tests__st__runtime__ops__test_fillpad_expand/fillpad_expand_narrow_valid_fp16/a2a3sim/pypto_kernel.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "kernel",
-    "corpus_problem_fingerprint_fnv1a64": "caa5f3f1fcb2d50e",
+    "corpus_problem_fingerprint_fnv1a64": "0f2fbf25c7ee58a7",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "58662c537a590c1f",
+    "corpus_source_fingerprint_fnv1a64": "11ce58af500d5e09",
     "corpus_source_path": "tests/st/runtime/ops/test_fillpad_expand.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -98,8 +97,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

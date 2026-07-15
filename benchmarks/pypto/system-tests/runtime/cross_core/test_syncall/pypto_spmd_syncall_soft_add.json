@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::cross_core::test_syncall::pypto_spmd_syncall_soft_add",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__cross_core__test_syncall",
     "corpus_export_file": "tests__st__runtime__cross_core__test_syncall/spmd_syncall_soft_aiv_512x128/a2a3sim/pypto_spmd_syncall_soft_add.dsa.json",
     "corpus_family": "pypto-runtime-cross_core",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "spmd_syncall_soft_add",
-    "corpus_problem_fingerprint_fnv1a64": "4adcf3849aa46228",
+    "corpus_problem_fingerprint_fnv1a64": "2ee4c79a08aa8895",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "a323200cdd5618f1",
+    "corpus_source_fingerprint_fnv1a64": "8502e0644c25b02a",
     "corpus_source_path": "tests/st/runtime/cross_core/test_syncall.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -132,8 +131,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

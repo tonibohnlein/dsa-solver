@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::examples::02_intermediate::test_rms_norm::pypto_rms_norm_incore_0",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__examples__02_intermediate__test_rms_norm",
     "corpus_export_file": "tests__st__examples__02_intermediate__test_rms_norm/pypto_rms_norm_incore_0.dsa.json",
     "corpus_family": "pypto-examples-02_intermediate",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "rms_norm_incore_0",
-    "corpus_problem_fingerprint_fnv1a64": "abac9ca30a03361d",
+    "corpus_problem_fingerprint_fnv1a64": "5c1c63e8e7ac2748",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "73ea45552c21ddd5",
+    "corpus_source_fingerprint_fnv1a64": "f55d480d7dc39a58",
     "corpus_source_path": "tests/st/examples/02_intermediate/test_rms_norm.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -291,8 +290,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

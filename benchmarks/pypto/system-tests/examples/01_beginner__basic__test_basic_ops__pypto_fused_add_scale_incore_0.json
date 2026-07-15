@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::examples::01_beginner::basic::test_basic_ops::pypto_fused_add_scale_incore_0",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__examples__01_beginner__basic__test_basic_ops",
     "corpus_export_file": "tests__st__examples__01_beginner__basic__test_basic_ops/pypto_fused_add_scale_incore_0.dsa.json",
     "corpus_family": "pypto-examples-01_beginner-basic",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "fused_add_scale_incore_0",
-    "corpus_problem_fingerprint_fnv1a64": "850a6026a89d2613",
+    "corpus_problem_fingerprint_fnv1a64": "bbb1f81430f3c53a",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "8aea47395f11b832",
+    "corpus_source_fingerprint_fnv1a64": "e915943d22ac67a9",
     "corpus_source_path": "tests/st/examples/01_beginner/basic/test_basic_ops.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -132,8 +131,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

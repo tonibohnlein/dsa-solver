@@ -1,12 +1,13 @@
 {
   "instance": "issue_1908_fragmentation",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "lifetime_ordering": "pypto_read_before_write",
     "memory_space_ids": "pypto_memory_space_enum_v1",
     "producer": "pypto",
     "solver_input": "pre_memory_reuse",
-    "target": "Ascend950"
+    "target": "Ascend950",
+    "corpus_source_fingerprint_fnv1a64": "5910adebec7ece8d",
+    "corpus_problem_fingerprint_fnv1a64": "ed8f0cada942afcf"
   },
   "problem": {
     "buffers": [
@@ -93,7 +94,6 @@
       }
     ],
     "pypto_structure": {
-      "whole_slot_reuse": true,
       "alias_classes": [
         {
           "buffer": 0,

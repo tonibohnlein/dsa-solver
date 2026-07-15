@@ -119,7 +119,6 @@ struct FeatureStats {
   std::size_t nontrivial_alias_classes = 0;
   std::size_t pipeline_groups = 0;
   std::size_t depth_shed_pipeline_groups = 0;
-  bool whole_slot_reuse = false;
 };
 
 struct RunRecord {
@@ -380,7 +379,6 @@ std::vector<std::string> ProblemFeatures(const dsa::DsaProblem& problem) {
     features.push_back("reuse_edges=" + std::to_string(problem.cost_model->reuse_penalties.size()));
   }
   if (problem.pypto_structure) {
-    if (problem.pypto_structure->whole_slot_reuse) features.push_back("whole_slot_reuse");
     if (!problem.pypto_structure->alias_classes.empty()) {
       features.push_back("alias_classes=" +
                          std::to_string(problem.pypto_structure->alias_classes.size()));
@@ -563,7 +561,6 @@ FeatureStats AnalyzeFeatures(const Instance& instance) {
   stats.pinned_allocations = problem.pinned_allocations.size();
   if (problem.cost_model) stats.reuse_penalties = problem.cost_model->reuse_penalties.size();
   if (problem.pypto_structure) {
-    stats.whole_slot_reuse = problem.pypto_structure->whole_slot_reuse;
     stats.alias_classes = problem.pypto_structure->alias_classes.size();
     stats.pipeline_groups = problem.pypto_structure->pipeline_groups.size();
     for (const dsa::PyptoAliasClass& alias_class : problem.pypto_structure->alias_classes) {
@@ -1296,7 +1293,7 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
             "max_live_capacity_ratio,aligned_buffers,multi_interval_buffers,"
             "flexible_pool_buffers,reserved_ranges,bank_geometries,colocations,separations,"
             "pipeline_separations,target_hazard_separations,semantic_no_alias_separations,"
-            "temporal_exclusions,pinned_allocations,reuse_penalties,whole_slot_reuse,"
+            "temporal_exclusions,pinned_allocations,reuse_penalties,"
             "alias_classes,nontrivial_alias_classes,pipeline_groups,depth_shed_pipeline_groups\n";
   std::vector<FeatureStats> rows;
   for (const Instance& instance : instances) {
@@ -1333,9 +1330,8 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
            << stats.bank_geometries << ',' << stats.colocations << ',' << stats.separations << ','
            << stats.pipeline_separations << ',' << stats.target_hazard_separations << ','
            << stats.semantic_no_alias_separations << ',' << stats.temporal_exclusions << ','
-           << stats.pinned_allocations << ',' << stats.reuse_penalties << ','
-           << (stats.whole_slot_reuse ? "true" : "false") << ',' << stats.alias_classes << ','
-           << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
+           << stats.pinned_allocations << ',' << stats.reuse_penalties << ',' << stats.alias_classes
+           << ',' << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
            << stats.depth_shed_pipeline_groups << '\n';
   }
 }
@@ -1482,10 +1478,6 @@ void WriteFeatureOccurrenceReport(std::ostream& output, const std::vector<Instan
     }
     output << "| " << name << " | " << documents << " | " << total << " |\n";
   };
-  std::size_t whole_slot_documents = 0;
-  for (const FeatureStats& row : rows) whole_slot_documents += row.whole_slot_reuse ? 1 : 0;
-  output << "| whole-slot reuse | " << whole_slot_documents << " | " << whole_slot_documents
-         << " |\n";
   write_count("aligned buffers", &FeatureStats::aligned_buffers);
   write_count("reserved ranges", &FeatureStats::reserved_ranges);
   write_count("separations", &FeatureStats::separations);

@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::qwen3::14b::decode_fwd::pypto_x_gamma0",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__qwen3__14b__decode_fwd",
     "corpus_export_file": "models__qwen3__14b__decode_fwd/call-001/pypto_x_gamma0.dsa.json",
     "corpus_family": "qwen3-14b",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "x_gamma0",
-    "corpus_problem_fingerprint_fnv1a64": "a8bed7d9450ee25e",
+    "corpus_problem_fingerprint_fnv1a64": "45360a0bf368730f",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "03fb762ae81cb032",
+    "corpus_source_fingerprint_fnv1a64": "df384cde75209da5",
     "corpus_source_path": "models/qwen3/14b/decode_fwd.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "experimental_features": "pipeline_adjacent_reuse_cost",
@@ -411,8 +410,7 @@
           "pool": 1,
           "slot_size": 16384
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_research_v1",

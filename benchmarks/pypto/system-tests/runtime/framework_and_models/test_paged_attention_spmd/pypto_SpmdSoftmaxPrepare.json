@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::framework_and_models::test_paged_attention_spmd::pypto_SpmdSoftmaxPrepare",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__framework_and_models__test_paged_attention_spmd",
     "corpus_export_file": "tests__st__runtime__framework_and_models__test_paged_attention_spmd/paged_attention_spmd_256bat_16h_128d_128bs_8192ctx_ptoas/a2a3sim/pypto_SpmdSoftmaxPrepare.dsa.json",
     "corpus_family": "pypto-runtime-framework_and_models",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "SpmdSoftmaxPrepare",
-    "corpus_problem_fingerprint_fnv1a64": "9805cb53af12381c",
+    "corpus_problem_fingerprint_fnv1a64": "0b75969c3e8d3e69",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "9614eb9b2dc41b0f",
+    "corpus_source_fingerprint_fnv1a64": "939f526e6099aef2",
     "corpus_source_path": "tests/st/runtime/framework_and_models/test_paged_attention_spmd.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -476,8 +475,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

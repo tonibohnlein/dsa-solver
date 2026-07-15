@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::deepseek::v4::prefill_attention_hca::pypto_prefill_hca_c128_norm_pad_init",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__deepseek__v4__prefill_attention_hca",
     "corpus_export_file": "models__deepseek__v4__prefill_attention_hca/call-001/pypto_prefill_hca_c128_norm_pad_init.dsa.json",
     "corpus_family": "deepseek-v4",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "prefill_hca_c128_norm_pad_init",
-    "corpus_problem_fingerprint_fnv1a64": "34539dd35071aadc",
+    "corpus_problem_fingerprint_fnv1a64": "8ed55cad18c3baa9",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "76f9aab6ddacd503",
+    "corpus_source_fingerprint_fnv1a64": "0aef5e502955d083",
     "corpus_source_path": "models/deepseek/v4/prefill_attention_hca.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -118,8 +117,7 @@
           "pool": 1,
           "slot_size": 2048
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_hard_v1",

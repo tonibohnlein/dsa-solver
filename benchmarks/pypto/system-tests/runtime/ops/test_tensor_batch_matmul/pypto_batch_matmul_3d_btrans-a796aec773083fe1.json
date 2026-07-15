@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_tensor_batch_matmul::pypto_batch_matmul_3d_btrans-a796aec773083fe1",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_tensor_batch_matmul",
     "corpus_export_file": "tests__st__runtime__ops__test_tensor_batch_matmul/tensor_batch_matmul_3d_by_3d_btrans_4x64x128x512/a2a3sim/pypto_batch_matmul_3d_btrans.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "batch_matmul_3d_btrans",
-    "corpus_problem_fingerprint_fnv1a64": "a796aec773083fe1",
+    "corpus_problem_fingerprint_fnv1a64": "fa34e8db89aa231c",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "52b8b5e450cc3b33",
+    "corpus_source_fingerprint_fnv1a64": "d06b53736de1c374",
     "corpus_source_path": "tests/st/runtime/ops/test_tensor_batch_matmul.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -996,8 +995,7 @@
           "pool": 4,
           "slot_size": 32768
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_hard_v1",

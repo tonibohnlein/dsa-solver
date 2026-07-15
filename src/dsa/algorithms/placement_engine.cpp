@@ -67,17 +67,6 @@ struct FitRequest {
   std::uint64_t alignment = 1;
 };
 
-// A physical allocation slot used by PyPTO's whole-slot reuse contract. All
-// members have the same base address; the slot keeps the maximum member size.
-// Distinct slots are spatially disjoint even when their members' lifetimes do
-// not overlap.
-struct StorageSlot {
-  PoolId pool = kDefaultPool;
-  std::uint64_t offset = 0;
-  std::uint64_t size = 0;
-  std::vector<std::size_t> members;
-};
-
 bool AddOverflows(std::uint64_t first, std::uint64_t second) {
   return first > std::numeric_limits<std::uint64_t>::max() - second;
 }
@@ -395,9 +384,6 @@ DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>&
   });
 
   std::vector<std::size_t> placed;
-  std::vector<StorageSlot> storage_slots;
-  const bool whole_slot_reuse =
-      problem.pypto_structure && problem.pypto_structure->whole_slot_reuse;
   DsaSolution solution;
   for (std::size_t index : order) {
     SuperBuffer& current = prepared.supers[index];
@@ -409,120 +395,7 @@ DsaResult PlaceWithOrder(const DsaProblem& problem, const std::vector<BufferId>&
       return result;
     }
 
-    if (whole_slot_reuse) {
-      auto slot_accepts = [&](const StorageSlot& slot) {
-        for (std::size_t member : slot.members) {
-          const SuperBuffer& other = prepared.supers[member];
-          if (SuperBuffersConflict(problem, current, other) || Separated(prepared, index, member) ||
-              current.pinned_exclusive || other.pinned_exclusive) {
-            return false;
-          }
-        }
-        return true;
-      };
-      auto slot_extent_fits = [&](std::size_t slot_index, std::uint64_t new_size) {
-        const StorageSlot& slot = storage_slots[slot_index];
-        if (AddOverflows(slot.offset, new_size)) return false;
-        for (const AddressRange& reserved : pool->reserved_ranges) {
-          if (AddressRangesOverlap(slot.offset, new_size, reserved.begin,
-                                   reserved.end - reserved.begin)) {
-            return false;
-          }
-        }
-        for (std::size_t other_index = 0; other_index < storage_slots.size(); ++other_index) {
-          if (other_index == slot_index) continue;
-          const StorageSlot& other = storage_slots[other_index];
-          if (other.pool == pool_id &&
-              AddressRangesOverlap(slot.offset, new_size, other.offset, other.size)) {
-            return false;
-          }
-        }
-        return true;
-      };
-
-      std::optional<std::size_t> chosen_slot;
-      if (current.pinned) {
-        current.offset = current.pinned->offset;
-        if (AddOverflows(current.offset, current.size)) {
-          result.status = SolveStatus::kInvalidProblem;
-          result.diagnostics.push_back("pinned colocation class address range overflows uint64");
-          return result;
-        }
-        for (std::size_t slot_index = 0; slot_index < storage_slots.size(); ++slot_index) {
-          const StorageSlot& slot = storage_slots[slot_index];
-          if (slot.pool != pool_id ||
-              !AddressRangesOverlap(current.offset, current.size, slot.offset, slot.size)) {
-            continue;
-          }
-          if (slot.offset != current.offset || !slot_accepts(slot)) {
-            result.status = SolveStatus::kInfeasibleProven;
-            result.diagnostics.push_back(
-                "pinned PyPTO allocation partially overlaps or conflicts with an existing slot");
-            return result;
-          }
-          chosen_slot = slot_index;
-          break;
-        }
-        if (chosen_slot &&
-            !slot_extent_fits(*chosen_slot,
-                              std::max(current.size, storage_slots[*chosen_slot].size))) {
-          result.status = SolveStatus::kInfeasibleProven;
-          result.diagnostics.push_back("pinned PyPTO allocation cannot grow its reuse slot");
-          return result;
-        }
-      } else {
-        std::vector<AddressRange> blocked = pool->reserved_ranges;
-        for (const StorageSlot& slot : storage_slots) {
-          if (slot.pool == pool_id) blocked.push_back({slot.offset, slot.offset + slot.size});
-        }
-        const std::optional<std::uint64_t> fresh_offset =
-            FindFirstFit({current.size, current.alignment}, std::move(blocked));
-        if (!fresh_offset) {
-          result.status = SolveStatus::kBestEffortNoFit;
-          result.diagnostics.push_back("address arithmetic overflow while placing buffer class");
-          return result;
-        }
-        current.offset = *fresh_offset;
-
-        // Reusing an existing slot is the only legal way to overlap an old
-        // address range. Prefer the lowest feasible base, exactly as first-fit
-        // does for an ordinary gap. Growing a slot is supported for arbitrary
-        // local-search orders, though size-descending first-fit rarely needs it.
-        for (std::size_t slot_index = 0; slot_index < storage_slots.size(); ++slot_index) {
-          const StorageSlot& slot = storage_slots[slot_index];
-          if (slot.pool != pool_id || slot.offset % current.alignment != 0 || !slot_accepts(slot)) {
-            continue;
-          }
-          const std::uint64_t new_size = std::max(current.size, slot.size);
-          if (!slot_extent_fits(slot_index, new_size)) continue;
-          if (slot.offset < current.offset) {
-            current.offset = slot.offset;
-            chosen_slot = slot_index;
-          }
-        }
-      }
-
-      if (chosen_slot) {
-        StorageSlot& slot = storage_slots[*chosen_slot];
-        slot.size = std::max(slot.size, current.size);
-        slot.members.push_back(index);
-      } else {
-        // A fresh pinned slot still has to be disjoint from every existing
-        // slot. Non-pinned fresh offsets were found with all slots blocked.
-        if (current.pinned) {
-          for (const StorageSlot& slot : storage_slots) {
-            if (slot.pool == pool_id &&
-                AddressRangesOverlap(current.offset, current.size, slot.offset, slot.size)) {
-              result.status = SolveStatus::kInfeasibleProven;
-              result.diagnostics.push_back(
-                  "pinned PyPTO allocation partially overlaps an existing slot");
-              return result;
-            }
-          }
-        }
-        storage_slots.push_back({pool_id, current.offset, current.size, {index}});
-      }
-    } else if (current.pinned) {
+    if (current.pinned) {
       current.offset = current.pinned->offset;
       if (AddOverflows(current.offset, current.size)) {
         result.status = SolveStatus::kInvalidProblem;

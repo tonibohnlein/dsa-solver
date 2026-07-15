@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::examples::advanced::allreduce::pypto_reduce_step",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "examples__advanced__allreduce",
     "corpus_export_file": "examples__advanced__allreduce/call-001/pypto_reduce_step.dsa.json",
     "corpus_family": "examples",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "reduce_step",
-    "corpus_problem_fingerprint_fnv1a64": "4164d157b2fc206b",
+    "corpus_problem_fingerprint_fnv1a64": "5e87560ce576f5f2",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "f92a76d3ccb21e3e",
+    "corpus_source_fingerprint_fnv1a64": "ec6f3537e46f5872",
     "corpus_source_path": "examples/advanced/allreduce.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -112,8 +111,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

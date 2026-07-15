@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_broadcast::pypto_col_expand_kernel-bc2c27b8495cd9a2",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_broadcast",
     "corpus_export_file": "tests__st__runtime__ops__test_broadcast/tile_col_expand_16x8/a2a3sim/pypto_col_expand_kernel.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "col_expand_kernel",
-    "corpus_problem_fingerprint_fnv1a64": "bc2c27b8495cd9a2",
+    "corpus_problem_fingerprint_fnv1a64": "9fa8d66de297e7ab",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "fdb9f7b5a9108ed1",
+    "corpus_source_fingerprint_fnv1a64": "a34c555692ad475c",
     "corpus_source_path": "tests/st/runtime/ops/test_broadcast.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -119,8 +118,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

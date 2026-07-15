@@ -53,6 +53,18 @@ file(RENAME
   "${INPUT_DIR}/case_c/pypto_trivial_chain.dsa.json"
 )
 
+# Checked-in benchmark documents are already normalized. This test exercises
+# raw-export import, so remove importer-owned metadata from the copied fixtures.
+file(GLOB_RECURSE RAW_INPUTS "${INPUT_DIR}/*.dsa.json")
+foreach(RAW_INPUT IN LISTS RAW_INPUTS)
+  file(READ "${RAW_INPUT}" RAW_TEXT)
+  string(REGEX REPLACE
+    "[ \t]*\"corpus_[^\"]+\"[ \t]*:[ \t]*\"[^\"]*\",?[\r\n]+"
+    "" RAW_TEXT "${RAW_TEXT}")
+  string(REPLACE ",\n  },\n  \"problem\"" "\n  },\n  \"problem\"" RAW_TEXT "${RAW_TEXT}")
+  file(WRITE "${RAW_INPUT}" "${RAW_TEXT}")
+endforeach()
+
 execute_process(
   COMMAND "${DSA_CORPUS}"
     --input "${INPUT_DIR}"
@@ -184,7 +196,6 @@ foreach(EXPECTED
     "pool_capacities_bytes"
     "max_interval_live_bytes_by_space"
     "temporal_conflicts"
-    "whole_slot_reuse"
     "alias_classes"
     "pipeline_separations"
     "UB=245760"

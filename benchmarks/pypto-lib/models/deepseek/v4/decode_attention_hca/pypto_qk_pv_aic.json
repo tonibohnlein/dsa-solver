@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::deepseek::v4::decode_attention_hca::pypto_qk_pv_aic",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__deepseek__v4__decode_attention_hca",
     "corpus_export_file": "models__deepseek__v4__decode_attention_hca/call-001/pypto_qk_pv_aic.dsa.json",
     "corpus_family": "deepseek-v4",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "qk_pv_aic",
-    "corpus_problem_fingerprint_fnv1a64": "b5d8f96db6a7aee2",
+    "corpus_problem_fingerprint_fnv1a64": "c219658692e35983",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "8e35cef57a06d1fe",
+    "corpus_source_fingerprint_fnv1a64": "114d2eb3296b0942",
     "corpus_source_path": "models/deepseek/v4/decode_attention_hca.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "experimental_features": "pipeline_adjacent_reuse_cost",
@@ -1087,8 +1086,7 @@
           "pool": 5,
           "slot_size": 65536
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_research_v1",

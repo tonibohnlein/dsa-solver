@@ -19,7 +19,6 @@ SolverCapabilities FirstFitSolver::Capabilities() const noexcept {
   capabilities.pinned_allocations = true;
   capabilities.reserved_ranges = true;
   capabilities.multi_pool = true;
-  capabilities.whole_slot_reuse = true;
   capabilities.lexicographic_objective = true;
   capabilities.capacity_objective = true;
   capabilities.peak_objective = true;

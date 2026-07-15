@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::deepseek::v4::decode_attention_csa::pypto_kv_score_proj",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__deepseek__v4__decode_attention_csa",
     "corpus_export_file": "models__deepseek__v4__decode_attention_csa/call-001/pypto_kv_score_proj.dsa.json",
     "corpus_family": "deepseek-v4",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "kv_score_proj",
-    "corpus_problem_fingerprint_fnv1a64": "2dbc69210516ce06",
+    "corpus_problem_fingerprint_fnv1a64": "d8b621723a27e8c7",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "81acfbddfd50ef68",
+    "corpus_source_fingerprint_fnv1a64": "1d81e8a4595d57fb",
     "corpus_source_path": "models/deepseek/v4/decode_attention_csa.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "experimental_features": "pipeline_adjacent_reuse_cost",
@@ -1465,25 +1464,25 @@
         {
           "cost": 1,
           "first": 11,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 25
         },
         {
           "cost": 1,
           "first": 15,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 29
         },
         {
           "cost": 1,
           "first": 19,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 33
         },
         {
           "cost": 1,
           "first": 23,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 37
         },
         {
@@ -1507,7 +1506,7 @@
         {
           "cost": 1,
           "first": 23,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 25
         },
         {
@@ -2311,8 +2310,7 @@
           "pool": 5,
           "slot_size": 4096
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_research_v1",

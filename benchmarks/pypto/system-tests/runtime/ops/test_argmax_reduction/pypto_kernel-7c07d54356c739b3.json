@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_argmax_reduction::pypto_kernel-7c07d54356c739b3",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_argmax_reduction",
     "corpus_export_file": "tests__st__runtime__ops__test_argmax_reduction/row_argmax_32x64_fp16_aligned/a2a3sim/pypto_kernel.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "kernel",
-    "corpus_problem_fingerprint_fnv1a64": "7c07d54356c739b3",
+    "corpus_problem_fingerprint_fnv1a64": "bffa366da724ff9a",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "2a9272e52261b64f",
+    "corpus_source_fingerprint_fnv1a64": "1405e263dac4b6a4",
     "corpus_source_path": "tests/st/runtime/ops/test_argmax_reduction.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -126,8 +125,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

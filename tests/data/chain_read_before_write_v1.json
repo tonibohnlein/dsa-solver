@@ -1,7 +1,6 @@
 {
   "instance": "read_before_write_chain",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "lifetime_ordering": "pypto_read_before_write",
     "memory_space_ids": "pypto_memory_space_enum_v1",
     "producer": "pypto",
@@ -60,7 +59,6 @@
       }
     ],
     "pypto_structure": {
-      "whole_slot_reuse": true,
       "alias_classes": [
         {"buffer": 0, "members": ["tile_a", "tile_a_view"]},
         {"buffer": 1, "members": ["tile_b"]},

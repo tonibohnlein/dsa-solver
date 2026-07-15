@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::cross_core::test_cross_core_dynamic_valid_shape::pypto_cube_producer-04d015d5c344c7e0",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__cross_core__test_cross_core_dynamic_valid_shape",
     "corpus_export_file": "tests__st__runtime__cross_core__test_cross_core_dynamic_valid_shape/cross_core_c2v_dynamic_tpush_valid_shape_8x12/a2a3sim/pypto_cube_producer.dsa.json",
     "corpus_family": "pypto-runtime-cross_core",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "cube_producer",
-    "corpus_problem_fingerprint_fnv1a64": "04d015d5c344c7e0",
+    "corpus_problem_fingerprint_fnv1a64": "8ad8a23d7205312d",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "2df9676fc598b817",
+    "corpus_source_fingerprint_fnv1a64": "ec1e7bb0c7fa04f0",
     "corpus_source_path": "tests/st/runtime/cross_core/test_cross_core_dynamic_valid_shape.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -172,8 +171,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

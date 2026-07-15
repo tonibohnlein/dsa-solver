@@ -3,7 +3,7 @@
 This directory contains the checked-in benchmark inputs and their provenance:
 
 - `pypto/`: 165 PyPTO problems;
-- `pypto-lib/`: 289 PyPTO-Lib problems;
+- `pypto-lib/`: 287 PyPTO-Lib problems;
 - `architectures/`: target specifications used by the architecture binder;
 - `capture/`: source-coverage inventories, not solver inputs;
 - `corpus.csv`: one statistics row per structured JSON input;
@@ -40,11 +40,11 @@ not a placement peak.
 | Origin | Instances | Buffers (min-max) | With reuse | With pipelines | Research profile |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | PyPTO-Lib examples | 11 | 3-19 | 10 | 2 | 0 |
-| PyPTO-Lib DeepSeek | 165 | 2-123 | 156 | 61 | 51 |
+| PyPTO-Lib DeepSeek | 163 | 2-123 | 154 | 61 | 51 |
 | PyPTO-Lib Qwen3 | 113 | 2-250 | 110 | 47 | 35 |
 | PyPTO system tests | 161 | 2-66 | 124 | 3 | 0 |
 | PyPTO unit fixtures | 4 | 2-4 | 4 | 2 | 1 |
-| **Total** | **454** | **2-250** | **404** | **115** | **87** |
+| **Total** | **452** | **2-250** | **402** | **115** | **87** |
 
 Research-cost rows use `pypto_research_v1`: production hard constraints plus
 an experimental, uncalibrated reuse cost. The target mix is 451 Ascend 910B

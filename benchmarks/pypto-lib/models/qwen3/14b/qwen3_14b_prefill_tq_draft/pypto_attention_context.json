@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::qwen3::14b::qwen3_14b_prefill_tq_draft::pypto_attention_context",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__qwen3__14b__qwen3_14b_prefill_tq_draft",
     "corpus_export_file": "models__qwen3__14b__qwen3_14b_prefill_tq_draft/call-001/pypto_attention_context.dsa.json",
     "corpus_family": "qwen3-14b",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "attention_context",
-    "corpus_problem_fingerprint_fnv1a64": "e5936918c4ed2468",
+    "corpus_problem_fingerprint_fnv1a64": "d20e6f98e38be755",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "2aad559f6a5b630b",
+    "corpus_source_fingerprint_fnv1a64": "ef0f9ac517a549fb",
     "corpus_source_path": "models/qwen3/14b/qwen3_14b_prefill_tq_draft.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -119,8 +118,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

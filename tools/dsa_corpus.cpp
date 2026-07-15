@@ -556,8 +556,7 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
     dsa::StructuredProblemDocument shape = document;
     shape.instance = "corpus_shape";
     shape.metadata.clear();
-    for (const char* semantic_key :
-         {"address_reuse_contract", "lifetime_ordering", "solver_input", "target"}) {
+    for (const char* semantic_key : {"lifetime_ordering", "solver_input", "target"}) {
       const auto semantic_metadata = document.metadata.find(semantic_key);
       if (semantic_metadata != document.metadata.end()) {
         shape.metadata.emplace(semantic_key, semantic_metadata->second);

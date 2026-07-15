@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::examples::02_intermediate::test_ffn_activations::pypto_matmul_kernel",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__examples__02_intermediate__test_ffn_activations",
     "corpus_export_file": "tests__st__examples__02_intermediate__test_ffn_activations/pypto_matmul_kernel.dsa.json",
     "corpus_family": "pypto-examples-02_intermediate",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "matmul_kernel",
-    "corpus_problem_fingerprint_fnv1a64": "d532c47cfa0bfdca",
+    "corpus_problem_fingerprint_fnv1a64": "7605ef7d11c1fed3",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "aceddf0607be55f9",
+    "corpus_source_fingerprint_fnv1a64": "18e5fb88bc2e673f",
     "corpus_source_path": "tests/st/examples/02_intermediate/test_ffn_activations.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -171,8 +170,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

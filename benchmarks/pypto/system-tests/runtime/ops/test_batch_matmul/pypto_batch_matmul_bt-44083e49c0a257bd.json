@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_batch_matmul::pypto_batch_matmul_bt-44083e49c0a257bd",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_batch_matmul",
     "corpus_export_file": "tests__st__runtime__ops__test_batch_matmul/batch_matmul_b_trans_2x64x64x64/a2a3sim/pypto_batch_matmul_bt.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "batch_matmul_bt",
-    "corpus_problem_fingerprint_fnv1a64": "44083e49c0a257bd",
+    "corpus_problem_fingerprint_fnv1a64": "11e866bbd57d8a28",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "1065eb632b63d338",
+    "corpus_source_fingerprint_fnv1a64": "f718a3f924ddbeb0",
     "corpus_source_path": "tests/st/runtime/ops/test_batch_matmul.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -264,8 +263,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::qwen3::14b::topk_select::pypto_greedy_select",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__qwen3__14b__topk_select",
     "corpus_export_file": "models__qwen3__14b__topk_select/call-001/pypto_greedy_select.dsa.json",
     "corpus_family": "qwen3-14b",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "greedy_select",
-    "corpus_problem_fingerprint_fnv1a64": "92239c47bfdfd2ef",
+    "corpus_problem_fingerprint_fnv1a64": "9e69664c9ee98486",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "6ad2322e2432411e",
+    "corpus_source_fingerprint_fnv1a64": "8499c58a15eeb838",
     "corpus_source_path": "models/qwen3/14b/topk_select.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -517,8 +516,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

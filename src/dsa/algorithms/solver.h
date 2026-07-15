@@ -19,7 +19,6 @@ struct SolverCapabilities {
   bool reserved_ranges = false;
   bool multi_pool = false;
   bool flexible_pool_assignment = false;
-  bool whole_slot_reuse = false;
 
   bool lexicographic_objective = false;
   bool capacity_objective = false;

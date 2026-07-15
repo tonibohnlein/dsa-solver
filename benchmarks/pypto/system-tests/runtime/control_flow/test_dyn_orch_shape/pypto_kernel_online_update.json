@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::control_flow::test_dyn_orch_shape::pypto_kernel_online_update",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__control_flow__test_dyn_orch_shape",
     "corpus_export_file": "tests__st__runtime__control_flow__test_dyn_orch_shape/dyn_orch_paged_attn_2b_16h_128d_128bs/a2a3sim/pypto_kernel_online_update.dsa.json",
     "corpus_family": "pypto-runtime-control_flow",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "kernel_online_update",
-    "corpus_problem_fingerprint_fnv1a64": "a63c58dea1aeca1c",
+    "corpus_problem_fingerprint_fnv1a64": "af1e5e0131895ee9",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "a3a140e3ec434545",
+    "corpus_source_fingerprint_fnv1a64": "99c2bdbedb173f1a",
     "corpus_source_path": "tests/st/runtime/control_flow/test_dyn_orch_shape.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -526,8 +525,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

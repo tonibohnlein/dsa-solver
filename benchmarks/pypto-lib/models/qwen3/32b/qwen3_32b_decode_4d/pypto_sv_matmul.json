@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::qwen3::32b::qwen3_32b_decode_4d::pypto_sv_matmul",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__qwen3__32b__qwen3_32b_decode_4d",
     "corpus_export_file": "models__qwen3__32b__qwen3_32b_decode_4d/call-001/pypto_sv_matmul.dsa.json",
     "corpus_family": "qwen3-32b",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "sv_matmul",
-    "corpus_problem_fingerprint_fnv1a64": "f2a474a9c25be6b3",
+    "corpus_problem_fingerprint_fnv1a64": "e52c1fdd8420101a",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "ac838033f172d364",
+    "corpus_source_fingerprint_fnv1a64": "a10804805ab4f749",
     "corpus_source_path": "models/qwen3/32b/qwen3_32b_decode_4d.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -530,8 +529,7 @@
           "pool": 4,
           "slot_size": 32768
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_hard_v1",

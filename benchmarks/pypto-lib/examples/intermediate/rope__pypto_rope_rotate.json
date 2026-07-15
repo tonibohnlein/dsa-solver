@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::examples::intermediate::rope::pypto_rope_rotate",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "examples__intermediate__rope",
     "corpus_export_file": "examples__intermediate__rope/call-001/pypto_rope_rotate.dsa.json",
     "corpus_family": "examples",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "rope_rotate",
-    "corpus_problem_fingerprint_fnv1a64": "1b8c42cce2c0cc18",
+    "corpus_problem_fingerprint_fnv1a64": "045ef8953f4a6b85",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "45c059b979128a4c",
+    "corpus_source_fingerprint_fnv1a64": "77eabb966f9d3404",
     "corpus_source_path": "examples/intermediate/rope.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -329,8 +328,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

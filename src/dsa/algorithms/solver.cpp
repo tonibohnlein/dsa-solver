@@ -51,8 +51,6 @@ SolverCompatibility CheckSolverCompatibility(const DsaProblem& problem,
   RequireFeature(&report, problem.pools.size() > 1, capabilities.multi_pool, "multi_pool");
   RequireFeature(&report, has_flexible_pool, capabilities.flexible_pool_assignment,
                  "flexible_pool_assignment");
-  RequireFeature(&report, problem.pypto_structure && problem.pypto_structure->whole_slot_reuse,
-                 capabilities.whole_slot_reuse, "whole_slot_reuse");
   if (has_reuse_penalties) AddUnique(&report.required_features, "reuse_penalties");
   if (has_bank_geometry) AddUnique(&report.required_features, "bank_geometry");
 

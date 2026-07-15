@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::deepseek::v4::decode_mtp::pypto_mtp_projection_linear_aic",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__deepseek__v4__decode_mtp",
     "corpus_export_file": "models__deepseek__v4__decode_mtp/call-001/pypto_mtp_projection_linear_aic.dsa.json",
     "corpus_family": "deepseek-v4",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "mtp_projection_linear_aic",
-    "corpus_problem_fingerprint_fnv1a64": "ce489ea12d210a7c",
+    "corpus_problem_fingerprint_fnv1a64": "9e5a1268a04dba89",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "91f701f8b8571d10",
+    "corpus_source_fingerprint_fnv1a64": "58a89cff921a9f74",
     "corpus_source_path": "models/deepseek/v4/decode_mtp.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -1110,8 +1109,7 @@
           "pool": 4,
           "slot_size": 16384
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_hard_v1",

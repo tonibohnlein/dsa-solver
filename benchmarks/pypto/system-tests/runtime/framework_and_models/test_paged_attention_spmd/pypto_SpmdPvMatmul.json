@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::framework_and_models::test_paged_attention_spmd::pypto_SpmdPvMatmul",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__framework_and_models__test_paged_attention_spmd",
     "corpus_export_file": "tests__st__runtime__framework_and_models__test_paged_attention_spmd/paged_attention_spmd_256bat_16h_128d_128bs_8192ctx_ptoas/a2a3sim/pypto_SpmdPvMatmul.dsa.json",
     "corpus_family": "pypto-runtime-framework_and_models",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "SpmdPvMatmul",
-    "corpus_problem_fingerprint_fnv1a64": "808050ece012d3de",
+    "corpus_problem_fingerprint_fnv1a64": "e49416e7dbb5c7f7",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "6161cda48e43e8c9",
+    "corpus_source_fingerprint_fnv1a64": "fc9cc5a82a5e82de",
     "corpus_source_path": "tests/st/runtime/framework_and_models/test_paged_attention_spmd.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -171,8 +170,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

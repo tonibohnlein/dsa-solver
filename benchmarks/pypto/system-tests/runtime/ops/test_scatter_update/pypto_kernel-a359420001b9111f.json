@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_scatter_update::pypto_kernel-a359420001b9111f",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_scatter_update",
     "corpus_export_file": "tests__st__runtime__ops__test_scatter_update/tile_scatter_update_single_batch/a2a3sim/pypto_kernel.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "kernel",
-    "corpus_problem_fingerprint_fnv1a64": "a359420001b9111f",
+    "corpus_problem_fingerprint_fnv1a64": "05ce583269e23f36",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "927d83e8a7e5b28c",
+    "corpus_source_fingerprint_fnv1a64": "06bd6f9534003e5d",
     "corpus_source_path": "tests/st/runtime/ops/test_scatter_update.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -376,8 +375,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

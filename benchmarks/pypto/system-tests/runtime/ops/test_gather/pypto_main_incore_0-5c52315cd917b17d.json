@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_gather::pypto_main_incore_0-5c52315cd917b17d",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_gather",
     "corpus_export_file": "tests__st__runtime__ops__test_gather/gather_rank2_last_dim/a2a3sim/pypto_main_incore_0.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "main_incore_0",
-    "corpus_problem_fingerprint_fnv1a64": "5c52315cd917b17d",
+    "corpus_problem_fingerprint_fnv1a64": "f8b1533dbc3f3be8",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "81805963694d7371",
+    "corpus_source_fingerprint_fnv1a64": "d44423e6dfa5913c",
     "corpus_source_path": "tests/st/runtime/ops/test_gather.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -177,8 +176,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

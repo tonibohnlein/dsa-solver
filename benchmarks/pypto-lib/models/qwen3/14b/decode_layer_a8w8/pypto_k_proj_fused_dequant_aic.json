@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::qwen3::14b::decode_layer_a8w8::pypto_k_proj_fused_dequant_aic",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__qwen3__14b__decode_layer_a8w8",
     "corpus_export_file": "models__qwen3__14b__decode_layer_a8w8/pypto_k_proj_fused_dequant_aic.dsa.json",
     "corpus_family": "qwen3-14b",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "k_proj_fused_dequant_aic",
-    "corpus_problem_fingerprint_fnv1a64": "7759640f96ce4e71",
+    "corpus_problem_fingerprint_fnv1a64": "7b07d8cb5c05cbac",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "fabcf306e164dbca",
+    "corpus_source_fingerprint_fnv1a64": "789d55652c9fc44a",
     "corpus_source_path": "models/qwen3/14b/decode_layer_a8w8.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -615,8 +614,7 @@
           "pool": 4,
           "slot_size": 32768
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_hard_v1",

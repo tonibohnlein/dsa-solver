@@ -45,8 +45,8 @@ manifest. Unique instances with conflicts, reuse candidates, multiple pools,
 pipeline groups, or semantic structure are retained even if current heuristics
 solve them easily.
 
-The checked-in corpus contains 454 meaningful, structurally deduplicated
-problems: 165 from PyPTO and 289 from PyPTO-Lib. Their statistics are in
+The checked-in corpus contains 452 meaningful, structurally deduplicated
+problems: 165 from PyPTO and 287 from PyPTO-Lib. Their statistics are in
 [`benchmarks/corpus.csv`](../benchmarks/corpus.csv).
 
 ## Import
@@ -72,7 +72,7 @@ Before publishing a refresh, require:
 1. every inventory row is covered or explicitly excluded;
 2. every observation appears in the manifest with a representative and reason;
 3. every selected document retains target, producer, pre-memory-reuse input,
-   sound lifetime, and whole-slot metadata;
+   sound physical lifetimes, and constraint provenance;
 4. all solver results pass independent placement validation; and
 5. source coverage and unique problem counts are reported separately.
 

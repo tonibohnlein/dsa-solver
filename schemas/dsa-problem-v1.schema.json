@@ -344,6 +344,7 @@
         "reason": {
           "enum": [
             "generic",
+            "pipeline_serialization",
             "cross_pipe",
             "cross_core",
             "event_budget"
@@ -457,10 +458,6 @@
         "pipeline_groups"
       ],
       "properties": {
-        "whole_slot_reuse": {
-          "type": "boolean",
-          "default": false
-        },
         "alias_classes": {
           "type": "array",
           "uniqueItems": true,

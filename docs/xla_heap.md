@@ -49,7 +49,7 @@ indistinguishable from our native heuristic. It accepts:
 - peak/capacity objectives.
 
 It rejects multi-interval liveness, separations, temporal exclusions, pins,
-reserved ranges, reuse costs, flexible pools, and PyPTO whole-slot reuse.
+reserved ranges, reuse costs, and flexible pools.
 Structured compiler inputs are compared through explicit per-pool core
 relaxations. An unsupported feature produces `kUnsupported`; it is never
 silently dropped.

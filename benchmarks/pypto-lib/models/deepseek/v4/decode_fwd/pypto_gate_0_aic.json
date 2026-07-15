@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::deepseek::v4::decode_fwd::pypto_gate_0_aic",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__deepseek__v4__decode_fwd",
     "corpus_export_file": "models__deepseek__v4__decode_fwd/call-001/pypto_gate_0_aic.dsa.json",
     "corpus_family": "deepseek-v4",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "gate_0_aic",
-    "corpus_problem_fingerprint_fnv1a64": "b50a0d8cef3df123",
+    "corpus_problem_fingerprint_fnv1a64": "2db6b35ef825268e",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "2a2ac144fd68e111",
+    "corpus_source_fingerprint_fnv1a64": "910de0d4cde33f03",
     "corpus_source_path": "models/deepseek/v4/decode_fwd.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "experimental_features": "pipeline_adjacent_reuse_cost",
@@ -493,13 +492,13 @@
         {
           "cost": 1,
           "first": 7,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 13
         },
         {
           "cost": 1,
           "first": 11,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 17
         },
         {
@@ -511,7 +510,7 @@
         {
           "cost": 1,
           "first": 11,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 13
         },
         {
@@ -523,13 +522,13 @@
         {
           "cost": 1,
           "first": 8,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 14
         },
         {
           "cost": 1,
           "first": 12,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 18
         },
         {
@@ -541,7 +540,7 @@
         {
           "cost": 1,
           "first": 12,
-          "reason": "cross_pipe",
+          "reason": "pipeline_serialization",
           "second": 14
         },
         {
@@ -990,8 +989,7 @@
           "pool": 5,
           "slot_size": 1024
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_research_v1",

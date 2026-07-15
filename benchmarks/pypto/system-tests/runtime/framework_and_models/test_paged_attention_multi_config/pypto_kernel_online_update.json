@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::framework_and_models::test_paged_attention_multi_config::pypto_kernel_online_update",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__framework_and_models__test_paged_attention_multi_config",
     "corpus_export_file": "tests__st__runtime__framework_and_models__test_paged_attention_multi_config/paged_attention_multi_config_ptoas_4bat_64h_128d_64bs/a2a3sim/pypto_kernel_online_update.dsa.json",
     "corpus_family": "pypto-runtime-framework_and_models",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "kernel_online_update",
-    "corpus_problem_fingerprint_fnv1a64": "6d8c90efb17f8474",
+    "corpus_problem_fingerprint_fnv1a64": "f41b2fee3aa0bf61",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "308a4300c3bfbdcb",
+    "corpus_source_fingerprint_fnv1a64": "f5b508ba0038bff4",
     "corpus_source_path": "tests/st/runtime/framework_and_models/test_paged_attention_multi_config.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -526,8 +525,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

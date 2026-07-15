@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::examples::intermediate::gemm::pypto_gemm_tile",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "examples__intermediate__gemm",
     "corpus_export_file": "examples__intermediate__gemm/call-001/pypto_gemm_tile.dsa.json",
     "corpus_family": "examples",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "gemm_tile",
-    "corpus_problem_fingerprint_fnv1a64": "0d6ee0a30ec2ad83",
+    "corpus_problem_fingerprint_fnv1a64": "73bf532839f9b92a",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "34e5e5659374395f",
+    "corpus_source_fingerprint_fnv1a64": "0de154772623dc7d",
     "corpus_source_path": "examples/intermediate/gemm.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -215,8 +214,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

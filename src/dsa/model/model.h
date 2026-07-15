@@ -106,6 +106,7 @@ struct PinnedAllocation {
 
 enum class ReusePenaltyReason : std::uint8_t {
   kGeneric,
+  kPipelineSerialization,
   kCrossPipe,
   kCrossCore,
   kEventBudget,
@@ -146,12 +147,6 @@ struct PyptoPipelineGroup {
 };
 
 struct PyptoStructure {
-  // Current PyPTO/PTOAS dependency tracking recognizes whole allocation-slot
-  // reuse, not arbitrary partial overlap between temporally disjoint buffers.
-  // Consequently a PyPTO-profile placement may put buffers at the same base
-  // address (the slot extent is their maximum size), or in disjoint address
-  // ranges, but never partially overlap them at different base addresses.
-  bool whole_slot_reuse = false;
   std::vector<PyptoAliasClass> alias_classes;
   std::vector<PyptoPipelineGroup> pipeline_groups;
 };

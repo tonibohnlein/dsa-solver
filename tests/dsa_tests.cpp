@@ -140,35 +140,6 @@ void TestFirstFitSubdividesFreedRegion() {
           "consumers did not subdivide the freed producer region");
 }
 
-void TestPyptoWholeSlotReuseDoesNotSubdivideFreedRegion() {
-  constexpr std::uint64_t kKiB = 1024;
-  dsa::DsaProblem problem;
-  problem.buffers = {
-      MakeBuffer(0, {{0, 3}}, 64 * kKiB),
-      MakeBuffer(1, {{3, 6}}, 32 * kKiB),
-      MakeBuffer(2, {{3, 6}}, 32 * kKiB),
-  };
-  problem.pools.front().capacity = 96 * kKiB;
-  dsa::PyptoStructure structure;
-  structure.whole_slot_reuse = true;
-  structure.alias_classes = {{0, {"b0"}}, {1, {"b1"}}, {2, {"b2"}}};
-  problem.pypto_structure = std::move(structure);
-
-  const dsa::DsaResult result = SolveAndValidate(problem, dsa::FirstFitSolver());
-  Require(result.objective.max_peak == 96 * kKiB,
-          "PyPTO whole-slot reuse partially subdivided a freed producer slot");
-  Require((OffsetOf(result, 1) == 0 && OffsetOf(result, 2) == 64 * kKiB) ||
-              (OffsetOf(result, 2) == 0 && OffsetOf(result, 1) == 64 * kKiB),
-          "PyPTO consumers did not reuse one whole slot plus one disjoint slot");
-
-  dsa::DsaSolution partial;
-  partial.placements = {{0, {dsa::kDefaultPool, 0}},
-                        {1, {dsa::kDefaultPool, 0}},
-                        {2, {dsa::kDefaultPool, 32 * kKiB}}};
-  Require(!dsa::ValidateSolution(problem, partial).empty(),
-          "PyPTO validator accepted a partial overlap at different base addresses");
-}
-
 void TestMultiIntervalLiveness() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -337,8 +308,7 @@ dsa::StructuredProblemDocument MakeStructuredDocument() {
   dsa::StructuredProblemDocument document;
   document.profile = dsa::BenchmarkProfile::kPyptoResearchV1;
   document.instance = "pypto_fixture";
-  document.metadata = {{"address_reuse_contract", "whole_slot_v1"},
-                       {"kernel", "fixture"},
+  document.metadata = {{"kernel", "fixture"},
                        {"lifetime_ordering", "pypto_read_before_write"},
                        {"solver_input", "pre_memory_reuse"},
                        {"target", "ascend910b"}};
@@ -360,10 +330,9 @@ dsa::StructuredProblemDocument MakeStructuredDocument() {
   document.problem.separations.push_back({0, 1, {dsa::SeparationReason::kPipelineStage}});
   document.problem.pinned_allocations.push_back({2, 4, 0, false});
   dsa::CostModel cost_model;
-  cost_model.reuse_penalties.push_back({0, 1, 25, dsa::ReusePenaltyReason::kCrossPipe});
+  cost_model.reuse_penalties.push_back({0, 1, 25, dsa::ReusePenaltyReason::kPipelineSerialization});
   document.problem.cost_model = std::move(cost_model);
   dsa::PyptoStructure structure;
-  structure.whole_slot_reuse = true;
   structure.alias_classes = {
       {0, {"tile_a", "tile_a_view"}},
       {1, {"tile_b"}},
@@ -399,7 +368,7 @@ void TestStructuredJsonRoundTripAndProfiles() {
   Require(parsed.problem.separations.front().reasons ==
               std::vector<dsa::SeparationReason>{dsa::SeparationReason::kPipelineStage},
           "separation provenance did not round-trip");
-  Require(parsed.problem.pypto_structure && parsed.problem.pypto_structure->whole_slot_reuse &&
+  Require(parsed.problem.pypto_structure &&
               parsed.problem.pypto_structure->alias_classes.front().members.size() == 2 &&
               parsed.problem.pypto_structure->pipeline_groups.front().effective_depth == 2,
           "normalized PyPTO structure did not round-trip");
@@ -482,7 +451,7 @@ void TestPyptoExportedCorpus() {
     std::uint64_t expected_peak;
   };
   const std::vector<CorpusCase> cases = {
-      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 0, 0, 98'304},
+      {"issue_1908_fragmentation_v1.json", "issue_1908_fragmentation", 4, 0, 0, 0, 65'536},
       {"pipeline_stage_separation_v1.json", "pipeline_stage_separation", 2, 1, 1, 0, 32'768},
       {"target_hazard_v1.json", "target_hazard", 3, 1, 0, 0, 8'192},
       {"capacity_gated_pipeline_cost_v1.json", "capacity_gated_pipeline_cost", 3, 0, 1, 2, 245'760},
@@ -573,9 +542,8 @@ void TestEveryPyptoCorpusDocumentIsReplayable() {
                 document.metadata.at("solver_input") == "pre_memory_reuse" &&
                 document.metadata.count("target") != 0 && !document.metadata.at("target").empty(),
             "PyPTO corpus document lost exporter provenance: " + path.string());
-    Require(document.problem.pypto_structure.has_value() &&
-                document.problem.pypto_structure->whole_slot_reuse,
-            "PyPTO corpus document lost the whole-slot reuse contract: " + path.string());
+    Require(document.problem.pypto_structure.has_value(),
+            "PyPTO corpus document lost its compiler provenance: " + path.string());
     const dsa::DsaResult first_fit = dsa::FirstFitSolver().Solve(document.problem);
     Require(first_fit.solution.has_value(),
             "first-fit returned no placement for corpus document: " + path.string());
@@ -694,7 +662,7 @@ void TestSolverCapabilityMatching() {
   const dsa::SolverCompatibility xla_match =
       dsa::CheckSolverCompatibility(document.problem, xla_heap.Capabilities());
   Require(!xla_match.StructurallyCompatible() &&
-              Contains(xla_match.unsupported_features, "whole_slot_reuse"),
+              Contains(xla_match.unsupported_features, "multi_interval"),
           "XLA heap silently accepted PyPTO-only structure");
   Require(xla_heap.Solve(document.problem).status == dsa::SolveStatus::kUnsupported,
           "XLA heap did not reject a structured PyPTO problem");
@@ -970,7 +938,6 @@ int main() {
   const std::vector<std::pair<std::string, void (*)()>> tests = {
       {"MiniMalloc CSV", TestMiniMallocCsv},
       {"first-fit #1908", TestFirstFitSubdividesFreedRegion},
-      {"PyPTO whole-slot reuse", TestPyptoWholeSlotReuseDoesNotSubdivideFreedRegion},
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},
       {"colocation", TestColocation},

@@ -1,18 +1,17 @@
 {
   "instance": "pypto::tests::st::runtime::ops::test_matmul::pypto_matmul_abtranspose-a6d792158e649746",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "tests__st__runtime__ops__test_matmul",
     "corpus_export_file": "tests__st__runtime__ops__test_matmul/matmul_abtranspose_32x64x32/a2a3sim/pypto_matmul_abtranspose.dsa.json",
     "corpus_family": "pypto-runtime-ops",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto",
     "corpus_original_instance": "matmul_abtranspose",
-    "corpus_problem_fingerprint_fnv1a64": "a6d792158e649746",
+    "corpus_problem_fingerprint_fnv1a64": "35f60fd8fe47409f",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
-    "corpus_source_fingerprint_fnv1a64": "c4f403d8b5643e47",
+    "corpus_source_fingerprint_fnv1a64": "db91ed6d32ee0aad",
     "corpus_source_path": "tests/st/runtime/ops/test_matmul.py",
     "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
     "lifetime_ordering": "pypto_read_before_write",
@@ -173,8 +172,7 @@
           ]
         }
       ],
-      "pipeline_groups": [],
-      "whole_slot_reuse": true
+      "pipeline_groups": []
     }
   },
   "profile": "pypto_hard_v1",

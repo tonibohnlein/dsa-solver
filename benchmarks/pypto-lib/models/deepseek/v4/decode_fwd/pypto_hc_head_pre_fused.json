@@ -1,18 +1,17 @@
 {
   "instance": "pypto-lib::models::deepseek::v4::decode_fwd::pypto_hc_head_pre_fused",
   "metadata": {
-    "address_reuse_contract": "whole_slot_v1",
     "corpus_case_id": "models__deepseek__v4__decode_fwd",
     "corpus_export_file": "models__deepseek__v4__decode_fwd/call-001/pypto_hc_head_pre_fused.dsa.json",
     "corpus_family": "deepseek-v4",
     "corpus_importer": "dsa-corpus-v1",
     "corpus_namespace": "pypto-lib",
     "corpus_original_instance": "hc_head_pre_fused",
-    "corpus_problem_fingerprint_fnv1a64": "54510319c030efb6",
+    "corpus_problem_fingerprint_fnv1a64": "65dfb227deb171c7",
     "corpus_producer_commit": "8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1",
     "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
     "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
-    "corpus_source_fingerprint_fnv1a64": "48fabe1c32f25e62",
+    "corpus_source_fingerprint_fnv1a64": "c5a9b836a06be9e6",
     "corpus_source_path": "models/deepseek/v4/decode_fwd.py",
     "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
     "experimental_features": "pipeline_adjacent_reuse_cost",
@@ -2488,8 +2487,7 @@
           "pool": 1,
           "slot_size": 512
         }
-      ],
-      "whole_slot_reuse": true
+      ]
     }
   },
   "profile": "pypto_research_v1",

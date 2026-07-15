@@ -208,8 +208,7 @@ StructuredProblemDocument CanonicalProgram(const StructuredProblemDocument& prog
   StructuredProblemDocument canonical = program;
   canonical.instance = "program";
   canonical.metadata.clear();
-  for (const char* key :
-       {"address_reuse_contract", "lifetime_ordering", "solver_input", "lowering_abi"}) {
+  for (const char* key : {"lifetime_ordering", "solver_input", "lowering_abi"}) {
     const auto found = program.metadata.find(key);
     if (found != program.metadata.end()) canonical.metadata.emplace(found->first, found->second);
   }

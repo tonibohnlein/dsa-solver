@@ -94,10 +94,6 @@ std::vector<std::string> ValidatePyptoV1(const StructuredProblemDocument& docume
   std::vector<std::string> errors;
   RequireMetadataValue(document, "lifetime_ordering", "pypto_read_before_write", &errors);
   RequireMetadataValue(document, "solver_input", "pre_memory_reuse", &errors);
-  RequireMetadataValue(document, "address_reuse_contract", "whole_slot_v1", &errors);
-  if (!problem.pypto_structure || !problem.pypto_structure->whole_slot_reuse) {
-    errors.push_back(profile + " requires whole-slot address reuse");
-  }
   if (!reject_experimental) return errors;
   for (const Buffer& buffer : problem.buffers) {
     if (buffer.live_intervals.size() != 1) {

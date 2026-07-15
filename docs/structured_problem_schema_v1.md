@@ -1,18 +1,12 @@
 # Structured problem schema v1
 
 Schema v1 is the replay boundary between compiler adapters and the standalone
-solver. The C++ envelope is `dsa::StructuredProblemDocument`; the
-machine-readable contract is
-[`schemas/dsa-problem-v1.schema.json`](../schemas/dsa-problem-v1.schema.json).
-Readers reject unknown versions.
+solver. The C++ envelope is `dsa::StructuredProblemDocument`; the machine
+contract is [`schemas/dsa-problem-v1.schema.json`](../schemas/dsa-problem-v1.schema.json).
 
 ```text
-compiler IR -> adapter -> schema-v1 JSON -> solver + validator
+compiler IR -> adapter -> schema-v1 JSON -> solver -> independent validator
 ```
-
-This document describes serialization. PyPTO semantics and the distinction
-between current and experimental features are defined in
-[`pypto_dsa.md`](pypto_dsa.md).
 
 ## Envelope
 
@@ -26,70 +20,31 @@ between current and experimental features are defined in
 }
 ```
 
-- `schema_version` is exactly `1`.
-- `profile` selects the validated feature contract.
-- `instance` is a stable benchmark identity.
-- `metadata` contains provenance and required PyPTO contract identifiers; its
-  values do not directly change placement feasibility.
-- `relaxed_from` and `relaxed_features` appear only on named relaxations.
-- `problem` contains the solver-independent model.
+`profile` validates which fields a producer may emit. It does not necessarily
+name a different optimization problem. In particular, `pypto_hard_v1` captures
+standard DSA plus compiler provenance and ordinary hard constraints.
 
 ## Problem
 
-```json
-{
-  "pools": [{
-    "id": 3,
-    "name": "L1",
-    "capacity": 1048576,
-    "reserved_ranges": [{"begin": 0, "end": 4096}]
-  }],
-  "buffers": [{
-    "id": 7,
-    "name": "lhs_tile",
-    "size": 32768,
-    "alignment": 512,
-    "live_intervals": [{"lower": 10, "upper": 20}],
-    "allowed_pools": [3]
-  }],
-  "constraints": {
-    "colocations": [],
-    "separations": [],
-    "temporal_exclusions": [],
-    "pinned_allocations": []
-  },
-  "objective": {
-    "aggregation": "lexicographic",
-    "terms": ["capacity_overflow", "total_peak", "max_peak"]
-  }
-}
-```
-
-Intervals and address ranges are half-open. Sizes, offsets, capacities, and
-other byte quantities are nonnegative JSON integers. Each buffer has one fixed
-size, one or more intervals, and one or more allowed pools. Multiple allowed
-pools are representable but not supported by the built-in solvers.
+Each pool has an optional capacity and reserved address ranges. Each buffer has
+a size, alignment, one or more half-open live intervals, and allowed pools.
+Built-in compiler use currently fixes each buffer to one pool.
 
 Hard constraints are:
 
 - `colocations`: equal pool and offset;
-- `separations`: spatially disjoint regardless of lifetime, with optional
-  reason provenance;
+- `separations`: disjoint address ranges regardless of lifetime;
 - `temporal_exclusions`: control-flow pairs proven unable to coexist;
 - `pinned_allocations`: fixed pool and offset; and
-- pool reservations, capacities, and any enabled whole-slot contract.
+- lifetime conflicts, reservations, alignment, and capacity.
 
-Optional bank geometry is descriptive unless `bank_cost` is requested. The
-optional `cost_model.reuse_penalties` contains numeric pair costs with reason
-provenance.
+There is no whole-slot contract. Lifetime-disjoint buffers may partially overlap
+at different bases, as required by ordinary DSA and issue #1908.
 
 ## PyPTO provenance
 
-`pypto_structure` records compiler relationships in normalized form:
-
 ```json
 {
-  "whole_slot_reuse": true,
   "alias_classes": [
     {"buffer": 7, "members": ["tile", "slice"]}
   ],
@@ -104,52 +59,45 @@ provenance.
 }
 ```
 
-Alias members describe values already collapsed into one buffer. Pipeline
-groups retain source depth and physical stage/residue membership. Except for
-`whole_slot_reuse`, these fields are provenance rather than independent hard
-constraints.
+Alias members describe values already collapsed into one physical buffer.
+Pipeline groups record source depth and stage/residue membership. Hard pipeline
+requirements are represented separately as typed `separations`; provenance
+alone does not change feasibility.
 
-## Objectives
+## Optional cost model
 
-Schema v1 supports lexicographic vectors built from:
+`cost_model.reuse_penalties` contains sparse buffer pairs. A cost is charged
+when the pair has disjoint lifetimes but overlapping placed address ranges.
+Reasons distinguish evidence:
 
-- `capacity_overflow`
-- `total_peak`
-- `max_peak`
-- `reuse_cost`
-- `bank_cost`
+- `pipeline_serialization`: PR #1949-style false WAR between pipeline stages;
+- `cross_pipe`, `cross_core`, `event_budget`: reserved for models calibrated
+  against PTOAS output and device measurements; and
+- `generic`: test or externally supplied cost with no stronger claim.
 
-Terms are compared in listed order and reported individually. Weighted and
-Pareto semantics require a future schema version.
+Schema v1 objectives are lexicographic vectors using `capacity_overflow`,
+`total_peak`, `max_peak`, `reuse_cost`, and `bank_cost`. Raw values are retained;
+weighted and Pareto semantics require a future version.
 
 ## Profiles
 
-| Profile | Meaning |
+| Profile | Contract |
 | --- | --- |
-| `standard_dsa` | one fixed pool, one interval per buffer, unit alignment, no compiler extensions |
-| `pypto_hard_v1` | current device-correct PyPTO contract: fixed pools, one lifetime hull, whole-slot reuse, peak objective |
-| `pypto_research_v1` | hard-v1 base contract plus explicitly experimental fields or costs |
+| `standard_dsa` | literature-compatible single-pool problem |
+| `pypto_hard_v1` | compiler capture using standard DSA geometry plus validated hard constraints and provenance |
+| `pypto_research_v1` | the same capture with explicit experimental constraints or costs |
 | `pypto_structured` | readable legacy profile; new producers should not emit it |
-| `pypto_core_relaxation` | named per-pool standard lower bound with every removed feature recorded |
+| `pypto_core_relaxation` | named standard lower-bound projection with removed features recorded |
 
-A core relaxation removes compiler-specific constraints only when doing so is
-provably non-strengthening. It is rejected for flexible pools, temporal
-exclusions, colocations, or overlapping intervals belonging to one physical
-buffer when the standard representation would make an unsound lower-bound
-claim.
+The mathematical distinction is documented in [`pypto_dsa.md`](pypto_dsa.md):
+only experimental features that change feasibility or the objective define a
+research refinement.
 
-## Capability matching
+## Capability matching and architecture binding
 
-`CheckSolverCompatibility` reports present hard features, unsupported hard
-features, and unsupported objective terms. Hard incompatibility returns
-`kUnsupported`. An objective-only mismatch may be reported as a disclosed
-ablation. No feature is silently removed; relaxation is a separate profile with
-explicit provenance.
+`CheckSolverCompatibility` reports unsupported hard features and objective
+terms; nothing is silently dropped. A core relaxation is a separate document.
 
-## Architecture-free programs
-
-The same envelope can represent a lowered program before target binding. Pool
-capacities are `null`, architecture-derived fields are absent, and
-`metadata.lowering_abi` is present. `dsa-bind` combines it with a versioned
-[`dsa-architecture-v1`](../schemas/dsa-architecture-v1.schema.json) document.
-See [`architecture_binding.md`](architecture_binding.md).
+An architecture-free capture leaves capacities unset and records
+`metadata.lowering_abi`. `dsa-bind` combines it with a versioned architecture
+document; see [`architecture_binding.md`](architecture_binding.md).
