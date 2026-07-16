@@ -71,7 +71,9 @@ InitMemRef
   -> write offsets back to MemRefs
 ```
 
-Pipeline-depth shedding is not hidden inside placement. Until it becomes an
-explicit solver decision, it belongs in an adapter-controlled
-solve/shed/re-solve loop. Joint schedule/allocation search is likewise an outer
-loop that regenerates a complete DSA problem for each legal schedule.
+Pipeline-depth shedding is not hidden inside placement. The adapter first
+solves with full pipeline-stage separation. If that search finds no
+capacity-fitting placement, it may call `BuildPipelineIntentRelaxation` and
+re-solve with typed reuse costs while emitting a performance warning. Joint
+schedule/allocation search remains a deferred outer loop that regenerates a
+complete DSA problem for each legal schedule.

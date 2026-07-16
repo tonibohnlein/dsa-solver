@@ -1,6 +1,7 @@
 #ifndef DSA_STRUCTURED_PROBLEM_H_
 #define DSA_STRUCTURED_PROBLEM_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <iosfwd>
@@ -49,6 +50,13 @@ struct StructuredProblemDocument {
   DsaProblem problem;
 };
 
+struct PipelineIntentRelaxation {
+  StructuredProblemDocument document;
+  std::size_t removed_pipeline_reason_count = 0;
+  std::size_t relaxed_separation_count = 0;
+  std::size_t added_penalty_count = 0;
+};
+
 [[nodiscard]] const char* ToString(BenchmarkProfile profile) noexcept;
 [[nodiscard]] bool IsPyptoProfile(BenchmarkProfile profile) noexcept;
 
@@ -73,6 +81,13 @@ void WriteStructuredProblemJsonFile(const std::filesystem::path& path,
 // schema v1 and are rejected.
 [[nodiscard]] std::vector<StructuredProblemDocument> BuildCoreRelaxations(
     const StructuredProblemDocument& source);
+
+// Convert pipeline-stage keep-apart constraints into soft reuse costs after a
+// strict capacity-constrained solve fails. All non-pipeline reasons remain
+// hard. This is an explicit research relaxation, never an implicit weakening
+// performed by an ordinary DSA solver.
+[[nodiscard]] PipelineIntentRelaxation BuildPipelineIntentRelaxation(
+    const StructuredProblemDocument& source, std::uint64_t penalty_per_pair = 1);
 
 }  // namespace dsa
 

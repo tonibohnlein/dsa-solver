@@ -239,6 +239,55 @@ void TestFitCostObjectiveAvoidsExpensiveReuse() {
           "fit-cost local search did not avoid the expensive reuse edge");
 }
 
+void TestPipelineIntentRelaxationPreservesNonPipelineReasons() {
+  dsa::StructuredProblemDocument document;
+  document.profile = dsa::BenchmarkProfile::kPyptoHardV1;
+  document.instance = "pipeline_intent_relaxation";
+  document.metadata = {
+      {"lifetime_ordering", "pypto_read_before_write"},
+      {"solver_input", "pre_memory_reuse"},
+  };
+  document.problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 8),
+      MakeBuffer(1, {{2, 4}}, 8),
+      MakeBuffer(2, {{4, 6}}, 8),
+  };
+  document.problem.separations = {
+      {0, 1, {dsa::SeparationReason::kPipelineStage}},
+      {1, 2, {dsa::SeparationReason::kPipelineStage, dsa::SeparationReason::kTargetHazard}},
+  };
+  document.problem.pypto_structure = dsa::PyptoStructure{};
+
+  const dsa::PipelineIntentRelaxation relaxation = dsa::BuildPipelineIntentRelaxation(document, 7);
+  Require(relaxation.removed_pipeline_reason_count == 2,
+          "pipeline relaxation did not count both pipeline-stage reasons");
+  Require(relaxation.relaxed_separation_count == 1,
+          "pipeline relaxation counted a pair that remains hard for another reason");
+  Require(relaxation.added_penalty_count == 1,
+          "pipeline relaxation should add a cost only for the fully relaxed pair");
+  Require(relaxation.document.profile == dsa::BenchmarkProfile::kPyptoResearchV1,
+          "pipeline relaxation did not mark the document research-only");
+  Require(relaxation.document.problem.separations.size() == 1 &&
+              relaxation.document.problem.separations.front().first == 1 &&
+              relaxation.document.problem.separations.front().second == 2 &&
+              relaxation.document.problem.separations.front().reasons ==
+                  std::vector<dsa::SeparationReason>{dsa::SeparationReason::kTargetHazard},
+          "pipeline relaxation weakened a non-pipeline hard reason");
+  Require(relaxation.document.problem.cost_model &&
+              relaxation.document.problem.cost_model->reuse_penalties.size() == 1,
+          "pipeline relaxation did not create the expected sparse reuse cost");
+  const dsa::ReusePenalty& penalty =
+      relaxation.document.problem.cost_model->reuse_penalties.front();
+  Require(penalty.first == 0 && penalty.second == 1 && penalty.cost == 7 &&
+              penalty.reason == dsa::ReusePenaltyReason::kPipelineSerialization,
+          "pipeline relaxation produced the wrong reuse penalty");
+  Require(
+      relaxation.document.problem.objective.terms == dsa::FitThenMinimizeReuseCostObjective().terms,
+      "pipeline relaxation did not select the fit-then-reuse objective");
+  Require(dsa::ValidateStructuredProblemDocument(relaxation.document).empty(),
+          "pipeline relaxation produced an invalid document");
+}
+
 void TestLocalSearchClosesOrderingGap() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -331,6 +380,8 @@ dsa::StructuredProblemDocument MakeStructuredDocument() {
   document.problem.pinned_allocations.push_back({2, 4, 0, false});
   dsa::CostModel cost_model;
   cost_model.reuse_penalties.push_back({0, 1, 25, dsa::ReusePenaltyReason::kPipelineSerialization});
+  cost_model.reuse_penalties.push_back(
+      {0, 1, 5, dsa::ReusePenaltyReason::kLoadMotionSerialization});
   document.problem.cost_model = std::move(cost_model);
   dsa::PyptoStructure structure;
   structure.alias_classes = {
@@ -372,9 +423,11 @@ void TestStructuredJsonRoundTripAndProfiles() {
               parsed.problem.pypto_structure->alias_classes.front().members.size() == 2 &&
               parsed.problem.pypto_structure->pipeline_groups.front().effective_depth == 2,
           "normalized PyPTO structure did not round-trip");
-  Require(
-      parsed.problem.cost_model && parsed.problem.cost_model->reuse_penalties.front().cost == 25,
-      "structured cost model did not round-trip");
+  Require(parsed.problem.cost_model && parsed.problem.cost_model->reuse_penalties.size() == 2 &&
+              parsed.problem.cost_model->reuse_penalties.front().cost == 25 &&
+              parsed.problem.cost_model->reuse_penalties.back().reason ==
+                  dsa::ReusePenaltyReason::kLoadMotionSerialization,
+          "structured cost model did not round-trip");
   Require(parsed.problem.objective.terms == dsa::FitThenMinimizeReuseCostObjective().terms,
           "structured objective did not round-trip");
 
@@ -944,6 +997,7 @@ int main() {
       {"temporal exclusion", TestTemporalExclusionOverridesConservativeHulls},
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
+      {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},
       {"local search", TestLocalSearchClosesOrderingGap},
       {"local search budget", TestLocalSearchUsesGlobalEvaluationBudget},
       {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},

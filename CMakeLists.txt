@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.8.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.9.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)

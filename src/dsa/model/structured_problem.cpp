@@ -133,6 +133,26 @@ bool PairTouches(const std::unordered_set<BufferId>& selected, BufferId first, B
   return selected.count(first) != 0 || selected.count(second) != 0;
 }
 
+bool HasReason(const Separation& separation, SeparationReason reason) {
+  return std::find(separation.reasons.begin(), separation.reasons.end(), reason) !=
+         separation.reasons.end();
+}
+
+bool HasPenalty(const CostModel& cost_model, BufferId first, BufferId second,
+                ReusePenaltyReason reason) {
+  if (second < first) std::swap(first, second);
+  return std::any_of(cost_model.reuse_penalties.begin(), cost_model.reuse_penalties.end(),
+                     [&](const ReusePenalty& penalty) {
+                       BufferId penalty_first = penalty.first;
+                       BufferId penalty_second = penalty.second;
+                       if (penalty_second < penalty_first) {
+                         std::swap(penalty_first, penalty_second);
+                       }
+                       return penalty_first == first && penalty_second == second &&
+                              penalty.reason == reason;
+                     });
+}
+
 }  // namespace
 
 const char* ToString(BenchmarkProfile profile) noexcept {
@@ -353,6 +373,81 @@ std::vector<StructuredProblemDocument> BuildCoreRelaxations(
     documents.push_back(std::move(relaxed));
   }
   return documents;
+}
+
+PipelineIntentRelaxation BuildPipelineIntentRelaxation(const StructuredProblemDocument& source,
+                                                       std::uint64_t penalty_per_pair) {
+  const std::vector<std::string> source_errors = ValidateStructuredProblemDocument(source);
+  if (!source_errors.empty()) {
+    throw std::invalid_argument("cannot relax an invalid structured problem: " +
+                                source_errors.front());
+  }
+  if (!IsPyptoProfile(source.profile)) {
+    throw std::invalid_argument("pipeline-intent relaxation requires a PyPTO source document");
+  }
+  if (penalty_per_pair == 0) {
+    throw std::invalid_argument("pipeline-intent reuse penalty must be non-zero");
+  }
+
+  PipelineIntentRelaxation relaxation;
+  relaxation.document = source;
+  relaxation.document.profile = BenchmarkProfile::kPyptoResearchV1;
+  relaxation.document.problem.objective = FitThenMinimizeReuseCostObjective();
+  if (!relaxation.document.problem.cost_model) {
+    relaxation.document.problem.cost_model = CostModel{};
+  }
+  CostModel& cost_model = *relaxation.document.problem.cost_model;
+
+  std::vector<Separation> retained;
+  retained.reserve(source.problem.separations.size());
+  for (const Separation& source_separation : source.problem.separations) {
+    if (!HasReason(source_separation, SeparationReason::kPipelineStage)) {
+      retained.push_back(source_separation);
+      continue;
+    }
+
+    ++relaxation.removed_pipeline_reason_count;
+    Separation retained_separation = source_separation;
+    retained_separation.reasons.erase(
+        std::remove(retained_separation.reasons.begin(), retained_separation.reasons.end(),
+                    SeparationReason::kPipelineStage),
+        retained_separation.reasons.end());
+    if (!retained_separation.reasons.empty()) {
+      retained.push_back(std::move(retained_separation));
+      continue;
+    }
+    ++relaxation.relaxed_separation_count;
+
+    const Buffer* first = source.problem.FindBuffer(source_separation.first);
+    const Buffer* second = source.problem.FindBuffer(source_separation.second);
+    if (first == nullptr || second == nullptr ||
+        HaveTemporalConflict(source.problem, *first, *second)) {
+      continue;
+    }
+    if (!HasPenalty(cost_model, source_separation.first, source_separation.second,
+                    ReusePenaltyReason::kPipelineSerialization)) {
+      cost_model.reuse_penalties.push_back({source_separation.first, source_separation.second,
+                                            penalty_per_pair,
+                                            ReusePenaltyReason::kPipelineSerialization});
+      ++relaxation.added_penalty_count;
+    }
+  }
+  relaxation.document.problem.separations = std::move(retained);
+  relaxation.document.metadata["experimental_features"] = "pipeline_intent_fallback";
+  relaxation.document.metadata["pipeline_intent_policy"] = "soft_after_strict_no_fit";
+  relaxation.document.metadata["pipeline_effective_depth_semantics"] =
+      "requested_intent_not_placement";
+  relaxation.document.metadata["reuse_cost_model"] = "pipeline_stage_overlap_pairs_v1";
+  relaxation.document.metadata["relaxed_pipeline_separations"] =
+      std::to_string(relaxation.relaxed_separation_count);
+
+  const std::vector<std::string> relaxed_errors =
+      ValidateStructuredProblemDocument(relaxation.document);
+  if (!relaxed_errors.empty()) {
+    throw std::logic_error("generated an invalid pipeline-intent relaxation: " +
+                           relaxed_errors.front());
+  }
+  return relaxation;
 }
 
 }  // namespace dsa

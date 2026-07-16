@@ -107,6 +107,7 @@ struct PinnedAllocation {
 enum class ReusePenaltyReason : std::uint8_t {
   kGeneric,
   kPipelineSerialization,
+  kLoadMotionSerialization,
   kCrossPipe,
   kCrossCore,
   kEventBudget,

@@ -53,7 +53,7 @@ DeepSeek-v4 loop-carried accumulator lifetimes; a solver legally reused one of
 those false holes and corrupted device output. The fix was to export the sound
 physical hull, not to weaken DSA placement.
 
-## Pipeline separation already grounded by PR #1949
+## Pipeline intent already grounded by PR #1949
 
 Pipeline clones are sequential in scalar program order but are intended to run
 concurrently on asynchronous hardware units. If two stages share an address,
@@ -61,10 +61,36 @@ the reuse creates a false write-after-read dependency: the next prefetch must
 wait for the previous consumer, destroying the intended ping-pong overlap.
 
 PR #1949 demonstrates this mechanism in PyPTO. `pipeline_membership=(group,
-stage)` identifies the clones. Distinct effective residues are exported as hard
-separations because the selected pipeline depth requires distinct buffers. If
-capacity forces stages into one residue, cross-stage reuse candidates may carry
-the experimental reason `pipeline_serialization`.
+stage)` identifies the clones. The strict capture exports all requested stages
+as hard `pipeline_stage` separations. The compiler first solves that ordinary
+capacity-constrained DSA problem.
+
+If the strict search finds no fitting placement, the explicit
+`BuildPipelineIntentRelaxation` transformation removes only the
+`pipeline_stage` reason. Any target-hazard or semantic reason on the same pair
+remains hard. Lifetime-disjoint relaxed pairs receive the experimental reason
+`pipeline_serialization`, and the problem is solved with:
+
+```text
+(capacity overflow, reuse cost, total peak, max peak)
+```
+
+This is a named research relaxation, not behavior that a standard solver may
+apply silently. A compiler using it must report that requested pipeline overlap
+may be lost.
+
+Formally, if `P` is the set of typed pipeline-stage pairs, the strict problem
+adds address disjointness for every pair in `P`. The fallback removes only
+those edges and minimizes:
+
+```text
+lex(capacity_overflow, sum((i,j) in P) w_ij * reuse(i,j),
+    total_peak, max_peak)
+```
+
+`reuse(i,j)` is one only for lifetime-disjoint buffers whose placed address
+ranges overlap. Ordinary lifetime conflicts and every non-pipeline separation
+remain hard.
 
 This separates two questions cleanly:
 
@@ -119,8 +145,8 @@ motivation.
 
 ## Objective and experiments
 
-The production path currently minimizes peak and validates capacity. Research
-documents may request lexicographically:
+The strict path minimizes peak and validates capacity. The explicit fallback
+requests lexicographically:
 
 ```text
 (capacity overflow, reuse/synchronization cost, total peak, max peak)

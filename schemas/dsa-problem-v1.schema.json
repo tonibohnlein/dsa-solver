@@ -345,6 +345,7 @@
           "enum": [
             "generic",
             "pipeline_serialization",
+            "load_motion_serialization",
             "cross_pipe",
             "cross_core",
             "event_budget"

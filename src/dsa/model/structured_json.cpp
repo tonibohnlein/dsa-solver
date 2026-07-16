@@ -135,6 +135,9 @@ ReusePenaltyReason ReadPenaltyReason(const Json& value, const std::string& path)
   const std::string name = ReadString(value, path);
   if (name == "generic") return ReusePenaltyReason::kGeneric;
   if (name == "pipeline_serialization") return ReusePenaltyReason::kPipelineSerialization;
+  if (name == "load_motion_serialization") {
+    return ReusePenaltyReason::kLoadMotionSerialization;
+  }
   if (name == "cross_pipe") return ReusePenaltyReason::kCrossPipe;
   if (name == "cross_core") return ReusePenaltyReason::kCrossCore;
   if (name == "event_budget") return ReusePenaltyReason::kEventBudget;
@@ -156,6 +159,8 @@ const char* PenaltyReasonName(ReusePenaltyReason reason) {
       return "generic";
     case ReusePenaltyReason::kPipelineSerialization:
       return "pipeline_serialization";
+    case ReusePenaltyReason::kLoadMotionSerialization:
+      return "load_motion_serialization";
     case ReusePenaltyReason::kCrossPipe:
       return "cross_pipe";
     case ReusePenaltyReason::kCrossCore:
