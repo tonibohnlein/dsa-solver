@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(dsa_solver VERSION 0.9.0 LANGUAGES CXX)
+project(dsa_solver VERSION 0.10.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -382,7 +382,8 @@ install(
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dsa
 )
 install(
-  FILES schemas/dsa-problem-v1.schema.json schemas/dsa-architecture-v1.schema.json
+  FILES schemas/dsa-problem-v1.schema.json schemas/dsa-solution-v1.schema.json
+        schemas/dsa-architecture-v1.schema.json
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dsa-solver/schemas
 )
 install(

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tonibohnlein/dsa-solver/schemas/dsa-solution-v1.schema.json",
+  "title": "DSA structured solution schema v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "instance",
+    "problem_fingerprint",
+    "metadata",
+    "placements"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "profile": {
+      "enum": [
+        "standard_dsa",
+        "pypto_structured",
+        "pypto_hard_v1",
+        "pypto_research_v1",
+        "pypto_core_relaxation"
+      ]
+    },
+    "instance": {"type": "string", "minLength": 1},
+    "problem_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "placements": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/placement"}
+    }
+  },
+  "$defs": {
+    "uint32": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "uint64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buffer", "pool", "offset"],
+      "properties": {
+        "buffer": {"$ref": "#/$defs/uint32"},
+        "pool": {"$ref": "#/$defs/uint32"},
+        "offset": {"$ref": "#/$defs/uint64"}
+      }
+    }
+  }
+}

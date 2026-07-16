@@ -239,6 +239,41 @@ void TestFitCostObjectiveAvoidsExpensiveReuse() {
           "fit-cost local search did not avoid the expensive reuse edge");
 }
 
+void TestStructuredSolutionRoundTripAndMismatchRejection() {
+  dsa::StructuredProblemDocument problem;
+  problem.profile = dsa::BenchmarkProfile::kPyptoHardV1;
+  problem.instance = "solution_roundtrip";
+  problem.metadata = {
+      {"lifetime_ordering", "pypto_read_before_write"},
+      {"solver_input", "pre_memory_reuse"},
+  };
+  problem.problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 8),
+      MakeBuffer(1, {{2, 4}}, 8),
+  };
+  const dsa::DsaResult result = SolveAndValidate(problem.problem, dsa::FirstFitSolver());
+  Require(result.solution.has_value(), "solution round-trip test has no placement");
+
+  const dsa::StructuredSolutionDocument solution =
+      dsa::BuildStructuredSolutionDocument(problem, *result.solution, {{"solver", "first_fit"}});
+  std::stringstream encoded;
+  dsa::WriteStructuredSolutionJson(encoded, solution);
+  const dsa::StructuredSolutionDocument decoded = dsa::ReadStructuredSolutionJson(encoded);
+  const dsa::DsaSolution replayed = dsa::ValidateAndExtractStructuredSolution(problem, decoded);
+  Require(replayed.placements == result.solution->placements,
+          "structured solution round-trip changed placements");
+
+  dsa::StructuredProblemDocument changed = problem;
+  changed.problem.buffers.front().size = 16;
+  bool rejected = false;
+  try {
+    static_cast<void>(dsa::ValidateAndExtractStructuredSolution(changed, decoded));
+  } catch (const std::invalid_argument& error) {
+    rejected = std::string(error.what()).find("fingerprint") != std::string::npos;
+  }
+  Require(rejected, "structured solution replay accepted a different problem");
+}
+
 void TestPipelineIntentRelaxationPreservesNonPipelineReasons() {
   dsa::StructuredProblemDocument document;
   document.profile = dsa::BenchmarkProfile::kPyptoHardV1;
@@ -997,6 +1032,7 @@ int main() {
       {"temporal exclusion", TestTemporalExclusionOverridesConservativeHulls},
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
+      {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},
       {"local search", TestLocalSearchClosesOrderingGap},
       {"local search budget", TestLocalSearchUsesGlobalEvaluationBudget},

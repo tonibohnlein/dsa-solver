@@ -105,8 +105,12 @@ constraints, pins, cost overlays, normalized PyPTO structure, and a lexicographi
   --input tests/data/pypto_structured_v1.json \
   --solver local-search \
   --seed 7 \
-  --iterations 20000
+  --iterations 20000 \
+  --solution-output placement.dsa.solution.json
 ```
+
+The solution artifact is fingerprinted against the complete structured input
+and can be independently validated and replayed by a compiler adapter.
 
 Run the explicitly relaxed standard-DSA lower bound for one source pool:
 

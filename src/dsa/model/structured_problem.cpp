@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <iomanip>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -153,6 +155,17 @@ bool HasPenalty(const CostModel& cost_model, BufferId first, BufferId second,
                      });
 }
 
+std::string Fnv1a64(const std::string& value) {
+  std::uint64_t hash = 14695981039346656037ULL;
+  for (const unsigned char byte : value) {
+    hash ^= byte;
+    hash *= 1099511628211ULL;
+  }
+  std::ostringstream output;
+  output << std::hex << std::setw(16) << std::setfill('0') << hash;
+  return output.str();
+}
+
 }  // namespace
 
 const char* ToString(BenchmarkProfile profile) noexcept {
@@ -174,6 +187,59 @@ const char* ToString(BenchmarkProfile profile) noexcept {
 bool IsPyptoProfile(BenchmarkProfile profile) noexcept {
   return profile == BenchmarkProfile::kPyptoStructured ||
          profile == BenchmarkProfile::kPyptoHardV1 || profile == BenchmarkProfile::kPyptoResearchV1;
+}
+
+std::string FingerprintStructuredProblem(const StructuredProblemDocument& document) {
+  const std::vector<std::string> errors = ValidateStructuredProblemDocument(document);
+  if (!errors.empty()) {
+    throw std::invalid_argument("cannot fingerprint invalid structured problem: " + errors.front());
+  }
+  std::ostringstream output;
+  WriteStructuredProblemJson(output, document);
+  return Fnv1a64(output.str());
+}
+
+StructuredSolutionDocument BuildStructuredSolutionDocument(
+    const StructuredProblemDocument& problem, const DsaSolution& solution,
+    std::map<std::string, std::string> metadata) {
+  const std::vector<std::string> errors = ValidateSolution(problem.problem, solution);
+  if (!errors.empty()) {
+    throw std::invalid_argument("cannot serialize invalid structured solution: " + errors.front());
+  }
+  StructuredSolutionDocument document;
+  document.schema_version = problem.schema_version;
+  document.profile = problem.profile;
+  document.instance = problem.instance;
+  document.problem_fingerprint = FingerprintStructuredProblem(problem);
+  document.metadata = std::move(metadata);
+  document.solution = solution;
+  return document;
+}
+
+DsaSolution ValidateAndExtractStructuredSolution(
+    const StructuredProblemDocument& problem, const StructuredSolutionDocument& solution_document) {
+  if (solution_document.schema_version != problem.schema_version) {
+    throw std::invalid_argument("solution schema version does not match the structured problem");
+  }
+  if (solution_document.profile != problem.profile) {
+    throw std::invalid_argument("solution profile does not match the structured problem");
+  }
+  if (solution_document.instance != problem.instance) {
+    throw std::invalid_argument("solution instance '" + solution_document.instance +
+                                "' does not match structured problem '" + problem.instance + "'");
+  }
+  const std::string expected_fingerprint = FingerprintStructuredProblem(problem);
+  if (solution_document.problem_fingerprint != expected_fingerprint) {
+    throw std::invalid_argument(
+        "solution problem fingerprint '" + solution_document.problem_fingerprint +
+        "' does not match expected fingerprint '" + expected_fingerprint + "'");
+  }
+  const std::vector<std::string> errors =
+      ValidateSolution(problem.problem, solution_document.solution);
+  if (!errors.empty()) {
+    throw std::invalid_argument("replayed structured solution is invalid: " + errors.front());
+  }
+  return solution_document.solution;
 }
 
 std::vector<std::string> ValidateStructuredProblemDocument(

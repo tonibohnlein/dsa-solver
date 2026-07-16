@@ -50,6 +50,15 @@ struct StructuredProblemDocument {
   DsaProblem problem;
 };
 
+struct StructuredSolutionDocument {
+  std::uint32_t schema_version = kStructuredProblemSchemaVersion;
+  BenchmarkProfile profile = BenchmarkProfile::kPyptoHardV1;
+  std::string instance;
+  std::string problem_fingerprint;
+  std::map<std::string, std::string> metadata;
+  DsaSolution solution;
+};
+
 struct PipelineIntentRelaxation {
   StructuredProblemDocument document;
   std::size_t removed_pipeline_reason_count = 0;
@@ -72,6 +81,26 @@ struct PipelineIntentRelaxation {
 void WriteStructuredProblemJson(std::ostream& output, const StructuredProblemDocument& document);
 void WriteStructuredProblemJsonFile(const std::filesystem::path& path,
                                     const StructuredProblemDocument& document);
+
+// Stable fingerprint of the complete structured problem document. Replay
+// artifacts use it to reject placements produced for different buffers,
+// lifetimes, capacities, constraints, objectives, or target metadata.
+[[nodiscard]] std::string FingerprintStructuredProblem(const StructuredProblemDocument& document);
+
+[[nodiscard]] StructuredSolutionDocument BuildStructuredSolutionDocument(
+    const StructuredProblemDocument& problem, const DsaSolution& solution,
+    std::map<std::string, std::string> metadata = {});
+[[nodiscard]] StructuredSolutionDocument ReadStructuredSolutionJson(std::istream& input);
+[[nodiscard]] StructuredSolutionDocument ReadStructuredSolutionJsonFile(
+    const std::filesystem::path& path);
+void WriteStructuredSolutionJson(std::ostream& output, const StructuredSolutionDocument& document);
+void WriteStructuredSolutionJsonFile(const std::filesystem::path& path,
+                                     const StructuredSolutionDocument& document);
+
+// Validate a replay artifact against the freshly exported problem and return
+// its independently validated placement.
+[[nodiscard]] DsaSolution ValidateAndExtractStructuredSolution(
+    const StructuredProblemDocument& problem, const StructuredSolutionDocument& solution_document);
 
 // Produce one sound standard-DSA lower-bound document per fixed pool. Hard
 // compiler constraints, alignment, reserved ranges, cost overlays, and

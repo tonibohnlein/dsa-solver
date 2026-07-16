@@ -412,8 +412,23 @@ measured event costs; a stronger evaluator measures critical-path growth.
 This handles transitive elimination and event pressure that independent pair
 weights miss. PTOAS
 [PR #948](https://github.com/hw-native-sys/PTOAS/pull/948) makes explicit
-physical overlap visible to downstream correctness analysis; instrumentation is
-still needed to expose the performance delta.
+physical overlap visible to downstream correctness analysis. The experiment
+branch adds `--pto-insert-sync-summary=<path>`, which records structural
+InsertSync counts as JSONL. These counts are not cycle estimates; they are the
+downstream evidence to correlate with device latency.
+
+The replay loop is deterministic:
+
+```text
+PyPTO export -> dsa-bench --solution-output placement.json
+             -> PyPTO fingerprint + independent replay validation
+             -> PTOAS InsertSync JSONL
+             -> device correctness and repeated latency
+```
+
+Two placements are compared against the same freshly exported problem, program
+schedule, code generation, input data, and target. This separates placement
+effects from solver randomness and compiler drift.
 
 ## Search is not the problem definition
 

@@ -38,6 +38,7 @@ struct Options {
   std::optional<std::uint64_t> capacity;
   std::optional<std::filesystem::path> output;
   std::optional<std::filesystem::path> json_output;
+  std::optional<std::filesystem::path> solution_output;
   std::optional<std::filesystem::path> reference_output;
   std::optional<dsa::PoolId> core_relaxation_pool;
   std::optional<ObjectiveOverride> objective_override;
@@ -69,6 +70,7 @@ void PrintHelp() {
             << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
             << "  --reference-output FILE.csv      Compare with a MiniMalloc solution CSV\n"
             << "  --json-output FILE.json          Also write the JSON result to a file\n"
+            << "  --solution-output FILE.json      Write a replayable structured solution\n"
             << "  --core-relaxation-pool ID        Run a sound standard relaxation of one pool\n"
             << "  --seed N                         Search random seed (default: 0)\n"
             << "  --iterations N                   Search evaluations/attempts budget\n"
@@ -103,6 +105,8 @@ Options ParseOptions(int argc, char** argv) {
       options.output = std::filesystem::path(next(&i, option));
     } else if (option == "--json-output") {
       options.json_output = std::filesystem::path(next(&i, option));
+    } else if (option == "--solution-output") {
+      options.solution_output = std::filesystem::path(next(&i, option));
     } else if (option == "--reference-output") {
       options.reference_output = std::filesystem::path(next(&i, option));
     } else if (option == "--core-relaxation-pool") {
@@ -382,6 +386,12 @@ int main(int argc, char** argv) {
               "--output CSV is unavailable for a structured profile; use a core relaxation");
         }
         dsa::WriteMiniMallocCsvFile(*options.output, document.problem, &*result.solution);
+      }
+      if (options.solution_output) {
+        dsa::WriteStructuredSolutionJsonFile(
+            *options.solution_output,
+            dsa::BuildStructuredSolutionDocument(
+                document, *result.solution, {{"solver", options.solver}}));
       }
     }
 

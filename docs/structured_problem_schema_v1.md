@@ -2,11 +2,20 @@
 
 Schema v1 is the replay boundary between compiler adapters and the standalone
 solver. The C++ envelope is `dsa::StructuredProblemDocument`; the machine
-contract is [`schemas/dsa-problem-v1.schema.json`](../schemas/dsa-problem-v1.schema.json).
+problem contract is
+[`schemas/dsa-problem-v1.schema.json`](../schemas/dsa-problem-v1.schema.json).
+Exact placement replay uses
+[`schemas/dsa-solution-v1.schema.json`](../schemas/dsa-solution-v1.schema.json).
 
 ```text
 compiler IR -> adapter -> schema-v1 JSON -> solver -> independent validator
 ```
+
+For controlled A/B experiments, `dsa-bench --solution-output FILE` records the
+complete placement with the problem profile, instance name, and a stable
+fingerprint of the full input. A compiler adapter must re-export the problem,
+match that fingerprint, and independently validate the recorded offsets before
+writeback. A solution from a different kernel or constraint set is rejected.
 
 ## Envelope
 

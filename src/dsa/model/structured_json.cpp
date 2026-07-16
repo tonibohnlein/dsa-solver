@@ -472,6 +472,46 @@ StructuredProblemDocument ParseDocument(const Json& root) {
   return document;
 }
 
+StructuredSolutionDocument ParseSolutionDocument(const Json& root) {
+  CheckFields(
+      root,
+      {"schema_version", "profile", "instance", "problem_fingerprint", "metadata", "placements"},
+      "root");
+
+  StructuredSolutionDocument document;
+  document.schema_version = ReadUnsigned<std::uint32_t>(
+      RequireField(root, "schema_version", "root"), "root.schema_version");
+  document.profile = ReadProfile(RequireField(root, "profile", "root"), "root.profile");
+  document.instance = ReadString(RequireField(root, "instance", "root"), "root.instance");
+  document.problem_fingerprint =
+      ReadString(RequireField(root, "problem_fingerprint", "root"), "root.problem_fingerprint");
+
+  const Json& metadata = RequireField(root, "metadata", "root");
+  if (!metadata.is_object()) throw std::runtime_error("root.metadata must be an object");
+  for (auto it = metadata.begin(); it != metadata.end(); ++it) {
+    if (!it.value().is_string()) {
+      throw std::runtime_error("root.metadata." + it.key() + " must be a string");
+    }
+    document.metadata.emplace(it.key(), it.value().get<std::string>());
+  }
+
+  const Json& placements = RequireArray(root, "placements", "root");
+  for (std::size_t index = 0; index < placements.size(); ++index) {
+    const std::string path = "root.placements[" + std::to_string(index) + "]";
+    const Json& placement = placements[index];
+    CheckFields(placement, {"buffer", "pool", "offset"}, path);
+    const BufferId buffer =
+        ReadUnsigned<BufferId>(RequireField(placement, "buffer", path), path + ".buffer");
+    const PoolId pool = ReadUnsigned<PoolId>(RequireField(placement, "pool", path), path + ".pool");
+    const std::uint64_t offset =
+        ReadUnsigned<std::uint64_t>(RequireField(placement, "offset", path), path + ".offset");
+    if (!document.solution.placements.emplace(buffer, Placement{pool, offset}).second) {
+      throw std::runtime_error(path + " repeats buffer " + std::to_string(buffer));
+    }
+  }
+  return document;
+}
+
 Json SerializeDocument(const StructuredProblemDocument& document) {
   const std::vector<std::string> errors = ValidateStructuredProblemDocument(document);
   if (!errors.empty()) {
@@ -573,6 +613,20 @@ Json SerializeDocument(const StructuredProblemDocument& document) {
   return root;
 }
 
+Json SerializeSolutionDocument(const StructuredSolutionDocument& document) {
+  Json root{{"schema_version", document.schema_version},
+            {"profile", ToString(document.profile)},
+            {"instance", document.instance},
+            {"problem_fingerprint", document.problem_fingerprint},
+            {"metadata", document.metadata},
+            {"placements", Json::array()}};
+  for (const auto& [buffer, placement] : document.solution.placements) {
+    root["placements"].push_back(
+        {{"buffer", buffer}, {"pool", placement.pool}, {"offset", placement.offset}});
+  }
+  return root;
+}
+
 }  // namespace
 
 StructuredProblemDocument ReadStructuredProblemJson(std::istream& input) {
@@ -599,6 +653,32 @@ void WriteStructuredProblemJsonFile(const std::filesystem::path& path,
   std::ofstream output(path);
   if (!output) throw std::runtime_error("cannot open structured problem output: " + path.string());
   WriteStructuredProblemJson(output, document);
+}
+
+StructuredSolutionDocument ReadStructuredSolutionJson(std::istream& input) {
+  try {
+    return ParseSolutionDocument(Json::parse(input));
+  } catch (const nlohmann::json::exception& error) {
+    throw std::runtime_error(std::string("invalid structured solution JSON: ") + error.what());
+  }
+}
+
+StructuredSolutionDocument ReadStructuredSolutionJsonFile(const std::filesystem::path& path) {
+  std::ifstream input(path);
+  if (!input) throw std::runtime_error("cannot open structured solution input: " + path.string());
+  return ReadStructuredSolutionJson(input);
+}
+
+void WriteStructuredSolutionJson(std::ostream& output, const StructuredSolutionDocument& document) {
+  output << std::setw(2) << SerializeSolutionDocument(document) << '\n';
+  if (!output) throw std::runtime_error("failed to write structured solution JSON");
+}
+
+void WriteStructuredSolutionJsonFile(const std::filesystem::path& path,
+                                     const StructuredSolutionDocument& document) {
+  std::ofstream output(path);
+  if (!output) throw std::runtime_error("cannot open structured solution output: " + path.string());
+  WriteStructuredSolutionJson(output, document);
 }
 
 }  // namespace dsa
