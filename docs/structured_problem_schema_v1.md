@@ -28,7 +28,10 @@ standard DSA plus compiler provenance and ordinary hard constraints.
 
 Each pool has an optional capacity and reserved address ranges. Each buffer has
 a size, alignment, one or more half-open live intervals, and allowed pools.
-Built-in compiler use currently fixes each buffer to one pool.
+Built-in compiler use currently fixes each buffer to one pool. PyPTO may bundle
+several physically independent memory spaces in one document, but no
+constraint or cost crosses between them, so they remain independent DSA
+instances.
 
 Hard constraints are:
 

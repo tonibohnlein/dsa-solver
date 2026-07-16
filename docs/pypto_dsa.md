@@ -69,10 +69,11 @@ two forms of the same standard DSA problem.
 ## PyPTO instance construction is not a new DSA problem
 
 PyPTO first partitions physical buffers by memory space. UB, L1, L0A, L0B,
-L0C, and other physically independent address spaces become separate DSA
-instances. A solver invocation therefore sees one arena only; buffers from
-different memory spaces cannot conflict, reuse one another, or activate a
-reuse penalty.
+L0C, and other physically independent address spaces define separate DSA
+instances mathematically. The current schema and adapter may bundle these
+independent arenas into one document and solver call, but no constraint, reuse,
+or penalty crosses a memory-space boundary. They can therefore be solved and
+reported independently without changing the problem.
 
 PyPTO then supplies compiler facts for that arena:
 
