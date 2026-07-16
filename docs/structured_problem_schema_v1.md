@@ -38,8 +38,7 @@ Hard constraints are:
 - `pinned_allocations`: fixed pool and offset; and
 - lifetime conflicts, reservations, alignment, and capacity.
 
-There is no whole-slot contract. Lifetime-disjoint buffers may partially overlap
-at different bases, as required by ordinary DSA and issue #1908.
+Lifetime-disjoint buffers may partially overlap at different bases.
 
 ## PyPTO provenance
 
@@ -74,18 +73,29 @@ costs.
 
 `cost_model.reuse_penalties` contains sparse buffer pairs. A cost is charged
 when the pair has disjoint lifetimes but overlapping placed address ranges.
-Reasons distinguish evidence:
+Reasons distinguish provenance, not a calibrated hardware cost:
 
-- `pipeline_serialization`: PR #1949-style false WAR between pipeline stages;
-- `load_motion_serialization`: reuse that forces an intentionally early load
-  back behind the previous consumer;
-- `cross_pipe`, `cross_core`, `event_budget`: reserved for models calibrated
-  against PTOAS output and device measurements; and
+- `pipeline_serialization`: implemented strict-to-soft fallback for pipeline
+  stages, grounded by PyPTO PR #1949;
+- `cross_pipe`: experimental placeholder for a placement-induced PTOAS
+  set/wait; production evidence should record the actual pipe pair and
+  counterfactual synchronization delta;
+- `load_motion_serialization` and `cross_core`: reserved schema vocabulary with
+  no independent producer or calibrated objective today;
+- `event_budget`: reserved for a future non-additive model of event
+  multiplicity reduction and `PIPE_ALL` fallback; and
 - `generic`: test or externally supplied cost with no stronger claim.
 
-Schema v1 objectives are lexicographic vectors using `capacity_overflow`,
-`total_peak`, `max_peak`, `reuse_cost`, and `bank_cost`. Raw values are retained;
-weighted and Pareto semantics require a future version.
+The mechanism definitions, examples, and evidence status are documented in
+[`pypto_dsa.md`](pypto_dsa.md). Producers must not stack overlapping categories
+on one pair until a non-double-counting composition rule exists.
+
+For PyPTO's fixed-capacity formulation, capacity is a hard feasibility
+constraint and `reuse_cost` is minimized among fitting placements. Schema v1
+can still encode lexicographic vectors using `capacity_overflow`, `total_peak`,
+`max_peak`, `reuse_cost`, and `bank_cost`; `capacity_overflow` is useful as an
+internal search signal or benchmark diagnostic, not as an accepted
+over-capacity solution.
 
 `BuildPipelineIntentRelaxation` is the explicit strict-to-soft transition. It
 removes only `pipeline_stage` reasons, preserves every other reason on the
@@ -95,13 +105,15 @@ Ordinary solvers never perform this relaxation implicitly.
 
 ## Profiles
 
-| Profile | Contract |
-| --- | --- |
-| `standard_dsa` | literature-compatible single-pool problem |
-| `pypto_hard_v1` | compiler capture using standard DSA geometry plus validated hard constraints and provenance |
-| `pypto_research_v1` | the same capture with explicit experimental constraints or costs |
-| `pypto_structured` | readable legacy profile; new producers should not emit it |
-| `pypto_core_relaxation` | named standard lower-bound projection with removed features recorded |
+- `standard_dsa`: literature-compatible single-pool problem.
+- `pypto_hard_v1`: standard DSA plus validated compiler constraints and
+  provenance.
+- `pypto_research_v1`: PyPTO capture with explicit experimental constraints or
+  costs.
+- `pypto_structured`: readable legacy profile; new producers should not emit
+  it.
+- `pypto_core_relaxation`: named standard lower-bound projection with removed
+  features recorded.
 
 The mathematical distinction is documented in [`pypto_dsa.md`](pypto_dsa.md):
 only experimental features that change feasibility or the objective define a
