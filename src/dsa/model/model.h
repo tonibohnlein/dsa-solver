@@ -230,6 +230,7 @@ struct DsaResult {
   SolveStatus status = SolveStatus::kUnsupported;
   std::optional<DsaSolution> solution;
   ObjectiveValue objective;
+  std::map<std::string, std::uint64_t> solver_metrics;
   std::vector<std::string> diagnostics;
 };
 

@@ -11,7 +11,8 @@
 - [`design.md`](design.md): solver framework and adapter boundaries.
 - [`literature_review.md`](literature_review.md): comparison with existing
   static-memory planners.
-- [`xla_heap.md`](xla_heap.md) and [`tvm_hill_climb.md`](tvm_hill_climb.md):
+- [`cypress_relaxation.md`](cypress_relaxation.md),
+  [`xla_heap.md`](xla_heap.md), and [`tvm_hill_climb.md`](tvm_hill_climb.md):
   provenance and exact scope of the behavioral reimplementations.
 
 Benchmark inputs and reports are documented under

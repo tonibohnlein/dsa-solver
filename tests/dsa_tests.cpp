@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "dsa/algorithms/cypress_relaxation_solver.h"
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
@@ -764,6 +765,50 @@ void TestSolverCapabilityMatching() {
           "unimplemented bank objective was silently advertised");
 }
 
+void TestCypressRelaxationBaseline() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 6),
+      MakeBuffer(1, {{0, 4}}, 4),
+      MakeBuffer(2, {{2, 4}}, 3),
+  };
+  problem.pools.front().capacity = 10;
+
+  const dsa::CypressRelaxationSolver solver;
+  const dsa::DsaResult result = SolveAndValidate(problem, solver);
+  Require(OffsetOf(result, 0) == 4 && OffsetOf(result, 1) == 0 && OffsetOf(result, 2) == 4,
+          "Cypress baseline did not reproduce the frozen Knight placement");
+  Require(result.objective.max_peak == 10,
+          "Cypress baseline did not fit the capacity after one relaxation");
+  Require(result.solver_metrics.at("relaxed_edges") == 1 &&
+              result.solver_metrics.at("actual_alias_pairs") == 1 &&
+              result.solver_metrics.at("packing_attempts") == 2,
+          "Cypress baseline did not report its relaxation accounting");
+
+  problem.pools.front().capacity = 13;
+  const dsa::DsaResult separated = SolveAndValidate(problem, solver);
+  Require(separated.objective.max_peak == 13 && separated.solver_metrics.at("relaxed_edges") == 0 &&
+              separated.solver_metrics.at("actual_alias_pairs") == 0,
+          "Cypress baseline relaxed a complete graph that already fit");
+
+  problem.pools.front().capacity.reset();
+  const dsa::DsaResult no_capacity = solver.Solve(problem);
+  Require(no_capacity.status == dsa::SolveStatus::kUnsupported &&
+              ContainsSubstring(no_capacity.diagnostics, "requires a fixed capacity"),
+          "Cypress baseline silently ran without its defining capacity bound");
+
+  dsa::DsaProblem mandatory_no_fit;
+  mandatory_no_fit.buffers = {
+      MakeBuffer(0, {{0, 2}}, 6),
+      MakeBuffer(1, {{0, 2}}, 6),
+  };
+  mandatory_no_fit.pools.front().capacity = 10;
+  const dsa::DsaResult no_fit = solver.Solve(mandatory_no_fit);
+  Require(no_fit.status == dsa::SolveStatus::kBestEffortNoFit && no_fit.solution.has_value() &&
+              no_fit.solver_metrics.at("relaxed_edges") == 0,
+          "Cypress heuristic failure was incorrectly reported as proven infeasibility");
+}
+
 void TestInvalidProblemIsReported() {
   dsa::DsaProblem problem;
   problem.buffers = {MakeBuffer(0, {{4, 4}}, 32)};
@@ -1043,6 +1088,7 @@ int main() {
       {"PyPTO recursive corpus", TestEveryPyptoCorpusDocumentIsReplayable},
       {"core relaxation", TestCoreRelaxationProfiles},
       {"solver capabilities", TestSolverCapabilityMatching},
+      {"Cypress relaxation", TestCypressRelaxationBaseline},
       {"XLA spatial best fit", TestXlaSpatialBestFitConformance},
       {"PyPTO structured search", TestPyptoStructuredSearchUsesStructureAndObjective},
       {"architecture binding", TestArchitectureBinding},

@@ -1,6 +1,7 @@
 // Copyright 2026 DSA-Solver Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#include "dsa/algorithms/cypress_relaxation_solver.h"
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
@@ -8,6 +9,7 @@
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/architecture.h"
+#include "dsa/cypress_relaxation_solver.h"
 #include "dsa/first_fit_solver.h"
 #include "dsa/io/minimalloc_csv.h"
 #include "dsa/minimalloc_csv.h"

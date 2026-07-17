@@ -88,6 +88,7 @@ when stronger search is available.
 | Method | Standard DSA | PyPTO direct | Role |
 | --- | --- | --- | --- |
 | first fit | yes | yes | deterministic fallback |
+| Cypress relaxation | capacity form | capacity form | unweighted anti-alias relaxation baseline |
 | XLA spatial best fit | yes | no | frozen heap baseline |
 | TVM hill climb | yes | compatible ablation | frozen ordering-search baseline |
 | generic local search | yes | compatible ablation | generic neighborhood baseline |
@@ -104,3 +105,14 @@ The checked-in
 MiniMalloc exact, first fit, XLA heap, TVM hill climb, and local search on the
 public MiniMalloc A--K set and deduplicated per-pool projections of PyPTO and
 PyPTO-Lib instances. Structured conclusions are intentionally deferred.
+
+## Cypress
+
+Cypress starts from a complete tensor-interference graph, removes auxiliary
+anti-alias edges until a Knight-style contiguous allocation fits a fixed shared
+memory budget, and then inserts dependencies required by selected physical
+reuse. It is the closest published policy baseline for PyPTO's
+capacity-versus-synchronization question, but it is unweighted and its edge
+deletion order is not specified in the paper. See
+[`cypress_relaxation.md`](cypress_relaxation.md) for the frozen implementation
+boundary.

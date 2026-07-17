@@ -16,7 +16,9 @@ namespace dsa::detail {
 struct PlacementSearchNode {
   BufferId representative = 0;
   std::string name;
+  std::vector<BufferId> members;
   std::uint64_t size = 0;
+  std::uint64_t alignment = 1;
   PoolId pool = kDefaultPool;
   bool pinned = false;
   std::vector<BufferId> conflicts;
