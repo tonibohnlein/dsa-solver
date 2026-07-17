@@ -295,4 +295,6 @@ structural baseline, while a search solver rejects metrics it cannot use for can
 
 See [the TVM hill-climb study](docs/tvm_hill_climb.md) for the exact search state, neighborhood,
 deliberate compatibility fixes, and the PyPTO refinement path. See
-[the XLA heap study](docs/xla_heap.md) for the second frozen compiler baseline.
+[the XLA heap study](docs/xla_heap.md) for the frozen spatial heap baseline and
+[the Cypress study](docs/cypress_relaxation.md) for the capacity-constrained
+anti-alias relaxation baseline.

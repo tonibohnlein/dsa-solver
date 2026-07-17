@@ -19,6 +19,7 @@ second; see [`pypto_dsa.md`](pypto_dsa.md).
 | Method | Standard DSA | Structured PyPTO | Role |
 | --- | --- | --- | --- |
 | first fit | direct | structural baseline | deterministic fallback |
+| Cypress relaxation | capacity form | capacity form | unweighted anti-alias relaxation baseline |
 | XLA spatial best fit | direct | explicit relaxation only | frozen heap baseline |
 | TVM hill climb | direct | compatible ablation | frozen ordering-search baseline |
 | generic local search | direct | compatible ablation | generic ordering-search baseline |
@@ -55,6 +56,15 @@ decaying acceptance of worse moves.
 `tvm_hill_climb` freezes that neighborhood. `local_search` adds generic
 insertion, reversal, and restart behavior. See
 [`tvm_hill_climb.md`](tvm_hill_climb.md).
+
+## Cypress
+
+Cypress starts from a complete interference graph, removes auxiliary
+anti-alias edges until a Knight-style contiguous allocation fits a fixed
+capacity, and then inserts dependencies required by physical reuse. It is an
+unweighted baseline for PyPTO's capacity-versus-synchronization question. The
+paper does not specify edge-deletion order; this implementation freezes one for
+reproducibility. See [`cypress_relaxation.md`](cypress_relaxation.md).
 
 ## Exact and production-oriented work
 

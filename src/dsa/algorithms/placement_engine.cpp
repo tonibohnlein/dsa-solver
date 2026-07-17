@@ -342,8 +342,13 @@ PlacementSearchSpace BuildPlacementSearchSpace(const DsaProblem& problem) {
       node.name = representative->name;
     }
     node.size = super.size;
+    node.alignment = super.alignment;
     node.pool = super.pinned ? super.pinned->pool : super.allowed_pools.front();
     node.pinned = super.pinned.has_value();
+    node.members.reserve(super.members.size());
+    for (std::size_t member : super.members) {
+      node.members.push_back(problem.buffers[member].id);
+    }
     search_space.nodes.push_back(std::move(node));
   }
 

@@ -39,3 +39,18 @@ project.
 
 `third_party/json` pins nlohmann/json. It is licensed under the MIT License; its complete license
 remains at `third_party/json/LICENSE.MIT` and is installed as `LICENSE.nlohmann-json`.
+
+## Cypress allocation policy
+
+`CypressRelaxationSolver` is an independent implementation of the allocation
+policy described in Rohan Yadav, Michael Garland, Alex Aiken, and Michael Bauer,
+[*Task-Based Tensor Computations on Modern
+GPUs*](https://rohany.github.io/publications/pldi2025-cypress.pdf), PLDI 2025.
+The paper is licensed under
+[Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/).
+The inner packing policy is described by Timothy J. Knight et al.,
+[*Compilation for Explicitly Managed Memory
+Hierarchies*](https://theory.stanford.edu/~aiken/publications/papers/ppopp07.pdf),
+PPoPP 2007. No implementation source from either project is copied, vendored,
+or linked. The published policy and deliberate differences are documented in
+[`docs/cypress_relaxation.md`](docs/cypress_relaxation.md).

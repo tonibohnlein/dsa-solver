@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -16,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "dsa/algorithms/cypress_relaxation_solver.h"
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
@@ -63,8 +65,8 @@ std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
 void PrintHelp() {
   std::cout << "Usage: dsa-bench --input INSTANCE.{csv,json} [options]\n\n"
             << "Options:\n"
-            << "  --solver first-fit|xla-heap|local-search|pypto-structured-search|"
-               "tvm-hill-climb\n"
+            << "  --solver first-fit|cypress-relaxation|xla-heap|local-search|"
+               "pypto-structured-search|tvm-hill-climb\n"
             << "                                   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
             << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
@@ -151,9 +153,9 @@ Options ParseOptions(int argc, char** argv) {
     }
   }
   if (options.input.empty()) UsageError("--input is required");
-  if (options.solver != "first-fit" && options.solver != "xla-heap" &&
-      options.solver != "local-search" && options.solver != "pypto-structured-search" &&
-      options.solver != "tvm-hill-climb") {
+  if (options.solver != "first-fit" && options.solver != "cypress-relaxation" &&
+      options.solver != "xla-heap" && options.solver != "local-search" &&
+      options.solver != "pypto-structured-search" && options.solver != "tvm-hill-climb") {
     UsageError("unknown solver '" + options.solver + "'");
   }
   return options;
@@ -274,6 +276,17 @@ void AppendStringArray(std::ostringstream* output, const std::vector<std::string
   *output << ']';
 }
 
+void AppendUnsignedMap(std::ostringstream* output,
+                       const std::map<std::string, std::uint64_t>& values) {
+  *output << '{';
+  std::size_t index = 0;
+  for (const auto& [name, value] : values) {
+    if (index++ != 0) *output << ',';
+    *output << '"' << JsonEscape(name) << "\":" << value;
+  }
+  *output << '}';
+}
+
 std::string BuildJson(const Options& options, const dsa::StructuredProblemDocument& document,
                       const dsa::SolverCompatibility& compatibility, const dsa::DsaResult& result,
                       std::uint64_t runtime_microseconds,
@@ -304,6 +317,8 @@ std::string BuildJson(const Options& options, const dsa::StructuredProblemDocume
   AppendStringArray(&output, compatibility.unsupported_objectives);
   output << ",\"diagnostics\":";
   AppendStringArray(&output, result.diagnostics);
+  output << ",\"solver_metrics\":";
+  AppendUnsignedMap(&output, result.solver_metrics);
   output << ",\"objective_terms\":[";
   for (std::size_t i = 0; i < problem.objective.terms.size(); ++i) {
     if (i != 0) output << ',';
@@ -348,7 +363,9 @@ int main(int argc, char** argv) {
     dsa::StructuredProblemDocument document = LoadProblemDocument(options);
 
     std::unique_ptr<dsa::DsaSolver> solver;
-    if (options.solver == "xla-heap") {
+    if (options.solver == "cypress-relaxation") {
+      solver = std::make_unique<dsa::CypressRelaxationSolver>();
+    } else if (options.solver == "xla-heap") {
       solver = std::make_unique<dsa::XlaHeapSolver>();
     } else if (options.solver == "pypto-structured-search") {
       solver = std::make_unique<dsa::PyptoStructuredSearchSolver>(options.pypto_structured_search);
@@ -390,8 +407,8 @@ int main(int argc, char** argv) {
       if (options.solution_output) {
         dsa::WriteStructuredSolutionJsonFile(
             *options.solution_output,
-            dsa::BuildStructuredSolutionDocument(
-                document, *result.solution, {{"solver", options.solver}}));
+            dsa::BuildStructuredSolutionDocument(document, *result.solution,
+                                                 {{"solver", options.solver}}));
       }
     }
 

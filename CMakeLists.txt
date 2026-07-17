@@ -18,6 +18,8 @@ endif()
 add_library(dsa_solver
   src/dsa/analysis/reuse_geometry.cpp
   src/dsa/analysis/reuse_geometry.h
+  src/dsa/algorithms/cypress_relaxation_solver.cpp
+  src/dsa/algorithms/cypress_relaxation_solver.h
   src/dsa/model/architecture.cpp
   src/dsa/model/architecture.h
   src/dsa/model/model.cpp
@@ -70,6 +72,7 @@ set(DSA_COMPATIBILITY_HEADERS
   src/dsa/model/structured_problem.h
   src/dsa/model/validator.h
   src/dsa/algorithms/first_fit_solver.h
+  src/dsa/algorithms/cypress_relaxation_solver.h
   src/dsa/algorithms/local_search_solver.h
   src/dsa/algorithms/pypto_structured_search_solver.h
   src/dsa/algorithms/solver.h
@@ -315,6 +318,16 @@ if(BUILD_TESTING)
     COMMAND dsa-bench
       --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/issue_1908_fragmentation_v1.json
       --solver first-fit
+  )
+  add_test(
+    NAME dsa-cli-cypress-relaxation
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/minimalloc_example.csv
+      --solver cypress-relaxation
+      --capacity 12
+  )
+  set_tests_properties(dsa-cli-cypress-relaxation PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"solver_metrics\":.*\"relaxed_edges\":"
   )
   add_test(
     NAME dsa-cli-xla-heap

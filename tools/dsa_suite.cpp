@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "dsa/algorithms/cypress_relaxation_solver.h"
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
@@ -48,6 +49,7 @@ namespace fs = std::filesystem;
 using Json = nlohmann::ordered_json;
 
 constexpr std::string_view kFirstFit = "first_fit";
+constexpr std::string_view kCypressRelaxation = "cypress_relaxation";
 constexpr std::string_view kXlaHeap = "xla_heap";
 constexpr std::string_view kTvmHillClimb = "tvm_hill_climb";
 constexpr std::string_view kLocalSearch = "local_search";
@@ -148,6 +150,7 @@ struct RunRecord {
   std::vector<std::string> features;
   std::vector<std::string> relaxed_features;
   std::vector<std::string> diagnostics;
+  std::map<std::string, std::uint64_t> solver_metrics;
   std::vector<std::uint64_t> objective_score;
   std::map<std::string, std::string> metadata;
 };
@@ -843,6 +846,8 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   std::unique_ptr<dsa::DsaSolver> solver;
   if (method == kFirstFit) {
     solver = std::make_unique<dsa::FirstFitSolver>();
+  } else if (method == kCypressRelaxation) {
+    solver = std::make_unique<dsa::CypressRelaxationSolver>();
   } else if (method == kXlaHeap) {
     solver = std::make_unique<dsa::XlaHeapSolver>();
   } else if (method == kTvmHillClimb) {
@@ -881,6 +886,7 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   record.runtime_us = DurationMicros(stopped - started);
   record.status = dsa::ToString(result.status);
   record.diagnostics = result.diagnostics;
+  record.solver_metrics = result.solver_metrics;
   PopulateSolutionMetrics(instance.document.problem, result, &record);
   return record;
 }
@@ -1028,8 +1034,14 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
               << dsa::ToString(instance.document.profile) << "]" << std::endl;
     const std::size_t deterministic_runs =
         options.standard_only ? options.deterministic_repetitions : 1;
+    const bool has_fixed_capacity =
+        std::all_of(instance.document.problem.pools.begin(), instance.document.problem.pools.end(),
+                    [](const dsa::Pool& pool) { return pool.capacity.has_value(); });
     for (std::size_t repetition = 0; repetition < deterministic_runs; ++repetition) {
       records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
+      if (has_fixed_capacity) {
+        records.push_back(RunHeuristic(instance, kCypressRelaxation, std::nullopt, options));
+      }
       records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
     }
     for (std::uint64_t seed : options.seeds) {
@@ -1152,6 +1164,7 @@ Json RecordJson(const RunRecord& record, const Options& options) {
   json["features"] = record.features;
   json["relaxed_features"] = record.relaxed_features;
   json["diagnostics"] = record.diagnostics;
+  json["solver_metrics"] = record.solver_metrics;
   json["objective_score"] = record.objective_score;
   json["metadata"] = record.metadata;
   json["relaxed_from"] = record.relaxed_from ? Json(*record.relaxed_from) : Json(nullptr);
@@ -1193,6 +1206,9 @@ RunRecord RunRecordFromJson(const Json& json) {
   record.features = json.at("features").get<std::vector<std::string>>();
   record.relaxed_features = json.at("relaxed_features").get<std::vector<std::string>>();
   record.diagnostics = json.at("diagnostics").get<std::vector<std::string>>();
+  if (json.contains("solver_metrics")) {
+    record.solver_metrics = json.at("solver_metrics").get<std::map<std::string, std::uint64_t>>();
+  }
   record.objective_score = json.at("objective_score").get<std::vector<std::uint64_t>>();
   record.metadata = json.at("metadata").get<std::map<std::string, std::string>>();
   return record;
@@ -1858,12 +1874,13 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << " |\n";
   }
 
-  output << "\n## PyPTO structured DSA\n\n"
-         << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
-            "lower bound | "
-            "First fit | XLA heap | TVM hill "
-            "climb | Local search | PyPTO structured search |\n"
-         << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |\n";
+  output
+      << "\n## PyPTO structured DSA\n\n"
+      << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
+         "lower bound | "
+         "First fit | Cypress relaxation | XLA heap | TVM hill "
+         "climb | Local search | PyPTO structured search |\n"
+      << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- |\n";
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
     if (!dsa::IsPyptoProfile(document.profile)) continue;
@@ -1877,6 +1894,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << CoreLowerBoundCell(summaries, document.instance) << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), nullptr,
                             true)
+           << " | "
+           << HeuristicCell(FindSummary(summaries, document.instance, profile, kCypressRelaxation),
+                            nullptr, true)
            << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), nullptr,
                             true)
