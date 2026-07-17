@@ -19,6 +19,7 @@
 #include "dsa/algorithms/pypto_structured_search_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
+#include "dsa/analysis/reuse_geometry.h"
 #include "dsa/io/minimalloc_csv.h"
 #include "dsa/model/architecture.h"
 #include "dsa/model/structured_problem.h"
@@ -237,6 +238,37 @@ void TestFitCostObjectiveAvoidsExpensiveReuse() {
   const dsa::DsaResult result = SolveAndValidate(problem, dsa::LocalSearchSolver(options));
   Require(result.objective.max_peak <= 14 && result.objective.reuse_cost == 0,
           "fit-cost local search did not avoid the expensive reuse edge");
+}
+
+void TestSparseReferenceReducesPhysicalReuse() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 10),
+      MakeBuffer(1, {{2, 4}}, 10),
+      MakeBuffer(2, {{0, 4}}, 10),
+  };
+  problem.pools.front().capacity = 30;
+  dsa::DsaSolution compact;
+  compact.placements = {
+      {0, {dsa::kDefaultPool, 0}},
+      {1, {dsa::kDefaultPool, 0}},
+      {2, {dsa::kDefaultPool, 10}},
+  };
+  Require(dsa::ValidateSolution(problem, compact).empty(),
+          "sparse-reference fixture is invalid");
+  const dsa::ReuseGeometryStats compact_stats =
+      dsa::EvaluateReuseGeometry(problem, compact);
+  Require(compact_stats.pair_count == 1 && compact_stats.overlap_bytes == 10,
+          "compact fixture has the wrong reuse geometry");
+
+  const dsa::SparseReferenceResult sparse =
+      dsa::BuildSparseReferencePlacement(problem, compact);
+  Require(dsa::ValidateSolution(problem, sparse.solution).empty(),
+          "sparse reference is invalid");
+  Require(sparse.final.pair_count == 0 && sparse.final.overlap_bytes == 0,
+          "sparse reference did not eliminate avoidable physical reuse");
+  Require(dsa::EvaluateObjective(problem, sparse.solution).max_peak == 30,
+          "sparse reference did not use the available capacity");
 }
 
 void TestStructuredSolutionRoundTripAndMismatchRejection() {
@@ -1032,6 +1064,7 @@ int main() {
       {"temporal exclusion", TestTemporalExclusionOverridesConservativeHulls},
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
+      {"sparse reference", TestSparseReferenceReducesPhysicalReuse},
       {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},
       {"local search", TestLocalSearchClosesOrderingGap},

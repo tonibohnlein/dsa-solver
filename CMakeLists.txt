@@ -16,6 +16,8 @@ if(NOT EXISTS "${DSA_NLOHMANN_JSON_INCLUDE_DIR}/nlohmann/json.hpp")
 endif()
 
 add_library(dsa_solver
+  src/dsa/analysis/reuse_geometry.cpp
+  src/dsa/analysis/reuse_geometry.h
   src/dsa/model/architecture.cpp
   src/dsa/model/architecture.h
   src/dsa/model/model.cpp
@@ -62,6 +64,7 @@ target_include_directories(dsa_solver
 # Keep the original flat dsa/*.h include paths available to existing consumers
 # while the source tree and preferred API use dsa/{model,algorithms,io}/*.h.
 set(DSA_COMPATIBILITY_HEADERS
+  src/dsa/analysis/reuse_geometry.h
   src/dsa/model/architecture.h
   src/dsa/model/model.h
   src/dsa/model/structured_problem.h
@@ -125,6 +128,21 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa-corpus PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 elseif(MSVC)
   target_compile_options(dsa-corpus PRIVATE /W4 /permissive-)
+endif()
+
+add_executable(dsa-placement-study tools/dsa_placement_study.cpp)
+target_link_libraries(dsa-placement-study PRIVATE dsa::solver)
+set_target_properties(dsa-placement-study PROPERTIES
+  CXX_EXTENSIONS OFF
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED YES
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(
+    dsa-placement-study PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+  )
+elseif(MSVC)
+  target_compile_options(dsa-placement-study PRIVATE /W4 /permissive-)
 endif()
 
 option(DSA_ENABLE_MINIMALLOC_BASELINE
@@ -364,7 +382,7 @@ if(BUILD_TESTING)
   )
 endif()
 
-install(TARGETS dsa_solver dsa-bench dsa-bind dsa-corpus dsa-suite
+install(TARGETS dsa_solver dsa-bench dsa-bind dsa-corpus dsa-placement-study dsa-suite
   EXPORT dsa-solver-targets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
