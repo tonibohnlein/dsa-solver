@@ -2,78 +2,64 @@
 
 ## Boundary
 
-`DsaProblem` is the solver-independent boundary. Solvers return `DsaResult`
-objects and never depend on PyPTO IR or MiniMalloc types. Every result is
-validated and its objective recomputed independently.
+`DsaProblem` is the solver-independent boundary. It contains buffers, memory
+arenas, placement constraints, and an objective. A solver returns `DsaResult`;
+the shared validator independently checks the placement and recomputes its
+objective.
 
-The dependency is one-way: PyPTO may link this library during experimentation
-or port a selected heuristic into the compiler. The PyPTO adapter remains
-responsible for IR analysis, problem export, result validation, and offset
-writeback. The full PyPTO problem is defined in
-[`pypto_dsa.md`](pypto_dsa.md).
+PyPTO owns compiler analysis and writeback:
 
-## Profiles and capabilities
+```text
+PyPTO IR -> adapter -> DsaProblem -> solver -> validator -> MemRef offsets
+```
 
-The framework keeps distinct claims separate:
+The standalone library never depends on PyPTO IR. During research PyPTO may
+link it; after selecting a heuristic, that heuristic can be ported into PyPTO
+and the dependency removed.
 
-- `standard_dsa`: the single-pool common subset used for direct algorithm
-  comparison;
-- `pypto_hard_v1`: the current device-correct PyPTO contract;
-- `pypto_research_v1`: hard-v1 plus explicitly experimental fields;
-- `pypto_structured`: a readable legacy profile; and
-- `pypto_core_relaxation`: a named standard lower bound derived from one PyPTO
-  pool.
+## Solvers
 
-`SolverCapabilities` distinguishes unsupported hard structure from unsupported
-objective terms. Hard incompatibility returns `kUnsupported`. An objective-only
-mismatch may be reported as an explicit ablation, but no feature is silently
-removed. The serialization contract is documented in
-[`structured_problem_schema_v1.md`](structured_problem_schema_v1.md).
+| Solver | Policy | Role |
+| --- | --- | --- |
+| `first_fit` | decreasing-size order, lowest valid address | deterministic fallback |
+| `xla_heap` | OpenXLA decreasing-size spatial best fit | frozen literature baseline |
+| `tvm_hill_climb` | TVM graph-guided ordering swaps | frozen literature baseline |
+| `local_search` | seeded swap/insertion/reversal ordering search | generic research baseline |
+| `pypto_structured_search` | generic moves plus pipeline, alias, and penalty-guided moves | experimental PyPTO heuristic |
+| `minimalloc_exact` | pinned Google MiniMalloc solver | optional exact standard-DSA baseline |
 
-## Placement and solvers
-
-The shared placement engine accepts a priority order and places buffers at the
-lowest aligned address not blocked by temporal conflicts, reservations,
-separations, or other enabled hard constraints. This decoder supports:
-
-- deterministic decreasing-size first fit;
-- generic seeded local search with swap, insertion, and reversal moves;
-- the frozen TVM-style graph-guided ordering search; and
-- the experimental PyPTO structured neighborhoods.
-
-The OpenXLA baseline has its own decreasing-size, smallest-fitting-free-chunk
-policy and deliberately narrower capabilities. MiniMalloc is the optional exact
-baseline for compatible standard instances. The named literature baselines are
-documented in [`xla_heap.md`](xla_heap.md) and
+Most heuristics decode a buffer order with the shared placement engine. The XLA
+solver retains its own smallest-fitting-free-chunk policy. Details of the named
+reimplementations are in [`xla_heap.md`](xla_heap.md) and
 [`tvm_hill_climb.md`](tvm_hill_climb.md).
 
-## Benchmark contract
+## Capability matching
 
-`dsa-suite` records one JSONL row per run and derives CSV and Markdown reports
-from those immutable rows. Seeded methods repeat; deterministic methods may be
-timed repeatedly. Every row records compatibility, validation, objective
-components, budget, and runtime.
+`SolverCapabilities` separates hard placement support from objective support.
+Unsupported required structure returns `kUnsupported`; benchmark projections
+are explicit documents and never silent feature removal. Profiles and feature
+semantics are defined in
+[`structured_problem_schema_v1.md`](structured_problem_schema_v1.md).
 
-Capacity-free standard reports compare achieved peak and runtime. A PyPTO core
-relaxation is labeled as a lower bound and never as a compiler-valid placement.
-The checked-in standard report is described in
-[`benchmarks/results/README.md`](../benchmarks/results/README.md).
+## Adapter pipeline
 
-## PyPTO adapter pipeline
-
-The intended compiler path is:
+The intended PyPTO path is:
 
 ```text
 InitMemRef
-  -> materialize mandatory semantic aliases and writebacks
-  -> collect the unmerged fixed-schedule problem
+  -> materialize semantic aliases and writebacks
+  -> collect physical buffers and conservative lifetimes
   -> solve and independently validate
-  -> write offsets back to MemRefs
+  -> write byte offsets to MemRefs
 ```
 
-Pipeline-depth shedding is not hidden inside placement. The adapter first
-solves with full pipeline-stage separation. If that search finds no
-capacity-fitting placement, it may call `BuildPipelineIntentRelaxation` and
-re-solve with typed reuse costs while emitting a performance warning. Joint
-schedule/allocation search remains a deferred outer loop that regenerates a
-complete DSA problem for each legal schedule.
+The adapter also owns the strict-then-soft pipeline-intent policy. Its
+mathematical formulation and evidence are in [`pypto_dsa.md`](pypto_dsa.md).
+
+## Benchmark records
+
+`dsa-suite` writes immutable JSONL rows, then derives CSV and Markdown reports.
+Rows include compatibility, status, validation, objective components, search
+budget, seed, and runtime. Capacity-free standard reports compare peak and
+solver runtime; compiler-specific conclusions require the original structured
+problem and independent device evidence.

@@ -1,498 +1,228 @@
 # PyPTO and dynamic storage allocation
 
-## Status and scope
+## Scope
 
-Draft. Tracks PyPTO issues
-[#1980](https://github.com/hw-native-sys/pypto/issues/1980) and
-[#1908](https://github.com/hw-native-sys/pypto/issues/1908).
-
-This document is the authoritative formulation of PyPTO memory planning on top
-of standard Dynamic Storage Allocation (DSA). It distinguishes:
-
-- the standard packing problem needed to fix PyPTO #1908;
-- compiler facts that only construct or constrain an instance;
-- the implemented pipeline-intent refinement;
-- proposed synchronization-aware objectives that still need device evidence.
-
-The operation order, tiling, and pipeline construction are fixed inputs. Joint
-schedule-memory optimization is outside the current formulation.
+This document defines PyPTO memory planning on top of standard Dynamic Storage
+Allocation (DSA) and tracks PyPTO
+[#1980](https://github.com/hw-native-sys/pypto/issues/1980). Operation order,
+tiling, pipeline construction, and physical memory spaces are fixed inputs.
+Schedule/allocation co-optimization is outside the current problem.
 
 ## Standard DSA
 
-Consider one contiguous memory arena beginning at position zero. The input is a
-set of buffers. Each buffer `i` has:
-
-- a positive size `s_i`, measured in memory units; and
-- a non-empty half-open lifetime `L_i = [begin_i, end_i)`.
-
-The solver chooses a non-negative integer starting position `p_i` for each
-buffer. While buffer `i` is alive, it occupies the memory interval:
+Consider one contiguous memory arena. Each buffer `i` has positive size `s_i`
+and a non-empty half-open lifetime `L_i = [begin_i, end_i)`. The solver chooses
+a non-negative integer start position `p_i`; the buffer occupies:
 
 ```text
 M_i(p) = [p_i, p_i + s_i)
 ```
 
-Two buffers that are alive at the same time must occupy disjoint memory
-intervals:
-
-```text
-if L_i and L_j overlap in time,
-then M_i(p) and M_j(p) must not overlap in memory
-```
-
-Time is therefore already encoded in the lifetime intervals. It determines
-which pairs constrain one another; it does not need to appear again in the
-spatial objective.
-
-The required arena size is the highest end position of any placed buffer:
+If `L_i` and `L_j` overlap in time, `M_i(p)` and `M_j(p)` must be disjoint. The
+required arena size is:
 
 ```text
 H(p) = max over buffers i of (p_i + s_i)
 ```
 
-The standard DSA optimization problem is:
+Peak minimization chooses a valid placement minimizing `H`. The capacity form
+asks whether a valid placement with `H(p) <= C` exists. Time is already encoded
+by the lifetime intervals; `H` measures the contiguous address range, including
+unused gaps below its highest occupied byte.
 
-```text
-choose one non-negative start position per buffer
-such that simultaneously live buffers do not overlap in memory
-and minimize the required contiguous arena size H
-```
+## PyPTO constructs standard DSA instances
 
-This measures the size of the contiguous arena `[0, H(p))`. It is not the sum
-of buffer sizes: unused gaps below the highest end position also occupy arena
-address space.
+UB, L1, L0A, L0B, and L0C are independent address spaces and therefore
+independent DSA problems. Schema v1 may bundle them in one document, but no
+constraint or cost crosses an arena boundary.
 
-The capacity decision form asks whether a feasible placement with `H(p) <= C`
-exists for a given arena size `C`. Peak minimization and capacity fitting are
-two forms of the same standard DSA problem.
+For each arena PyPTO adds compiler facts:
 
-## PyPTO instance construction is not a new DSA problem
+- capacity;
+- byte alignment (`p_i mod a_i = 0`);
+- reserved address ranges;
+- mandatory aliases materialized as physical buffers;
+- hard keep-apart relations for correctness or pipeline intent; and
+- alias/pipeline provenance for validation and research.
 
-PyPTO first partitions physical buffers by memory space. UB, L1, L0A, L0B,
-L0C, and other physically independent address spaces define separate DSA
-instances mathematically. The current schema and adapter may bundle these
-independent arenas into one document and solver call, but no constraint, reuse,
-or penalty crosses a memory-space boundary. They can therefore be solved and
-reported independently without changing the problem.
+These facts construct or constrain an instance; they do not replace standard
+DSA geometry. Lifetime-disjoint buffers may overlap partially at arbitrary
+aligned positions.
 
-PyPTO then supplies compiler facts for that arena:
-
-- Capacity selects the fit-within-capacity decision form.
-- An alignment requirement `a_i` restricts the starting position to
-  `p_i mod a_i = 0`. In PyPTO, sizes and positions are bytes, so 32-byte
-  alignment permits starts `0, 32, 64, ...`. The current solver retains byte
-  units and rounds candidate starting positions up to the required alignment.
-  It does not round buffer sizes or normalize the problem before solving.
-- A reserved prefix or range removes address space from ordinary placement.
-- A mandatory alias materializes several semantic values as one physical
-  buffer.
-- An explicit separation adds another conflict edge for a correctness or intent
-  reason.
-- Pipeline and alias provenance support validation, reporting, and structured
-  search.
-
-The solver's `p_i` is a position relative to the beginning of this arena.
-PyPTO later writes the corresponding byte address into the MemRef.
-Lifetime-disjoint buffers may overlap partially at arbitrary aligned positions.
-
-An implementation may normalize a uniformly aligned instance to smaller
-integer units. For a common unit `g`, if every buffer size, capacity, reserved
-boundary, and fixed address is divisible by `g`, define:
-
-```text
-q_i = p_i / g
-u_i = s_i / g
-```
-
-The normalized problem is exact, and its peak in bytes is:
-
-```text
-H_bytes = g * max over buffers i of (q_i + u_i)
-```
-
-The checked-in PyPTO corpus currently satisfies this condition for `g = 32`.
-If a size is not divisible by `g`, replacing it with `ceil(s_i / g)` pads the
-allocation and changes the problem unless the compiler or architecture already
-requires that size padding.
-
-The adapter pipeline is:
+The current adapter path is:
 
 ```text
 InitMemRef
-  -> MaterializeSemanticAliases
-  -> collect unmerged physical buffers
-  -> standalone standard-DSA solver
-  -> independent validation
-  -> write the chosen byte addresses to MemRefs
+  -> materialize semantic aliases and writebacks
+  -> collect physical buffers and conservative lifetimes
+  -> solve and independently validate
+  -> write byte offsets to MemRefs
 ```
 
-The lifetime of each exported physical allocation is a conservative hull. The
-exporter must not invent holes by unioning member-level SSA ranges. A false hole
-previously allowed legal-looking reuse that corrupted DeepSeek-v4 loop-carried
-accumulators on device.
+Each exported physical buffer uses one conservative lifetime hull. The exporter
+must not create unproven holes from member-level SSA ranges: an earlier false
+hole allowed a legal-looking placement to corrupt DeepSeek-v4 loop-carried
+accumulators.
 
-PTOAS must independently make explicit physical-address overlap safe when it
-inserts low-level synchronization. PyPTO lifetime and cost models do not replace
-that downstream correctness check.
+PTOAS must also validate or synchronize explicit physical-address overlap when
+lowering to asynchronous hardware pipes. PyPTO's lifetime and cost models do
+not replace that downstream correctness check.
 
-## The actual PyPTO refinement: costly physical reuse
+## Capacity-constrained DSA with reuse penalties
 
-Some lifetime-disjoint buffers are legally reusable under standard DSA, but
-placing them in overlapping physical ranges can introduce synchronization and
-reduce asynchronous overlap.
+Some lifetime-compatible buffers are safe to overlap but introduce additional
+synchronization. Schema v1 represents this preference with ordinary weighted
+pair edges.
 
-The optional cost model contains sparse records:
+For sparse edge set `E`, edge `e = (i, j, w_e)` is active when the two placed
+byte ranges overlap:
 
 ```text
-(first buffer, second buffer, integer cost, reason)
+I_e(p) = 1 if M_i(p) overlaps M_j(p)
+         0 otherwise
+
+reuse_cost(p) = sum over e in E of w_e * I_e(p)
 ```
 
-For penalty edge `e = (i, j, w_e, reason_e)`, define:
+Any byte overlap activates the full edge. The solver treats every reason label
+as provenance; how a producer chooses edges and weights is a separate modeling
+question.
+
+For capacity `C`, the PyPTO refinement is:
 
 ```text
-I_e(p) = 1  if:
-                their lifetimes permit reuse, and
-                their placed address ranges overlap
-         0  otherwise
+find a valid standard-DSA placement p with H(p) <= C
+that minimizes reuse_cost(p)
 ```
 
-The current additive reuse cost is:
+Capacity is hard. Penalties rank fitting placements and cannot legalize a
+lifetime conflict, reserved-range overlap, misalignment, or hard separation.
+Peak may be a final tie-break, but bytes are not converted to cycles with an
+arbitrary scalar weight.
+
+## Hard constraints and pipeline fallback
+
+Correctness separations such as `semantic_no_alias` and `target_hazard` always
+remain hard.
+
+Pipeline stages are different: distinct storage is performance intent. PyPTO
+first represents different stages of one group as hard separations so requested
+ping-pong overlap is preserved. If the bounded strict search finds no fitting
+placement, `BuildPipelineIntentRelaxation`:
+
+1. removes only the `pipeline_stage` reason;
+2. preserves any other reason on the same pair;
+3. adds a `pipeline_serialization` pair cost when the pair becomes fully
+   relaxable; and
+4. selects the fit-then-minimize-reuse objective.
+
+PyPTO warns when the selected placement violates strict pipeline intent. If the
+relaxed problem also has no fitting placement, compilation reports
+out-of-memory. Because the strict solver is heuristic, failure to find a strict
+placement is not a proof of infeasibility; the final solution is checked against
+the strict problem before warning.
+
+Unit cost per relaxed pipeline pair is reproducible but uncalibrated. It can
+overcount a large group and pipeline membership alone does not prove that reuse
+adds synchronization.
+
+## Grounding pair costs in PTOAS
+
+A positive edge needs a fixed-placement counterfactual:
 
 ```text
-reuse_cost(p) = sum over penalty edges e of w_e * I_e(p)
-
-a pair activates when:
-  - they are allowed to reuse memory temporally
-  - their physical byte ranges overlap at all
+same program, schedule, and all unrelated offsets
+placement A: pair uses disjoint ranges
+placement B: pair overlaps
+evidence: final PTOAS synchronization or kernel cycles worsen only in B
 ```
 
-Any overlap activates the full pair cost. Equal-base reuse and partial overlap
-are treated identically:
+PTOAS compares absolute half-open byte ranges, including partial overlaps across
+different allocation roots. Address hazards can produce:
+
+| Placement-induced relation | Possible PTOAS result |
+| --- | --- |
+| Cross-pipe RAW, WAR, or WAW | set/wait event pair |
+| Same-pipe RAW, WAR, or WAW | pipe barrier |
+| Cross-pipe ACC read/read | target-specific conservative hazard |
+| Already-covered dependency | redundant sync removed |
+| Proven MTE2 load/load or exact PIPE_V exemption | no new sync |
+| Loop back-edge | retained, possibly multi-event synchronization |
+| Event-ID pressure | event coalescing or `PIPE_ALL` fallback |
+
+Therefore `cross_pipe`, raw event counts, and pipeline membership are too coarse
+to assign a cost. Evidence must include the final barrier/event topology,
+source/destination pipes, control-flow location, and redundant-sync removal.
+
+The relevant PTOAS implementation is under:
 
 ```text
-A = [0, 32 KiB), B = [32 KiB, 40 KiB)  -> no overlap, cost 0
-A = [0, 32 KiB), B = [24 KiB, 32 KiB)  -> partial overlap, full pair cost
-A = [0, 32 KiB), B = [0, 8 KiB)        -> equal base, full pair cost
+PTOAS/lib/PTO/Transforms/InsertSync/
+  MemoryDependentAnalyzer.cpp
+  InsertSyncAnalysis.cpp
+  RemoveRedundantSync.cpp
+  SyncEventIdAllocation.cpp
 ```
 
-The cost changes preference, not correctness. It cannot legalize lifetime
-conflicts, reserved-range overlap, misalignment, or another hard separation.
-
-### Grounded placement effects
-
-A penalty should not be attached merely because two operations use different
-pipes. It should represent a downstream synchronization change caused by
-overlapping the two physical ranges. PTOAS provides the counterfactual:
-
-```text
-compile with disjoint ranges
-compile with overlapping ranges
-penalty evidence = synchronization present only in the overlapping placement
-```
-
-PTOAS checks address-aliasing RAW, WAR, and WAW hazards. A placement-induced
-hazard becomes a same-pipe barrier or a cross-pipe set/wait pair. ACC also has a
-target-specific cross-pipe read/read hazard. This gives stronger evidence than
-the coarse schema-v1 names:
-
-- `induced_set_wait`: overlap adds a cross-pipe event dependency;
-- `induced_pipe_barrier`: overlap adds a same-pipe barrier;
-- `loop_amplified_sync`: the dependency remains inside a loop and executes each
-  iteration;
-- `pipeline_depth_loss`: overlap serializes stages intended to run together;
-- `event_degradation`: added synchronization exhausts event IDs, reducing
-  per-slot events to one event or falling back to `PIPE_ALL`.
-
-The first four can motivate pair or group penalties. Event degradation is
-non-additive and should be scored separately. These names describe proposed
-measurements; schema v1 currently has only coarser reason codes.
-
-#### Pipeline intent: hard first, then penalized
-
-Different requested stages of one pipeline first receive a hard separation.
-Only if no capacity-fitting placement is found does PyPTO relax that intent,
-attach `pipeline_serialization` penalties, and emit `PH-DSA-001` when the
-selected placement shares a range:
-
-```text
-stage 0: load operand_0 -> compute_0
-stage 1: load operand_1 -> compute_1
-
-separate ranges: load_1 can overlap compute_0
-shared range:    load_1 waits for compute_0; ping-pong becomes serial
-```
-
-PyPTO [PR #1949](https://github.com/hw-native-sys/pypto/pull/1949)
-demonstrated this false WAR on L0B operands and measured the synchronization
-stall on 910B2.
-
-#### General address-induced synchronization
-
-Pipeline membership is not required. Any lifetime-disjoint buffers can create a
-new physical-address dependency:
-
-```text
-Vector: final read of A
-MTE2:   overwrite B
-
-disjoint ranges: no address dependency
-overlapping ranges: PTOAS emits Vector -> MTE2 set/wait
-```
-
-The same test applies to MTE, Vector, Cube, and same-pipe pairs. A coarse
-`cross_pipe` edge should therefore be replaced or calibrated by the actual
-PTOAS delta, including source pipe, destination pipe, barrier/event kind, and
-control-flow location.
-
-#### Loop and pipeline amplification
-
-A synchronization pair outside a loop may execute once. A loop-carried
-dependency remains in the loop, may execute every iteration, and may require
-one event ID per rotating buffer slot. The same pairwise reuse can therefore be
-cheap in straight-line code but expensive in a hot pipelined loop:
-
-```text
-iteration k:     Vector reads stage[k % 2]
-iteration k + 1: MTE overwrites the reused address
-
-two ranges: independent rotating stages
-one range:  per-iteration set/wait and lost overlap
-```
-
-Trip count, loop depth, and retained physical stage count are stronger features
-than a unit pair cost.
-
-#### Event-ID and control-flow escalation
-
-PTOAS allocates a finite event-ID pool per pipe pair. Under pressure it can
-reduce a multi-buffer dependency to one event; if allocation still fails, it
-replaces the dependency with a local `PIPE_ALL` barrier. This discontinuity
-cannot be modeled by summing independent pair weights.
-
-PTOAS also removes synchronization conservatively: a branch-spanning sync is
-redundant only when both branches cover it, loop-internal sync cannot prove an
-outer dependency redundant because the loop may execute zero times, and
-compensation sync is retained. Avoiding the placement-induced alias can
-therefore remove more synchronization than the initial pair alone suggests.
-
-#### Labels that are not independent mechanisms
-
-`CanonicalizeIOOrder` can mark an early load whose overlap was deliberate, but
-`load_motion_serialization` is not a second cost: the actual effect is the
-barrier or set/wait caused by address reuse. Likewise, `cross_core` is not yet a
-local-arena penalty on either A2A3 or A5; it needs a concrete same-arena
-placement choice that changes emitted cross-core synchronization.
-
-`generic` remains useful only for solver tests and external experiments.
-
-## Implemented strict-then-soft pipeline policy
-
-`pl.pipeline(stage=F)` and compiler-created pipelines express an intent to keep
-several stages active concurrently. Their scalar statement lifetimes can be
-disjoint even though asynchronous execution is intended to overlap.
-
-PyPTO [PR #1949](https://github.com/hw-native-sys/pypto/pull/1949)
-demonstrated the mechanism: sharing an operand address makes the next load wait
-until the previous compute stops reading that address. The resulting false
-write-after-read dependency serializes the pipeline.
-
-### Stage A: preserve requested depth as a hard constraint
-
-PyPTO retains `(pipeline group, stage)` membership. For every different-stage
-pair in the same group, the strict problem adds:
-
-```text
-[p_i, p_i + s_i) must not overlap [p_j, p_j + s_j)
-```
-
-The compiler tries deterministic first-fit and then bounded structured search.
-If either finds a capacity-fitting placement, the hard intent is preserved and
-no performance warning is emitted.
-
-### Stage B: relax only pipeline intent after strict search fails
-
-If strict search finds no fitting placement:
-
-1. remove only the `pipeline_stage` reason from affected pairs;
-2. retain every correctness reason on the same pair;
-3. add unit `pipeline_serialization` penalties to fully relaxed,
-   lifetime-disjoint pairs;
-4. solve the relaxed problem;
-5. emit performance hint `PH-DSA-001` if the chosen placement violates the
-   strict pipeline separations.
-
-For example:
-
-```text
-reasons before: [pipeline_stage, target_hazard]
-reasons after:  [target_hazard]
-result:         pair remains hard-separated
-```
-
-The current solver is heuristic, so “strict search failed” is not a proof of
-strict infeasibility. A relaxed solution is therefore revalidated against the
-strict problem. If it is also strict-valid, PyPTO keeps the strict profile and
-does not warn.
-
-Version 1 assigns unit cost to every relaxed stage-member pair:
-
-```text
-pipeline_cost(p) = sum over pipeline pairs (i, j) in P of I_ij(p)
-```
-
-This is simple and reproducible, but a group with more member pairs can receive
-more cost without losing more effective depth. It is a baseline model, not a
-calibrated latency prediction.
-
-## Capacity-constrained objective
-
-For an architecture with arena capacity `C`, capacity is a hard constraint:
-
-```text
-find a standard-DSA placement p with H(p) <= C
-and minimize reuse_cost(p) among those fitting placements
-```
-
-An over-capacity placement is not a worse solution; it is infeasible. Arena size
-and raw synchronization components are still reported, but bytes are not mixed
-with synchronization using an arbitrary scalar weight. A search algorithm may
-use overflow internally to move toward feasibility without making overflow part
-of the accepted-solution objective.
-
-The strict pipeline problem is solved first. If it has no fitting placement,
-only pipeline-intent separations are relaxed, the compiler emits a performance
-warning, and the relaxed capacity-constrained problem minimizes the resulting
-penalty. If that problem also has no fitting placement, compilation reports
-out-of-memory.
-
-## Candidate refinements to evaluate
-
-These are separate experimental formulations, not one growing production
-profile.
-
-### Candidate 1: pairwise pipeline serialization
-
-This is the implemented version:
-
-```text
-fit first
-then minimize the number or weighted sum of reused cross-stage pairs
-```
-
-Evidence: PyPTO PR #1949 proves the false-WAR mechanism. Unknown: whether pair
-count predicts latency across pipeline groups and workloads.
-
-### Candidate 2: group-level retained pipeline depth
-
-For pipeline group `g`, let:
-
-- `D_g` be requested depth;
-- `F_g(p)` be the number of physically independent stage residues retained by
-  placement `p`;
-- `w_g` be a measured group importance.
-
-A candidate group cost is:
-
-```text
-depth_cost(p) = sum over groups g of w_g * (D_g - F_g(p))
-
-penalize lost pipeline depth per group, not every overlapping member pair
-```
-
-This avoids pair-count bias, but requires a precise definition of physical
-residue equivalence and device calibration of `w_g`.
-
-### Candidate 3: PTOAS feedback score
-
-Compile candidate placements through PTOAS and compare them with a disjoint
-reference placement. Record the induced set/waits, barriers, loop frequency,
-retained event multiplicity, and `PIPE_ALL` fallbacks. A first proxy can sum
-measured event costs; a stronger evaluator measures critical-path growth.
-
-This handles transitive elimination and event pressure that independent pair
-weights miss. PTOAS
-[PR #948](https://github.com/hw-native-sys/PTOAS/pull/948) makes explicit
-physical overlap visible to downstream correctness analysis. The experiment
-branch adds `--pto-insert-sync-summary=<path>`, which records structural
-InsertSync counts as JSONL. These counts are not cycle estimates; they are the
-downstream evidence to correlate with device latency.
-
-The replay loop is deterministic:
-
-```text
-PyPTO export -> dsa-bench --solution-output placement.json
-             -> PyPTO fingerprint + independent replay validation
-             -> PTOAS InsertSync JSONL
-             -> device correctness and repeated latency
-```
-
-Two placements are compared against the same freshly exported problem, program
-schedule, code generation, input data, and target. This separates placement
-effects from solver randomness and compiler drift.
-
-## Search is not the problem definition
-
-`pypto_structured_search` is one heuristic for the formulations above. It uses
-the common standard-DSA placement engine and adds generic ordering,
-pipeline-group, alias, and penalty-guided moves.
-
-The mathematical problem is defined by buffers, hard constraints, and objective
-terms. A solver that does not advertise support for a required feature returns
-`kUnsupported`; no feature or objective is silently dropped.
-
-Solver improvements should follow evidence that the corresponding objective
-predicts device behavior. Standard benchmark tables continue to compare peak
-and solver runtime. Research tables must additionally report synchronization
-and end-to-end effects.
-
-## Profiles and exported documents
-
-- `standard_dsa` is a literature-compatible DSA problem.
-- `pypto_hard_v1` is standard DSA plus validated compiler-derived hard
-  constraints and provenance.
-- `pypto_research_v1` is a PyPTO capture with an explicit experimental cost or
-  relaxation.
-
-Profiles describe schema contracts, not separate geometries. In particular,
-`pypto_hard_v1` retains the standard DSA placement geometry.
-
-The external solver dependency is temporary. Once an algorithm and objective
-are selected and validated, the heuristic can be ported into PyPTO and the
-dependency removed.
-
-## Device-calibration plan
-
-Controlled experiments must hold the scheduled program, tiling, and codegen
-inputs fixed while changing only the placement policy.
-
-First run an offline PTOAS A/B for each candidate reuse:
-
-```text
-same PTO program and schedule
-placement A: selected pair uses disjoint ranges
-placement B: selected pair overlaps
-compare emitted barriers, set/waits, event multiplicity, and PIPE_ALL
-```
-
-Then run controlled device A/B tests for MTE-to-Vector, MTE-to-Cube, same-pipe,
-loop-carried, depth-2 pipeline, and event-pressure cases. Record:
-
-1. capacity feasibility and arena size;
-2. activated penalties by reason and pipeline group;
-3. emitted PTOAS dependencies, events, waits, and barriers;
-4. retained physical pipeline depth;
-5. numerical correctness;
-6. repeated device latency and utilization.
-
-Required comparisons:
-
-- strict pipeline separation versus the relaxed placement;
-- pairwise penalty versus group-level lost-depth penalty;
-- predicted pair/group cost versus PTOAS-measured synchronization;
-- fitted kernels versus held-out DeepSeek and Qwen kernels.
-
-Do not promote a candidate because it improves a proxy alone. It must predict or
-improve end-to-end behavior without compromising correctness.
+## Evidence so far
+
+The current PyPTO adapter emits one live penalty family:
+`pipeline_serialization` from the strict-to-soft fallback. Other schema-v1
+reason names are experimental vocabulary, not independent producer policies.
+
+Fixed-placement experiments found:
+
+- In a 16-placement gather factorial, four lifetime-compatible overlaps had
+  heterogeneous but additive effects: one overlap induced a small costly event,
+  one overlap was beneficial because separating it introduced a much more
+  expensive in-loop barrier, and two overlaps were free.
+- Removing the first event reduced simulator cycles by about 0.7%; separating
+  the beneficial overlap increased cycles by about 27%. Synchronization-group
+  count alone therefore had the wrong ordering.
+- A two/three/four-slot L0A pipeline ladder produced identical final
+  synchronization. Those pipeline-derived pair penalties were false positives
+  for that kernel.
+- No experiment demonstrated a capped OR cost, an all-members hyperedge, or a
+  useful universal weight by reason category.
+
+These results support ordinary pair edges as the simplest starting model, but
+also require zero, positive, beneficial, and context-dependent classifications.
+A false-positive penalty can make a placement slower.
+
+## Current research method
+
+Start from the pairwise model and escalate only when evidence falsifies it:
+
+1. select real UB and L1 kernels with enough buffers and address headroom;
+2. generate several unweighted fitting placements;
+3. isolate one physical overlap relation at a time;
+4. compare final PTOAS synchronization and in-core simulator cycles;
+5. validate informative endpoints numerically on device;
+6. repeat a pair in multiple surrounding placements; and
+7. run a 2x2 interaction test only when two isolated nonzero pairs affect the
+   same region.
+
+Classify each pair as positive, zero, beneficial, context-dependent, or not
+isolatable. Promote a fixed positive edge only when its harmful sign is stable
+and additive. OR groups, hyperedges, retained-depth factors, and global event
+budgets remain deferred until a repeated non-additive experiment requires them.
+
+End-to-end latency is the final performance criterion, but isolated kernel
+cycles are the practical first signal. Device correctness is mandatory;
+orchestration wall time is not kernel timing.
+
+## Solver versus formulation
+
+`pypto_structured_search` is one heuristic. It uses the shared DSA placement
+engine and adds pipeline-block, alias, and penalty-guided ordering moves. The
+problem itself is defined only by buffers, hard constraints, and objective
+terms. Unsupported required features return `kUnsupported`; they are never
+silently dropped.
+
+Schema profiles and replay rules are defined in
+[`structured_problem_schema_v1.md`](structured_problem_schema_v1.md). The
+standalone dependency is temporary: after selecting and validating a heuristic,
+it can be ported into PyPTO.
 
 ## References
 
@@ -505,4 +235,4 @@ improve end-to-end behavior without compromising correctness.
   [#913](https://github.com/hw-native-sys/PTOAS/issues/913) and
   [#948](https://github.com/hw-native-sys/PTOAS/pull/948).
 - Standard baselines: MiniMalloc, TelaMalloc, TVM USMP, and OpenXLA heap
-  simulation.
+  simulation; see [`literature_review.md`](literature_review.md).

@@ -1,18 +1,15 @@
 # Documentation
 
-- [`pypto_dsa.md`](pypto_dsa.md): authoritative definition and research plan
-  for the PyPTO-specific DSA problem.
-- [`structured_problem_schema_v1.md`](structured_problem_schema_v1.md): JSON
-  serialization and solver-capability contract.
-- [`architecture_binding.md`](architecture_binding.md): binding a lowered
-  program to an architecture specification.
-- [`compiler_corpus.md`](compiler_corpus.md): reproducible capture and import of
-  compiler-derived instances.
-- [`design.md`](design.md): solver framework and adapter boundaries.
-- [`literature_review.md`](literature_review.md): comparison with existing
-  static-memory planners.
-- [`xla_heap.md`](xla_heap.md) and [`tvm_hill_climb.md`](tvm_hill_climb.md):
-  provenance and exact scope of the behavioral reimplementations.
+| Document | Scope |
+| --- | --- |
+| [`pypto_dsa.md`](pypto_dsa.md) | Standard DSA, the PyPTO capacity-and-reuse refinement, and current evidence |
+| [`structured_problem_schema_v1.md`](structured_problem_schema_v1.md) | JSON fields, profiles, replay, and solver capability matching |
+| [`design.md`](design.md) | Solver framework and compiler-adapter boundaries |
+| [`architecture_binding.md`](architecture_binding.md) | Binding a lowered program to versioned target resources |
+| [`compiler_corpus.md`](compiler_corpus.md) | Capturing and normalizing PyPTO/PyPTO-Lib instances |
+| [`literature_review.md`](literature_review.md) | Standard-DSA baselines and related compiler planners |
+| [`xla_heap.md`](xla_heap.md) | OpenXLA baseline provenance and exact policy |
+| [`tvm_hill_climb.md`](tvm_hill_climb.md) | TVM baseline provenance and exact policy |
 
-Benchmark inputs and reports are documented under
-[`benchmarks/`](../benchmarks/README.md).
+Benchmark inputs, statistics, and reports are documented in
+[`benchmarks/README.md`](../benchmarks/README.md).

@@ -1,60 +1,48 @@
 # Compiler-derived corpus workflow
 
-Compiler instances are captured exhaustively, normalized structurally, and
-then filtered for meaningful solver choices. Raw exports remain build/device
-artifacts; normalized representatives are checked into `benchmarks/pypto` and
-`benchmarks/pypto-lib`.
+Raw compiler exports remain artifacts. Structurally normalized representatives
+are checked into `benchmarks/pypto` and `benchmarks/pypto-lib`.
 
-## Raw capture
+## Capture
 
-PyPTO emits schema-v1 JSON before memory reuse. Each runnable source uses a
-stable case directory because raw function-local names such as `kernel` are not
-globally unique:
+PyPTO exports schema-v1 JSON before memory reuse. Coverage contracts in
+`benchmarks/capture/` list every expected source entry point and reviewed
+exclusion. `tools/capture_pypto_program.py` performs a host-only compile with
+one process and one codegen worker; capture does not validate device numerics.
 
-```text
-corpus/
-  models__deepseek__v4__decode_attention_swa/
-    pypto_attention_aic.dsa.json
-    pypto_attention_aiv.dsa.json
-```
+Raw outputs use one stable directory per source case because kernel-local names
+are not globally unique.
 
-Coverage contracts under `benchmarks/capture/` enumerate every expected source
-entry point and reviewed exclusion. `tools/capture_pypto_program.py` performs a
-host-only compile with `MemoryPlanner.DSA`, one process, and one codegen worker.
-This is sufficient to generate solver inputs, but it is not numerical device
-validation.
-
-## Normalization and selection
+## Normalize and select
 
 `dsa-corpus`:
 
-- validates every PyPTO document;
-- assigns a source-qualified instance identity;
-- records source and producer repositories, commits, paths, and raw hashes;
+- validates every document;
+- adds source/compiler repositories, commits, paths, and hashes;
+- assigns source-qualified identities;
 - canonicalizes non-semantic IDs and names;
-- deduplicates identical target/problem shapes; and
-- writes `manifest.tsv` and `coverage.tsv` for the complete observations.
+- deduplicates canonical problem shapes; and
+- writes complete observation and coverage manifests.
 
-All solver-visible sizes, intervals, pools, edges, objectives, alias members,
-and pipeline membership remain in the canonical fingerprint. Fingerprint
-collisions are checked by comparing canonical bytes.
+All solver-visible geometry, constraints, costs, aliases, and pipeline
+provenance remain in the canonical fingerprint. Canonical bytes are compared
+when fingerprints collide.
 
-An observation is excluded from aggregate solver results when it has no actual
-placement choice, for example no temporal conflicts. It remains visible in the
-manifest. Unique instances with conflicts, reuse candidates, multiple pools,
-pipeline groups, or semantic structure are retained even if current heuristics
-solve them easily.
+A capture is excluded from aggregate solver results only when it has no
+placement choice: all buffers can share one address and no constraint, pin,
+colocation, temporal exclusion, or reuse cost changes that conclusion. Excluded
+observations remain in the manifest.
 
-The checked-in corpus contains 452 meaningful, structurally deduplicated
-problems: 165 from PyPTO and 287 from PyPTO-Lib. Their statistics are in
-[`benchmarks/corpus.csv`](../benchmarks/corpus.csv).
+Current counts and statistics are generated in
+[`benchmarks/corpus.csv`](../benchmarks/corpus.csv) and summarized in
+[`benchmarks/README.md`](../benchmarks/README.md).
 
 ## Import
 
 ```bash
 ./build/dsa-corpus \
   --input /path/to/raw-corpus \
-  --output /tmp/pypto-lib-corpus \
+  --output /tmp/normalized-corpus \
   --coverage-targets benchmarks/capture/pypto-lib-6e897cd.tsv \
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
   --source-commit 6e897cd99c28767b22e05f209da3e041f15c3dfc \
@@ -63,27 +51,20 @@ problems: 165 from PyPTO and 287 from PyPTO-Lib. Their statistics are in
   --namespace pypto-lib
 ```
 
-The output directory must be new or empty. Import fails for missing or
-unexpected coverage targets, duplicate output identities, invalid paths,
-non-PyPTO profiles, or already-normalized input.
+The output directory must be new or empty. Import fails for invalid input,
+coverage mismatch, duplicate output identity, or already-normalized documents.
 
-Before publishing a refresh, require:
+## Refresh checklist
 
-1. every inventory row is covered or explicitly excluded;
-2. every observation appears in the manifest with a representative and reason;
-3. every selected document retains target, producer, pre-memory-reuse input,
-   sound physical lifetimes, and constraint provenance;
-4. all solver results pass independent placement validation; and
-5. source coverage and unique problem counts are reported separately.
+For a new source or producer revision:
 
-The earlier 597-document `b8802dc6` device archive must not be imported. It was
-valuable for diagnosing the DeepSeek-v4 lifetime-hole defect, but contains
-known-unsound lifetimes. All published inputs use the fixed exporter lineage.
+1. add a revision-named coverage TSV rather than editing the old contract;
+2. capture and import into fresh directories;
+3. require every coverage row to be captured or explicitly excluded;
+4. compare manifests and corpus statistics;
+5. verify that selected inputs use a device-validated, sound lifetime exporter;
+6. independently validate all reported placements; and
+7. update checked-in representatives deliberately.
 
-## Updating revisions
-
-Add a revision-named coverage TSV instead of modifying an old contract. Capture
-and import into fresh directories, compare manifests and corpus statistics,
-then update the checked-in representatives deliberately. Exact source and
-producer commits are the provenance authority; hashes detect accidental
-content changes.
+Exact commits are the provenance authority; hashes detect accidental content
+changes.
