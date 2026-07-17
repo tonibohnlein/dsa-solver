@@ -154,6 +154,22 @@ Therefore `cross_pipe`, raw event counts, and pipeline membership are too coarse
 to assign a cost. Evidence must include the final barrier/event topology,
 source/destination pipes, control-flow location, and redundant-sync removal.
 
+The current candidate-generation hypothesis is deliberately sparse. Add a
+positive pair edge only when all four statements hold:
+
+```text
+the two physical byte ranges overlap
++ PTOAS finds an access dependence through those ranges
++ the access order and pipe assignment require additional synchronization
++ no existing dependency already provides that ordering
+```
+
+Pipe category, pipeline membership, or lifetime compatibility alone is not
+enough. The edge records the two buffers whose overlap activates the hazard;
+the associated operations, pipes, loop/branch context, and resulting sync group
+are evidence used to generate and later weight that edge. Weight calibration is
+a separate step.
+
 The relevant PTOAS implementation is under:
 
 ```text
@@ -182,6 +198,18 @@ Fixed-placement experiments found:
 - A two/three/four-slot L0A pipeline ladder produced identical final
   synchronization. Those pipeline-derived pair penalties were false positives
   for that kernel.
+- A later compact-versus-sparse study held the generated program fixed and
+  found four real kernels where compact placement added synchronization. The
+  strongest case, `mlp_block_aiv`, added five in-loop `PIPE_V -> PIPE_V`
+  barriers and one event. `dyn_online_update`, `mlp_block_aic`, and a pipelined
+  matmul added smaller event sets.
+- Most compact reuse remained free: removing 67 reuse pairs from
+  `mlp_block_aiv` changed only six sync groups, while removing 56 L0A reuse
+  pairs from the pipeline case changed none attributable to L0A. Generic
+  minimum-aliasing and blanket pipeline penalties therefore over-penalize.
+- Gather remained a negative control: removing reuse introduced an in-loop
+  barrier. A positive penalty on that overlap could select the slower
+  placement.
 - No experiment demonstrated a capped OR cost, an all-members hyperedge, or a
   useful universal weight by reason category.
 
@@ -189,23 +217,41 @@ These results support ordinary pair edges as the simplest starting model, but
 also require zero, positive, beneficial, and context-dependent classifications.
 A false-positive penalty can make a placement slower.
 
+One accounting discrepancy remains open: the compact-versus-sparse report
+described loop-carried group counts as unchanged, but the raw
+`mlp_block_aic` summaries record 16 versus 18. That delta must be attributed
+before drawing conclusions about loop-carried costs.
+
 ## Current research method
 
 Start from the pairwise model and escalate only when evidence falsifies it:
 
-1. select real UB and L1 kernels with enough buffers and address headroom;
-2. generate several unweighted fitting placements;
-3. isolate one physical overlap relation at a time;
-4. compare final PTOAS synchronization and in-core simulator cycles;
-5. validate informative endpoints numerically on device;
-6. repeat a pair in multiple surrounding placements; and
-7. run a 2x2 interaction test only when two isolated nonzero pairs affect the
-   same region.
+1. use `mlp_block_aiv`, `dyn_online_update`, and `mlp_block_aic` as the first
+   positive case studies;
+2. map each changed PTOAS sync group back to candidate buffer pairs;
+3. activate exactly one overlap while every unrelated buffer offset stays
+   fixed, and require the overlap-set difference to contain exactly that pair;
+4. compare the complete sync topology, not only aggregate group count;
+5. repeat the same pair in a second surrounding placement when possible;
+6. generate additional fitting loose placements guided by PTOAS mechanisms:
+   separate suspected loop barriers and cross-pipe hazards while retaining
+   overlaps that are already ordered or exempt;
+7. report the nondominated landscape in `(peak, in-loop barriers, in-loop
+   events, straight-line events)` rather than collapsing it to one scalar;
+8. run one 2x2 interaction test on two independently harmful pairs; and
+9. validate informative endpoints numerically and compare in-core cycles.
 
 Classify each pair as positive, zero, beneficial, context-dependent, or not
-isolatable. Promote a fixed positive edge only when its harmful sign is stable
-and additive. OR groups, hyperedges, retained-depth factors, and global event
-budgets remain deferred until a repeated non-additive experiment requires them.
+isolatable. Promote a fixed positive edge only when its harmful sign is stable.
+Retain the additive pair objective only if the 2x2 response is additive; OR
+groups, hyperedges, retained-depth factors, and global event budgets remain
+deferred until a repeated non-additive experiment requires them.
+
+The loose-placement landscape is exploratory evidence, not an algorithm
+benchmark. Placements should be constructed from the same fingerprinted
+problem with deterministic offset edits. PTOAS rules may guide which overlaps
+to remove or retain, but PTOAS synchronization counts are not yet a solver
+objective and are not converted into weights during this phase.
 
 End-to-end latency is the final performance criterion, but isolated kernel
 cycles are the practical first signal. Device correctness is mandatory;
