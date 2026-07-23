@@ -26,12 +26,17 @@ and the dependency removed.
 | `tvm_hill_climb` | TVM graph-guided ordering swaps | frozen literature baseline |
 | `local_search` | seeded swap/insertion/reversal ordering search | generic research baseline |
 | `pypto_structured_search` | generic moves plus pipeline, alias, and penalty-guided moves | experimental PyPTO heuristic |
+| `canonical_greedy`, `promote_repair` | penalty-aware constructive methods | DSA-RP baselines |
+| `reuse_penalty_local_search` | joint order and promoted-soft-set search | DSA-RP heuristic |
+| `canonical_branch_and_bound`, `implicit_hitting_set` | canonical search and logic-based decomposition | DSA-RP exact engines |
+| `reuse_penalty_portfolio` | span-one, capacity-two, treewidth, then branch-and-bound dispatch | DSA-RP exact portfolio |
 | `minimalloc_exact` | pinned Google MiniMalloc solver | optional exact standard-DSA baseline |
 
 Most heuristics decode a buffer order with the shared placement engine. The XLA
 solver retains its own smallest-fitting-free-chunk policy. Details of the named
 reimplementations are in [`xla_heap.md`](xla_heap.md) and
-[`tvm_hill_climb.md`](tvm_hill_climb.md).
+[`tvm_hill_climb.md`](tvm_hill_climb.md). DSA-RP methods and exact
+applicability checks are in [`dsa_rp_algorithms.md`](dsa_rp_algorithms.md).
 
 ## Capability matching
 

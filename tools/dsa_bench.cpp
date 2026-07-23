@@ -22,6 +22,10 @@
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
 #include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
+#include "dsa/algorithms/reuse_penalty_exact_solvers.h"
+#include "dsa/algorithms/reuse_penalty_local_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_portfolio_solvers.h"
+#include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/io/minimalloc_csv.h"
@@ -48,6 +52,7 @@ struct Options {
   dsa::LocalSearchOptions local_search;
   dsa::PyptoStructuredSearchOptions pypto_structured_search;
   dsa::TvmHillClimbOptions tvm_hill_climb;
+  dsa::ReusePenaltyLocalSearchOptions reuse_penalty_local_search;
 };
 
 [[noreturn]] void UsageError(const std::string& message) {
@@ -66,7 +71,10 @@ std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
 void PrintHelp() {
   std::cout << "Usage: dsa-bench --input INSTANCE.{csv,json} [options]\n\n"
             << "Options:\n"
-            << "  --solver first-fit|canonical-greedy|promote-repair|cypress-relaxation|"
+            << "  --solver first-fit|canonical-greedy|promote-repair|promote-all|"
+               "unit-random-coloring|canonical-branch-and-bound|implicit-hitting-set|"
+               "capacity-two-exact|span-one-min-cost-flow|treewidth-partition-dp|"
+               "reuse-penalty-portfolio|reuse-penalty-local-search|cypress-relaxation|"
                "xla-heap|local-search|pypto-structured-search|tvm-hill-climb\n"
             << "                                   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
@@ -123,17 +131,21 @@ Options ParseOptions(int argc, char** argv) {
       options.local_search.seed = seed;
       options.pypto_structured_search.seed = seed;
       options.tvm_hill_climb.seed = seed;
+      options.reuse_penalty_local_search.seed = seed;
     } else if (option == "--iterations") {
       const std::uint64_t iterations = ParseUnsigned(next(&i, option), option);
       options.local_search.max_iterations = iterations;
       options.pypto_structured_search.max_iterations = iterations;
       options.tvm_hill_climb.max_attempts = iterations;
+      options.reuse_penalty_local_search.max_evaluations = iterations;
     } else if (option == "--restarts") {
       options.local_search.restarts = ParseUnsigned(next(&i, option), option);
       options.pypto_structured_search.restarts = options.local_search.restarts;
+      options.reuse_penalty_local_search.restarts = options.local_search.restarts;
     } else if (option == "--stagnation") {
       options.local_search.stagnation_limit = ParseUnsigned(next(&i, option), option);
       options.pypto_structured_search.stagnation_limit = options.local_search.stagnation_limit;
+      options.reuse_penalty_local_search.stagnation_limit = options.local_search.stagnation_limit;
     } else if (option == "--target-total-peak") {
       options.tvm_hill_climb.target_total_peak = ParseUnsigned(next(&i, option), option);
     } else if (option == "--worse-move-scale") {
@@ -155,7 +167,12 @@ Options ParseOptions(int argc, char** argv) {
   }
   if (options.input.empty()) UsageError("--input is required");
   if (options.solver != "first-fit" && options.solver != "canonical-greedy" &&
-      options.solver != "promote-repair" && options.solver != "cypress-relaxation" &&
+      options.solver != "promote-repair" && options.solver != "promote-all" &&
+      options.solver != "unit-random-coloring" && options.solver != "canonical-branch-and-bound" &&
+      options.solver != "implicit-hitting-set" && options.solver != "capacity-two-exact" &&
+      options.solver != "span-one-min-cost-flow" && options.solver != "treewidth-partition-dp" &&
+      options.solver != "reuse-penalty-portfolio" &&
+      options.solver != "reuse-penalty-local-search" && options.solver != "cypress-relaxation" &&
       options.solver != "xla-heap" && options.solver != "local-search" &&
       options.solver != "pypto-structured-search" && options.solver != "tvm-hill-climb") {
     UsageError("unknown solver '" + options.solver + "'");
@@ -338,6 +355,10 @@ std::string BuildJson(const Options& options, const dsa::StructuredProblemDocume
     output << ",\"search_budget\":" << options.local_search.max_iterations
            << ",\"restarts\":" << options.local_search.restarts
            << ",\"stagnation_limit\":" << options.local_search.stagnation_limit;
+  } else if (options.solver == "reuse-penalty-local-search") {
+    output << ",\"search_budget\":" << options.reuse_penalty_local_search.max_evaluations
+           << ",\"restarts\":" << options.reuse_penalty_local_search.restarts
+           << ",\"stagnation_limit\":" << options.reuse_penalty_local_search.stagnation_limit;
   } else if (options.solver == "tvm-hill-climb") {
     output << ",\"search_budget\":" << options.tvm_hill_climb.max_attempts
            << ",\"worse_move_scale_percent\":" << options.tvm_hill_climb.worse_move_scale_percent;
@@ -369,6 +390,36 @@ int main(int argc, char** argv) {
       solver = std::make_unique<dsa::CanonicalGreedySolver>();
     } else if (options.solver == "promote-repair") {
       solver = std::make_unique<dsa::PromoteRepairSolver>();
+    } else if (options.solver == "promote-all") {
+      solver = std::make_unique<dsa::PromoteAllSolver>();
+    } else if (options.solver == "unit-random-coloring") {
+      dsa::UnitRandomColoringOptions random_options;
+      random_options.seed = options.local_search.seed;
+      solver = std::make_unique<dsa::UnitRandomColoringSolver>(random_options);
+    } else if (options.solver == "canonical-branch-and-bound") {
+      dsa::CanonicalBranchAndBoundOptions exact_options;
+      exact_options.max_search_nodes = options.local_search.max_iterations;
+      solver = std::make_unique<dsa::CanonicalBranchAndBoundSolver>(exact_options);
+    } else if (options.solver == "implicit-hitting-set") {
+      dsa::ImplicitHittingSetOptions exact_options;
+      exact_options.max_oracle_nodes = options.local_search.max_iterations;
+      solver = std::make_unique<dsa::ImplicitHittingSetSolver>(exact_options);
+    } else if (options.solver == "capacity-two-exact") {
+      dsa::CapacityTwoExactOptions exact_options;
+      exact_options.max_search_nodes = options.local_search.max_iterations;
+      solver = std::make_unique<dsa::CapacityTwoExactSolver>(exact_options);
+    } else if (options.solver == "span-one-min-cost-flow") {
+      solver = std::make_unique<dsa::SpanOneMinCostFlowSolver>();
+    } else if (options.solver == "treewidth-partition-dp") {
+      solver = std::make_unique<dsa::TreewidthPartitionDpSolver>();
+    } else if (options.solver == "reuse-penalty-portfolio") {
+      dsa::ReusePenaltyPortfolioOptions portfolio_options;
+      portfolio_options.capacity_two.max_search_nodes = options.local_search.max_iterations;
+      portfolio_options.general.max_search_nodes = options.local_search.max_iterations;
+      solver = std::make_unique<dsa::ReusePenaltyPortfolioSolver>(portfolio_options);
+    } else if (options.solver == "reuse-penalty-local-search") {
+      solver =
+          std::make_unique<dsa::ReusePenaltyLocalSearchSolver>(options.reuse_penalty_local_search);
     } else if (options.solver == "cypress-relaxation") {
       solver = std::make_unique<dsa::CypressRelaxationSolver>();
     } else if (options.solver == "xla-heap") {

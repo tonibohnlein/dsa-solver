@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <random>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -20,6 +21,10 @@
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
 #include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
+#include "dsa/algorithms/reuse_penalty_exact_solvers.h"
+#include "dsa/algorithms/reuse_penalty_local_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_portfolio_solvers.h"
+#include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/analysis/reuse_geometry.h"
@@ -330,6 +335,280 @@ void TestDsaRpConstructiveBaselines() {
   Require(triangle_repair.solver_metrics.at("demoted_edges") == 1 &&
               triangle_repair.objective.reuse_cost > triangle_optimum,
           "promote-repair fixture no longer exposes the heuristic optimality gap");
+
+  const dsa::DsaResult strict = dsa::PromoteAllSolver().Solve(problem);
+  Require(strict.status == dsa::SolveStatus::kBestEffortNoFit &&
+              strict.solver_metrics.at("promoted_edges") == 3,
+          "promote-all control did not report the strict capacity failure");
+
+  dsa::UnitRandomColoringOptions random_options;
+  random_options.seed = 23;
+  random_options.samples = 8;
+  const dsa::DsaResult random =
+      SolveAndValidate(problem, dsa::UnitRandomColoringSolver(random_options));
+  Require(random.solver_metrics.at("samples") == 8 && random.objective.max_peak <= 2,
+          "unit random-coloring control did not produce a sampled fit");
+}
+
+void TestDsaRpExactSolvers() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+      MakeBuffer(2, {{2, 3}}, 1),
+  };
+  problem.pools.front().capacity = 2;
+  problem.cost_model = dsa::CostModel{{
+      {0, 1, 9, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 2, 4, dsa::ReusePenaltyReason::kCrossPipe},
+      {0, 2, 1, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const std::uint64_t optimum = BruteForceMinimumReuseCost(problem);
+  Require(optimum == 1, "exact-solver fixture has the wrong brute-force optimum");
+
+  const dsa::DsaResult branch_and_bound =
+      SolveAndValidate(problem, dsa::CanonicalBranchAndBoundSolver());
+  Require(branch_and_bound.objective.reuse_cost == optimum,
+          "canonical branch-and-bound disagrees with brute force");
+  Require(branch_and_bound.solver_metrics.at("optimality_proven") == 1,
+          "canonical branch-and-bound did not certify its result");
+
+  const dsa::DsaResult hitting_set = SolveAndValidate(problem, dsa::ImplicitHittingSetSolver());
+  Require(hitting_set.objective.reuse_cost == optimum,
+          "implicit hitting set disagrees with brute force");
+  Require(hitting_set.solver_metrics.at("optimal_reuse_cost_proven") == 1 &&
+              hitting_set.solver_metrics.at("verified_cores") > 0,
+          "implicit hitting set did not expose its proof metrics");
+  const dsa::DsaResult capacity_two = SolveAndValidate(problem, dsa::CapacityTwoExactSolver());
+  Require(capacity_two.objective.reuse_cost == optimum &&
+              capacity_two.solver_metrics.at("optimality_proven") == 1,
+          "capacity-two specialization disagrees with brute force");
+  const dsa::DsaResult treewidth = SolveAndValidate(problem, dsa::TreewidthPartitionDpSolver());
+  Require(treewidth.objective.reuse_cost == optimum &&
+              treewidth.solver_metrics.at("optimal_reuse_cost_proven") == 1,
+          "treewidth specialization disagrees with brute force");
+  const dsa::DsaResult portfolio = SolveAndValidate(problem, dsa::ReusePenaltyPortfolioSolver());
+  Require(portfolio.objective.reuse_cost == optimum &&
+              portfolio.solver_metrics.at("portfolio_method") == 2,
+          "portfolio did not dispatch the capacity-two fixture correctly");
+
+  dsa::DsaProblem infeasible;
+  infeasible.buffers = {
+      MakeBuffer(0, {{0, 2}}, 1),
+      MakeBuffer(1, {{0, 2}}, 1),
+      MakeBuffer(2, {{0, 2}}, 1),
+  };
+  infeasible.pools.front().capacity = 2;
+  infeasible.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const dsa::DsaResult cbb_infeasible = dsa::CanonicalBranchAndBoundSolver().Solve(infeasible);
+  Require(cbb_infeasible.status == dsa::SolveStatus::kInfeasibleProven,
+          "canonical branch-and-bound missed hard infeasibility");
+  const dsa::DsaResult ihs_infeasible = dsa::ImplicitHittingSetSolver().Solve(infeasible);
+  Require(ihs_infeasible.status == dsa::SolveStatus::kInfeasibleProven,
+          "implicit hitting set missed hard infeasibility");
+  const dsa::DsaResult capacity_two_infeasible = dsa::CapacityTwoExactSolver().Solve(infeasible);
+  Require(capacity_two_infeasible.status == dsa::SolveStatus::kInfeasibleProven,
+          "capacity-two specialization missed hard infeasibility");
+
+  std::mt19937_64 random(0xD5A2026U);
+  for (std::size_t instance = 0; instance < 24; ++instance) {
+    dsa::DsaProblem generated;
+    generated.pools.front().capacity = 3 + random() % 3;
+    for (dsa::BufferId id = 0; id < 4; ++id) {
+      const std::int64_t begin = static_cast<std::int64_t>(random() % 4);
+      const std::int64_t end = begin + 1 + static_cast<std::int64_t>(random() % 2);
+      generated.buffers.push_back(MakeBuffer(id, {{begin, end}}, 1 + random() % 2));
+    }
+    dsa::CostModel costs;
+    for (std::size_t first = 0; first < generated.buffers.size(); ++first) {
+      for (std::size_t second = first + 1; second < generated.buffers.size(); ++second) {
+        if (!generated.buffers[first].live_intervals.front().Overlaps(
+                generated.buffers[second].live_intervals.front()) &&
+            random() % 4 != 0) {
+          costs.reuse_penalties.push_back({generated.buffers[first].id,
+                                           generated.buffers[second].id, 1 + random() % 9,
+                                           dsa::ReusePenaltyReason::kCrossPipe});
+        }
+      }
+    }
+    generated.cost_model = std::move(costs);
+    generated.objective = dsa::FitThenMinimizeReuseCostObjective();
+    const std::uint64_t generated_optimum = BruteForceMinimumReuseCost(generated);
+    const dsa::DsaResult generated_cbb = dsa::CanonicalBranchAndBoundSolver().Solve(generated);
+    const dsa::DsaResult generated_ihs = dsa::ImplicitHittingSetSolver().Solve(generated);
+    if (generated_optimum == std::numeric_limits<std::uint64_t>::max()) {
+      Require(generated_cbb.status == dsa::SolveStatus::kInfeasibleProven &&
+                  generated_ihs.status == dsa::SolveStatus::kInfeasibleProven,
+              "exact solvers disagreed with brute-force infeasibility");
+    } else {
+      Require(generated_cbb.status == dsa::SolveStatus::kFeasible &&
+                  generated_cbb.objective.reuse_cost == generated_optimum,
+              "canonical branch-and-bound failed generated cross-check");
+      Require(generated_ihs.status == dsa::SolveStatus::kFeasible &&
+                  generated_ihs.objective.reuse_cost == generated_optimum,
+              "implicit hitting set failed generated cross-check");
+    }
+  }
+
+  for (std::size_t instance = 0; instance < 24; ++instance) {
+    dsa::DsaProblem generated;
+    generated.pools.front().capacity = 2;
+    for (dsa::BufferId id = 0; id < 5; ++id) {
+      const std::int64_t begin = static_cast<std::int64_t>(random() % 5);
+      const std::int64_t end = begin + 1 + static_cast<std::int64_t>(random() % 2);
+      generated.buffers.push_back(MakeBuffer(id, {{begin, end}}, 1));
+    }
+    dsa::CostModel costs;
+    for (std::size_t first = 0; first < generated.buffers.size(); ++first) {
+      for (std::size_t second = first + 1; second < generated.buffers.size(); ++second) {
+        if (!generated.buffers[first].live_intervals.front().Overlaps(
+                generated.buffers[second].live_intervals.front()) &&
+            random() % 3 != 0) {
+          costs.reuse_penalties.push_back({generated.buffers[first].id,
+                                           generated.buffers[second].id, 1 + random() % 7,
+                                           dsa::ReusePenaltyReason::kCrossPipe});
+        }
+      }
+    }
+    generated.cost_model = std::move(costs);
+    generated.objective = dsa::FitThenMinimizeReuseCostObjective();
+    const std::uint64_t generated_optimum = BruteForceMinimumReuseCost(generated);
+    const dsa::DsaResult specialized = dsa::CapacityTwoExactSolver().Solve(generated);
+    const dsa::DsaResult treewidth_specialized = dsa::TreewidthPartitionDpSolver().Solve(generated);
+    if (generated_optimum == std::numeric_limits<std::uint64_t>::max()) {
+      Require(specialized.status == dsa::SolveStatus::kInfeasibleProven,
+              "capacity-two specialization disagreed with generated "
+              "infeasibility");
+      Require(treewidth_specialized.status == dsa::SolveStatus::kInfeasibleProven,
+              "treewidth specialization disagreed with generated "
+              "infeasibility");
+    } else {
+      Require(specialized.status == dsa::SolveStatus::kFeasible &&
+                  specialized.objective.reuse_cost == generated_optimum,
+              "capacity-two specialization failed generated cross-check");
+      Require(treewidth_specialized.status == dsa::SolveStatus::kFeasible &&
+                  treewidth_specialized.objective.reuse_cost == generated_optimum,
+              "treewidth specialization failed generated cross-check");
+    }
+  }
+
+  dsa::DsaProblem phases;
+  phases.pools.front().capacity = 3;
+  phases.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1), MakeBuffer(1, {{0, 1}}, 1), MakeBuffer(2, {{2, 3}}, 1),
+      MakeBuffer(3, {{2, 3}}, 1), MakeBuffer(4, {{2, 3}}, 1), MakeBuffer(5, {{4, 5}}, 1),
+      MakeBuffer(6, {{4, 5}}, 1),
+  };
+  phases.cost_model = dsa::CostModel{{
+      {0, 2, 9, dsa::ReusePenaltyReason::kCrossPipe},
+      {0, 3, 1, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 3, 8, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 4, 2, dsa::ReusePenaltyReason::kCrossPipe},
+      {2, 5, 7, dsa::ReusePenaltyReason::kCrossPipe},
+      {3, 5, 3, dsa::ReusePenaltyReason::kCrossPipe},
+      {4, 6, 4, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  phases.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const std::uint64_t phase_optimum = BruteForceMinimumReuseCost(phases);
+  const dsa::DsaResult flow = SolveAndValidate(phases, dsa::SpanOneMinCostFlowSolver());
+  Require(flow.objective.reuse_cost == phase_optimum &&
+              flow.solver_metrics.at("optimal_reuse_cost_proven") == 1,
+          "span-one flow specialization disagrees with brute force");
+  const dsa::DsaResult phase_treewidth =
+      SolveAndValidate(phases, dsa::TreewidthPartitionDpSolver());
+  Require(phase_treewidth.objective.reuse_cost == phase_optimum,
+          "treewidth specialization disagrees on the span-one fixture");
+  const dsa::DsaResult phase_portfolio =
+      SolveAndValidate(phases, dsa::ReusePenaltyPortfolioSolver());
+  Require(phase_portfolio.objective.reuse_cost == phase_optimum &&
+              phase_portfolio.solver_metrics.at("portfolio_method") == 1,
+          "portfolio did not dispatch the span-one fixture correctly");
+
+  dsa::DsaProblem treewidth_only = problem;
+  treewidth_only.pools.front().capacity = 3;
+  const dsa::DsaResult treewidth_portfolio =
+      SolveAndValidate(treewidth_only, dsa::ReusePenaltyPortfolioSolver());
+  Require(treewidth_portfolio.objective.reuse_cost == 0 &&
+              treewidth_portfolio.solver_metrics.at("portfolio_method") == 3,
+          "portfolio did not dispatch the bounded-treewidth fixture "
+          "correctly");
+
+  for (std::size_t instance = 0; instance < 16; ++instance) {
+    dsa::DsaProblem generated;
+    generated.pools.front().capacity = 3;
+    dsa::BufferId next_id = 0;
+    std::vector<std::vector<dsa::BufferId>> generated_phases;
+    for (std::size_t phase = 0; phase < 3; ++phase) {
+      generated_phases.emplace_back();
+      const std::size_t phase_size = 1 + static_cast<std::size_t>(random() % 3);
+      for (std::size_t member = 0; member < phase_size; ++member) {
+        generated.buffers.push_back(MakeBuffer(
+            next_id,
+            {{static_cast<std::int64_t>(phase * 2), static_cast<std::int64_t>(phase * 2 + 1)}}, 1));
+        generated_phases.back().push_back(next_id++);
+      }
+    }
+    dsa::CostModel costs;
+    for (std::size_t phase = 0; phase + 1 < generated_phases.size(); ++phase) {
+      for (dsa::BufferId first : generated_phases[phase]) {
+        for (dsa::BufferId second : generated_phases[phase + 1]) {
+          if (random() % 4 != 0) {
+            costs.reuse_penalties.push_back(
+                {first, second, 1 + random() % 11, dsa::ReusePenaltyReason::kCrossPipe});
+          }
+        }
+      }
+    }
+    generated.cost_model = std::move(costs);
+    generated.objective = dsa::FitThenMinimizeReuseCostObjective();
+    const std::uint64_t generated_optimum = BruteForceMinimumReuseCost(generated);
+    const dsa::DsaResult specialized = SolveAndValidate(generated, dsa::SpanOneMinCostFlowSolver());
+    Require(specialized.objective.reuse_cost == generated_optimum,
+            "span-one flow specialization failed generated cross-check");
+    const dsa::DsaResult generated_treewidth =
+        SolveAndValidate(generated, dsa::TreewidthPartitionDpSolver());
+    Require(generated_treewidth.objective.reuse_cost == generated_optimum,
+            "treewidth specialization failed generated phase cross-check");
+  }
+}
+
+void TestDsaRpPromotedSetLocalSearch() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+      MakeBuffer(2, {{2, 3}}, 1),
+  };
+  problem.pools.front().capacity = 2;
+  problem.cost_model = dsa::CostModel{{
+      {0, 1, 9, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 2, 4, dsa::ReusePenaltyReason::kCrossPipe},
+      {0, 2, 1, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+
+  dsa::ReusePenaltyLocalSearchOptions options;
+  options.seed = 17;
+  options.max_evaluations = 256;
+  options.restarts = 2;
+  options.stagnation_limit = 8;
+  options.soft_moves_per_iteration = 8;
+  options.order_moves_per_iteration = 4;
+  const dsa::DsaResult result =
+      SolveAndValidate(problem, dsa::ReusePenaltyLocalSearchSolver(options));
+  Require(result.objective.reuse_cost == BruteForceMinimumReuseCost(problem) &&
+              result.objective.reuse_cost == 1,
+          "promoted-set local search missed the soft-triangle optimum");
+  Require(
+      result.solver_metrics.at("soft_moves") > 0 && result.solver_metrics.at("promoted_edges") == 2,
+      "promoted-set local search did not expose its soft-edge state");
+
+  problem.pools.front().capacity = 1;
+  const dsa::DsaResult forced =
+      SolveAndValidate(problem, dsa::ReusePenaltyLocalSearchSolver(options));
+  Require(forced.objective.reuse_cost == 14,
+          "promoted-set local search mishandled forced full reuse");
 }
 
 void TestSparseReferenceReducesPhysicalReuse() {
@@ -346,17 +625,13 @@ void TestSparseReferenceReducesPhysicalReuse() {
       {1, {dsa::kDefaultPool, 0}},
       {2, {dsa::kDefaultPool, 10}},
   };
-  Require(dsa::ValidateSolution(problem, compact).empty(),
-          "sparse-reference fixture is invalid");
-  const dsa::ReuseGeometryStats compact_stats =
-      dsa::EvaluateReuseGeometry(problem, compact);
+  Require(dsa::ValidateSolution(problem, compact).empty(), "sparse-reference fixture is invalid");
+  const dsa::ReuseGeometryStats compact_stats = dsa::EvaluateReuseGeometry(problem, compact);
   Require(compact_stats.pair_count == 1 && compact_stats.overlap_bytes == 10,
           "compact fixture has the wrong reuse geometry");
 
-  const dsa::SparseReferenceResult sparse =
-      dsa::BuildSparseReferencePlacement(problem, compact);
-  Require(dsa::ValidateSolution(problem, sparse.solution).empty(),
-          "sparse reference is invalid");
+  const dsa::SparseReferenceResult sparse = dsa::BuildSparseReferencePlacement(problem, compact);
+  Require(dsa::ValidateSolution(problem, sparse.solution).empty(), "sparse reference is invalid");
   Require(sparse.final.pair_count == 0 && sparse.final.overlap_bytes == 0,
           "sparse reference did not eliminate avoidable physical reuse");
   Require(dsa::EvaluateObjective(problem, sparse.solution).max_peak == 30,
@@ -1201,6 +1476,8 @@ int main() {
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"DSA-RP constructive baselines", TestDsaRpConstructiveBaselines},
+      {"DSA-RP exact solvers", TestDsaRpExactSolvers},
+      {"DSA-RP promoted-set local search", TestDsaRpPromotedSetLocalSearch},
       {"sparse reference", TestSparseReferenceReducesPhysicalReuse},
       {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},

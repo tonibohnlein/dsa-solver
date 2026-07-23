@@ -4,6 +4,9 @@
 #ifndef DSA_REUSE_PENALTY_BASELINE_SOLVERS_H_
 #define DSA_REUSE_PENALTY_BASELINE_SOLVERS_H_
 
+#include <cstddef>
+#include <cstdint>
+
 #include "dsa/algorithms/solver.h"
 
 namespace dsa {
@@ -28,6 +31,34 @@ class PromoteRepairSolver final : public DsaSolver {
   [[nodiscard]] const char* Name() const noexcept override;
   [[nodiscard]] SolverCapabilities Capabilities() const noexcept override;
   [[nodiscard]] DsaResult Solve(const DsaProblem& problem) const override;
+};
+
+// Control that keeps every soft edge apart and reports over-capacity rather
+// than repairing it.
+class PromoteAllSolver final : public DsaSolver {
+ public:
+  [[nodiscard]] const char* Name() const noexcept override;
+  [[nodiscard]] SolverCapabilities Capabilities() const noexcept override;
+  [[nodiscard]] DsaResult Solve(const DsaProblem& problem) const override;
+};
+
+struct UnitRandomColoringOptions {
+  std::uint64_t seed = 0;
+  std::size_t samples = 1;
+};
+
+// Uniform-color control for the geometry-free, unit-size specialization.
+// Each node independently selects one of the capacity colors.
+class UnitRandomColoringSolver final : public DsaSolver {
+ public:
+  explicit UnitRandomColoringSolver(UnitRandomColoringOptions options = {});
+
+  [[nodiscard]] const char* Name() const noexcept override;
+  [[nodiscard]] SolverCapabilities Capabilities() const noexcept override;
+  [[nodiscard]] DsaResult Solve(const DsaProblem& problem) const override;
+
+ private:
+  UnitRandomColoringOptions options_;
 };
 
 }  // namespace dsa

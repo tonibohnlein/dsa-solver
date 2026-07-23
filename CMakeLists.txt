@@ -18,6 +18,8 @@ endif()
 add_library(dsa_solver
   src/dsa/analysis/reuse_geometry.cpp
   src/dsa/analysis/reuse_geometry.h
+  src/dsa/algorithms/canonical_exact_search.cpp
+  src/dsa/algorithms/canonical_exact_search.h
   src/dsa/algorithms/cypress_relaxation_solver.cpp
   src/dsa/algorithms/cypress_relaxation_solver.h
   src/dsa/model/architecture.cpp
@@ -39,6 +41,16 @@ add_library(dsa_solver
   src/dsa/algorithms/pypto_structured_search_solver.h
   src/dsa/algorithms/reuse_penalty_baseline_solvers.cpp
   src/dsa/algorithms/reuse_penalty_baseline_solvers.h
+  src/dsa/algorithms/reuse_penalty_exact_solvers.cpp
+  src/dsa/algorithms/reuse_penalty_exact_solvers.h
+  src/dsa/algorithms/reuse_penalty_local_search_solver.cpp
+  src/dsa/algorithms/reuse_penalty_local_search_solver.h
+  src/dsa/algorithms/reuse_penalty_portfolio_solvers.cpp
+  src/dsa/algorithms/reuse_penalty_portfolio_solvers.h
+  src/dsa/algorithms/reuse_penalty_search.cpp
+  src/dsa/algorithms/reuse_penalty_search.h
+  src/dsa/algorithms/reuse_penalty_treewidth_solver.cpp
+  src/dsa/algorithms/reuse_penalty_treewidth_solver.h
   src/dsa/algorithms/solver.cpp
   src/dsa/algorithms/solver.h
   src/dsa/algorithms/tvm_hill_climb_solver.cpp
@@ -78,6 +90,10 @@ set(DSA_COMPATIBILITY_HEADERS
   src/dsa/algorithms/local_search_solver.h
   src/dsa/algorithms/pypto_structured_search_solver.h
   src/dsa/algorithms/reuse_penalty_baseline_solvers.h
+  src/dsa/algorithms/reuse_penalty_exact_solvers.h
+  src/dsa/algorithms/reuse_penalty_local_search_solver.h
+  src/dsa/algorithms/reuse_penalty_portfolio_solvers.h
+  src/dsa/algorithms/reuse_penalty_treewidth_solver.h
   src/dsa/algorithms/solver.h
   src/dsa/algorithms/tvm_hill_climb_solver.h
   src/dsa/algorithms/xla_heap_solver.h
@@ -350,6 +366,27 @@ if(BUILD_TESTING)
   set_tests_properties(dsa-cli-promote-repair PROPERTIES
     PASS_REGULAR_EXPRESSION "\"solver\":\"promote-repair\".*\"status\":\"feasible\""
   )
+  foreach(DSA_RP_SOLVER IN ITEMS
+      canonical-branch-and-bound
+      implicit-hitting-set
+      span-one-min-cost-flow
+      treewidth-partition-dp
+      reuse-penalty-portfolio
+      reuse-penalty-local-search
+  )
+    add_test(
+      NAME dsa-cli-${DSA_RP_SOLVER}
+      COMMAND dsa-bench
+        --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/dsa_rp_phase_v1.json
+        --solver ${DSA_RP_SOLVER}
+        --seed 7
+        --iterations 20000
+        --restarts 2
+    )
+    set_tests_properties(dsa-cli-${DSA_RP_SOLVER} PROPERTIES
+      PASS_REGULAR_EXPRESSION "\"solver\":\"${DSA_RP_SOLVER}\".*\"status\":\"feasible\""
+    )
+  endforeach()
   add_test(
     NAME dsa-cli-xla-heap
     COMMAND dsa-bench
@@ -427,7 +464,9 @@ install(
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dsa
   FILES_MATCHING
   PATTERN "*.h"
+  PATTERN "canonical_exact_search.h" EXCLUDE
   PATTERN "placement_engine.h" EXCLUDE
+  PATTERN "reuse_penalty_search.h" EXCLUDE
 )
 install(
   FILES ${DSA_COMPATIBILITY_HEADERS}
