@@ -456,6 +456,7 @@ if(BUILD_TESTING)
     COMMAND ${CMAKE_COMMAND}
       -DDSA_CORPUS=$<TARGET_FILE:dsa-corpus>
       -DDSA_BENCH=$<TARGET_FILE:dsa-bench>
+      -DDSA_SUITE=$<TARGET_FILE:dsa-suite>
       -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
       -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_rp_corpus_smoke.cmake

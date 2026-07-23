@@ -1,7 +1,7 @@
 # Copyright 2026 dsa-solver contributors
 # SPDX-License-Identifier: Apache-2.0
 
-if(NOT DEFINED DSA_CORPUS OR NOT DEFINED DSA_BENCH OR
+if(NOT DEFINED DSA_CORPUS OR NOT DEFINED DSA_BENCH OR NOT DEFINED DSA_SUITE OR
    NOT DEFINED SOURCE_DIR OR NOT DEFINED BINARY_DIR)
   message(FATAL_ERROR "DSA-RP corpus smoke test is missing a required path")
 endif()
@@ -108,3 +108,25 @@ foreach(INSTANCE IN ITEMS "${HARD_INSTANCE}" "${SOFT_INSTANCE}")
     )
   endif()
 endforeach()
+
+execute_process(
+  COMMAND "${DSA_SUITE}"
+    --pypto "${OUTPUT_DIR}/instances"
+    --output-dir "${OUTPUT_DIR}/features"
+    --dsa-rp-variants-only
+    --features-only
+  RESULT_VARIABLE SUITE_RESULT
+  OUTPUT_VARIABLE SUITE_OUTPUT
+  ERROR_VARIABLE SUITE_ERROR
+)
+if(NOT SUITE_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "DSA-RP-only suite filtering failed (${SUITE_RESULT})\n${SUITE_OUTPUT}\n${SUITE_ERROR}"
+  )
+endif()
+file(STRINGS "${OUTPUT_DIR}/features/features.csv" FEATURE_ROWS)
+list(LENGTH FEATURE_ROWS FEATURE_ROW_COUNT)
+if(NOT FEATURE_ROW_COUNT EQUAL 3)
+  message(FATAL_ERROR
+    "DSA-RP-only suite filtering expected a header and two variants, found ${FEATURE_ROW_COUNT}")
+endif()

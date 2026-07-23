@@ -91,6 +91,7 @@ struct Options {
   bool standard_only = false;
   bool report_only = false;
   bool features_only = false;
+  bool dsa_rp_variants_only = false;
   std::string run_label = "local";
 };
 
@@ -257,6 +258,7 @@ void PrintHelp() {
       << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
       << "  --standard-only                 Project PyPTO pools to capacity-free standard DSA\n"
       << "  --features-only                 Write features.csv without running solvers\n"
+      << "  --dsa-rp-variants-only          Keep only paired cross-pipe hard/soft variants\n"
       << "  --report-only                   Rebuild the report from existing results.jsonl\n"
       << "  --help                           Show this help\n";
 }
@@ -304,6 +306,8 @@ Options ParseOptions(int argc, char** argv) {
       options.standard_only = true;
     } else if (option == "--features-only") {
       options.features_only = true;
+    } else if (option == "--dsa-rp-variants-only") {
+      options.dsa_rp_variants_only = true;
     } else if (option == "--report-only") {
       options.report_only = true;
     } else {
@@ -336,6 +340,9 @@ Options ParseOptions(int argc, char** argv) {
     UsageError("--features-only cannot be combined with --report-only or --standard-only");
   }
   if (options.features_only) options.build_core_relaxations = false;
+  if (options.dsa_rp_variants_only && !options.standard_roots.empty()) {
+    UsageError("--dsa-rp-variants-only accepts only --pypto inputs");
+  }
   return options;
 }
 
@@ -738,6 +745,10 @@ std::vector<Instance> LoadInstances(const Options& options) {
   }
   for (const fs::path& path : DiscoverFiles(options.pypto_roots, {".json"})) {
     Instance structured = LoadPyptoInstance(path);
+    if (options.dsa_rp_variants_only &&
+        MetadataValue(structured.document, "dsa_rp_edge_policy").empty()) {
+      continue;
+    }
     const std::string fingerprint =
         MetadataValue(structured.document, "corpus_problem_fingerprint_fnv1a64");
     if (!fingerprint.empty() && !compiler_problem_fingerprints.insert(fingerprint).second) {
@@ -966,6 +977,14 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   record.status = dsa::ToString(result.status);
   record.diagnostics = result.diagnostics;
   record.solver_metrics = result.solver_metrics;
+  const auto metric_is_set = [&](std::string_view name) {
+    const auto metric = result.solver_metrics.find(std::string(name));
+    return metric != result.solver_metrics.end() && metric->second != 0;
+  };
+  record.certified_optimal = metric_is_set("optimality_proven") ||
+                             metric_is_set("optimal_reuse_cost_proven") ||
+                             (metric_is_set("zero_penalty_feasibility_proven") && result.solution &&
+                              result.objective.reuse_cost == 0);
   PopulateSolutionMetrics(instance.document.problem, result, &record);
   return record;
 }
@@ -1926,6 +1945,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
   append_option("minimalloc-timeout-ms", std::to_string(options.minimalloc_timeout_ms));
   if (!options.run_minimalloc) output << " \\" << '\n' << "  --no-minimalloc";
   if (!options.build_core_relaxations) output << " \\" << '\n' << "  --no-core-relaxations";
+  if (options.dsa_rp_variants_only) {
+    output << " \\" << '\n' << "  --dsa-rp-variants-only";
+  }
   output << "\n```\n\n"
          << "MiniMalloc is compared directly only with standard DSA. For PyPTO instances it runs "
             "only on explicitly recorded core relaxations, so those numbers are lower bounds—not "
