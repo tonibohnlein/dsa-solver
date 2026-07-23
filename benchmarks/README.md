@@ -4,17 +4,20 @@ This directory contains the checked-in benchmark inputs and their provenance:
 
 - `pypto/`: 273 PyPTO problems;
 - `pypto-lib/`: 587 PyPTO-Lib problems;
+- `minimalloc-dsa-rp/`: 11 synthetic scheduled-program DSA-RP lifts of
+  MiniMalloc A–K;
 - `architectures/`: target specifications used by the architecture binder;
 - `capture/`: source-coverage inventories, not solver inputs;
-- `corpus.csv`: one statistics row per structured JSON input;
+- `corpus.csv`: one statistics row per PyPTO/PyPTO-Lib JSON input;
 - `results/`: reproducible solver results.
 
 ## Structured corpus
 
 Each JSON file is a schema-v1 `StructuredProblemDocument`. `corpus.csv`
-summarizes provenance, buffer sizes, lifetimes, conflicts, capacities, and
-PyPTO alias/pipeline structure. `uniform_buffer_size=true` identifies the
-unit-weighted DSA special case.
+summarizes the PyPTO/PyPTO-Lib captures: provenance, buffer sizes, lifetimes,
+conflicts, capacities, and alias/pipeline structure. The synthetic MiniMalloc
+lifts carry their statistics in document metadata and their result snapshot.
+`uniform_buffer_size=true` identifies the unit-weighted DSA special case.
 
 The corpus omits captures with no placement choice: all buffers can share one
 address and there is no separation, pinning, colocation, temporal exclusion,
@@ -50,6 +53,39 @@ Each DSA-RP pair represents one unique recognized problem twice: `hard_v1`
 turns the recognized cross-pipe pairs into separations, while `soft_v1` retains
 them as unit reuse penalties. Edge-free captures are not duplicated. These
 policies are experimental A/B inputs, not calibrated performance claims.
+
+## MiniMalloc-derived DSA-RP
+
+The A–K lifts are algorithmic stress tests, not reconstructed compiler traces.
+Each original buffer keeps its size and lifetime and is given one synthetic
+first write and final read on a deterministic four-stream schedule. The
+`dsa-rp-lift` tool computes happens-before and emits a unit soft edge exactly
+when a maximal access of the earlier buffer is unordered with the later
+buffer's first write. Ordered handoffs remain free; no pipeline constraints or
+hard/soft variants are added.
+
+The lift uses an explicit quadratic pair scan as a simple offline reference.
+It implements the Fable edge rule, not the engineering note's output-sensitive
+compiler implementation.
+
+Capacity is the deterministic standard first-fit peak, so every lifted instance
+has a known fitting placement. The 11 lifts contain 154–454 buffers and
+1,928–9,890 derived edges. Regenerate the flat A–K directory with:
+
+```bash
+./build/dsa-rp-lift \
+  --input third_party/minimalloc/benchmarks/challenging \
+  --output benchmarks/minimalloc-dsa-rp \
+  --source-commit 9f5cf810fec4494df473c23cffd0567989e81b69 \
+  --streams 4 \
+  --seed 0 \
+  --capacity-first-fit
+```
+
+The generator version, source revision, schedule seed, stream count, capacity
+policy, compatible-pair count, and derived-edge count are stored in every JSON
+document. These instances test the DSA-RP algorithms; they are not evidence for
+any hardware synchronization cost.
 
 ## Multi-pool and architecture binding
 

@@ -28,6 +28,7 @@
 #include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
+#include "dsa/analysis/penalty_edge_derivation.h"
 #include "dsa/analysis/reuse_geometry.h"
 #include "dsa/io/minimalloc_csv.h"
 #include "dsa/model/architecture.h"
@@ -173,6 +174,92 @@ void TestFirstFitSubdividesFreedRegion() {
   const std::uint64_t second = OffsetOf(result, 2);
   Require((first == 0 && second == 32 * kKiB) || (second == 0 && first == 32 * kKiB),
           "consumers did not subdivide the freed producer region");
+}
+
+void TestPenaltyEdgesFollowMaximalAccessHappensBefore() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 4),
+      MakeBuffer(1, {{2, 4}}, 4),
+      MakeBuffer(2, {{4, 6}}, 4),
+  };
+  problem.pools.front().capacity = 8;
+
+  dsa::ScheduledProgram program;
+  program.stream_count = 2;
+  program.operations = {
+      {0, 0, 0, 0}, {1, 1, 0, 3}, {2, 0, 1, 4}, {3, 0, 2, 7}, {4, 1, 1, 8}, {5, 1, 2, 11},
+  };
+  program.cross_dependencies = {{0, 1}, {2, 3}, {4, 5}};
+  program.accesses = {
+      {0, 0, dsa::AccessKind::kWrite}, {0, 1, dsa::AccessKind::kRead},
+      {1, 2, dsa::AccessKind::kWrite}, {1, 3, dsa::AccessKind::kRead},
+      {2, 4, dsa::AccessKind::kWrite}, {2, 5, dsa::AccessKind::kRead},
+  };
+  const dsa::PenaltyEdgeDerivation derivation =
+      dsa::DerivePenaltyEdges(problem, program, {{0, 5}, {7, 0}});
+  Require(derivation.lifetime_compatible_pairs == 3,
+          "derivation did not inspect every lifetime-compatible pair");
+  Require(derivation.ordered_pairs == 1 && derivation.edges.size() == 2,
+          "derivation did not distinguish ordered and unordered handoffs");
+  Require(derivation.edges[0].first == 0 && derivation.edges[0].second == 1 &&
+              derivation.edges[0].cost == 7 &&
+              derivation.edges[0].needed_syncs == std::vector<dsa::DerivedSyncAnchor>{{1, 2}},
+          "first unordered maximal-access handoff was derived incorrectly");
+  Require(derivation.edges[1].first == 1 && derivation.edges[1].second == 2 &&
+              derivation.edges[1].cost == 5 &&
+              derivation.edges[1].needed_syncs == std::vector<dsa::DerivedSyncAnchor>{{3, 4}},
+          "second unordered maximal-access handoff was derived incorrectly");
+
+  dsa::DsaProblem antichain_problem;
+  antichain_problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 4),
+      MakeBuffer(1, {{2, 4}}, 4),
+  };
+  antichain_problem.pools.front().capacity = 8;
+  dsa::ScheduledProgram antichain_program;
+  antichain_program.stream_count = 3;
+  antichain_program.operations = {
+      {0, 0, 0, 0}, {1, 0, 1, 3}, {2, 1, 0, 3}, {3, 2, 0, 4}, {4, 2, 1, 7},
+  };
+  antichain_program.cross_dependencies = {{0, 2}, {3, 4}};
+  antichain_program.accesses = {
+      {0, 0, dsa::AccessKind::kWrite}, {0, 1, dsa::AccessKind::kRead},
+      {0, 2, dsa::AccessKind::kRead},  {1, 3, dsa::AccessKind::kWrite},
+      {1, 4, dsa::AccessKind::kRead},
+  };
+  const dsa::PenaltyEdgeDerivation antichain = dsa::DerivePenaltyEdges(
+      antichain_problem, antichain_program, {{0, 0, 3}, {0, 0, 5}, {0, 0, 0}});
+  Require(
+      antichain.edges.size() == 1 && antichain.edges[0].cost == 8 &&
+          antichain.edges[0].needed_syncs == std::vector<dsa::DerivedSyncAnchor>{{1, 3}, {2, 3}},
+      "maximal-access antichain costs were not combined on one buffer pair");
+
+  dsa::ApplyPenaltyEdgeDerivation(&problem, derivation);
+  dsa::StructuredProblemDocument document;
+  document.profile = dsa::BenchmarkProfile::kDsaRpV1;
+  document.instance = "scheduled_handoff";
+  document.problem = problem;
+  Require(dsa::ValidateStructuredProblemDocument(document).empty(),
+          "derived generic DSA-RP document did not satisfy its profile");
+
+  std::ostringstream output;
+  dsa::WriteStructuredProblemJson(output, document);
+  std::istringstream input(output.str());
+  const dsa::StructuredProblemDocument parsed = dsa::ReadStructuredProblemJson(input);
+  Require(parsed.profile == dsa::BenchmarkProfile::kDsaRpV1 && parsed.problem.cost_model &&
+              parsed.problem.cost_model->reuse_penalties.size() == 2,
+          "generic DSA-RP profile or penalties did not round-trip");
+
+  dsa::StructuredProblemDocument no_capacity = document;
+  no_capacity.problem.pools.front().capacity.reset();
+  Require(!dsa::ValidateStructuredProblemDocument(no_capacity).empty(),
+          "dsa_rp_v1 silently accepted an unbounded arena");
+
+  dsa::StructuredProblemDocument sequential = document;
+  sequential.problem.cost_model = dsa::CostModel{};
+  Require(dsa::ValidateStructuredProblemDocument(sequential).empty(),
+          "dsa_rp_v1 rejected the empty edge set of a sequential schedule");
 }
 
 void TestMultiIntervalLiveness() {
@@ -1841,6 +1928,7 @@ int main() {
   const std::vector<std::pair<std::string, void (*)()>> tests = {
       {"MiniMalloc CSV", TestMiniMallocCsv},
       {"first-fit #1908", TestFirstFitSubdividesFreedRegion},
+      {"penalty-edge derivation", TestPenaltyEdgesFollowMaximalAccessHappensBefore},
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},
       {"colocation", TestColocation},

@@ -21,6 +21,11 @@ enum class BenchmarkProfile : std::uint8_t {
   // directly with exact standard solvers.
   kStandardDsa,
 
+  // Standard single-pool DSA geometry with a fixed capacity and weighted soft
+  // anti-alias edges. This is the portable DSA-RP problem, independent of any
+  // compiler-specific edge producer.
+  kDsaRpV1,
+
   // Legacy schema-v1 compiler profile. Kept readable for existing artifacts;
   // new producers must choose the explicit hard or research profile below.
   kPyptoStructured,

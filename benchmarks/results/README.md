@@ -10,14 +10,19 @@ placements for `pypto_hard_v1`.
 variant, mechanically recognized cross-pipe reuse relations are hard
 separations; in the other, the same relations are unit-weight soft penalties.
 
+`minimalloc-dsa-rp-v1/` compares the same algorithms on the 11 generic
+MiniMalloc-derived DSA-RP stress instances. These have one soft profile, not
+PyPTO pipeline hard/soft variants. Their access schedule is synthetic and
+deterministic; see `../README.md` for the exact derivation.
+
 Each snapshot retains:
 
 - `report.md`: the readable aggregate comparison;
 - `summary.csv`: per-instance best peak and median runtime;
 - `results.jsonl`: all repetitions, seeds, statuses, and validation results.
 
-The DSA-RP snapshot also has `algorithm-comparison.csv` and
-`paired-objectives.csv`. Its report explains the penalty-specific columns and
+The paired PyPTO DSA-RP snapshot also has `algorithm-comparison.csv` and
+`paired-objectives.csv`. Each report explains its penalty-specific columns and
 records the exact reproduction command.
 
 For `standard-v1`, quality is the geometric mean of

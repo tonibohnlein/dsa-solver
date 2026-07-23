@@ -17,6 +17,7 @@
     "profile": {
       "enum": [
         "standard_dsa",
+        "dsa_rp_v1",
         "pypto_structured",
         "pypto_hard_v1",
         "pypto_research_v1",

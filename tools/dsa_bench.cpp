@@ -519,7 +519,8 @@ int main(int argc, char** argv) {
       }
     }
 
-    if (options.reference_output && dsa::IsPyptoProfile(document.profile)) {
+    if (options.reference_output && document.profile != dsa::BenchmarkProfile::kStandardDsa &&
+        document.profile != dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
       throw std::runtime_error(
           "MiniMalloc references are only comparable with standard or core-relaxation profiles");
     }

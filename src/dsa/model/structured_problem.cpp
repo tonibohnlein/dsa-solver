@@ -1,10 +1,12 @@
 #include "dsa/model/structured_problem.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -13,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "dsa/model/model.h"
 #include "dsa/model/validator.h"
 
 namespace dsa {
@@ -79,6 +82,28 @@ std::vector<std::string> ValidateStandardProblem(const DsaProblem& problem) {
 bool ObjectiveIsMinimizePeak(const ObjectiveSpec& objective) {
   const ObjectiveSpec expected = MinimizePeakObjective();
   return objective.aggregation == expected.aggregation && objective.terms == expected.terms;
+}
+
+bool ObjectiveIsFitThenMinimizeReuseCost(const ObjectiveSpec& objective) {
+  const ObjectiveSpec expected = FitThenMinimizeReuseCostObjective();
+  return objective.aggregation == expected.aggregation && objective.terms == expected.terms;
+}
+
+std::vector<std::string> ValidateDsaRpV1(const DsaProblem& problem) {
+  DsaProblem standard_geometry = problem;
+  standard_geometry.cost_model.reset();
+  standard_geometry.objective = MinimizePeakObjective();
+  std::vector<std::string> errors = ValidateStandardProblem(standard_geometry);
+  if (problem.pools.size() == 1 && !problem.pools.front().capacity) {
+    errors.emplace_back("dsa_rp_v1 requires a fixed capacity");
+  }
+  if (!problem.cost_model) {
+    errors.emplace_back("dsa_rp_v1 requires an explicit reuse-cost model");
+  }
+  if (!ObjectiveIsFitThenMinimizeReuseCost(problem.objective)) {
+    errors.emplace_back("dsa_rp_v1 requires the fit-then-minimize-reuse-cost objective");
+  }
+  return errors;
 }
 
 void RequireMetadataValue(const StructuredProblemDocument& document, const std::string& key,
@@ -173,6 +198,8 @@ const char* ToString(BenchmarkProfile profile) noexcept {
   switch (profile) {
     case BenchmarkProfile::kStandardDsa:
       return "standard_dsa";
+    case BenchmarkProfile::kDsaRpV1:
+      return "dsa_rp_v1";
     case BenchmarkProfile::kPyptoStructured:
       return "pypto_structured";
     case BenchmarkProfile::kPyptoHardV1:
@@ -262,6 +289,18 @@ std::vector<std::string> ValidateStructuredProblemDocument(
       }
       if (!document.relaxed_features.empty()) {
         errors.push_back("standard DSA document cannot declare relaxed_features");
+      }
+      break;
+    case BenchmarkProfile::kDsaRpV1:
+      if (document.relaxed_from) {
+        errors.emplace_back("dsa_rp_v1 document cannot declare relaxed_from");
+      }
+      if (!document.relaxed_features.empty()) {
+        errors.emplace_back("dsa_rp_v1 document cannot declare relaxed_features");
+      }
+      {
+        std::vector<std::string> dsa_rp_errors = ValidateDsaRpV1(document.problem);
+        errors.insert(errors.end(), dsa_rp_errors.begin(), dsa_rp_errors.end());
       }
       break;
     case BenchmarkProfile::kPyptoStructured:

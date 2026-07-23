@@ -30,11 +30,14 @@ The project is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE
   validates solutions, and writes raw JSONL, aggregated CSV, and Markdown tables.
 - A native `dsa-corpus` importer that turns raw compiler export trees into uniquely identified,
   provenance-rich benchmark corpora and fails closed on missing coverage targets.
+- A `dsa-rp-lift` generator that derives synthetic scheduled-program penalty
+  edges for the MiniMalloc A–K geometry using maximal-access happens-before.
 - A native `dsa-bind` architecture binder with versioned Ascend 910B/950 resource specifications,
   lowering-ABI checks, and stable program/architecture fingerprints.
 - Versioned structured JSON for replaying compiler instances without compiler IR dependencies.
 - A checked-in corpus of byte-for-byte PyPTO exporter outputs, replayed by all built-in solvers in CTest.
-- Explicit standard, PyPTO hard-v1, PyPTO research-v1, legacy structured, and sound core-relaxation profiles.
+- Explicit standard, generic DSA-RP, PyPTO hard-v1, PyPTO research-v1, legacy
+  structured, and sound core-relaxation profiles.
 - Central solver capability matching for hard features and requested objective terms.
 - Google MiniMalloc pinned as a submodule, including the official A–K corpus and exact C++ solver.
 - CMake install/export support for later `find_package` or `add_subdirectory` use from PyPTO.
