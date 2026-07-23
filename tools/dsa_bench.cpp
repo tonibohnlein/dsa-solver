@@ -25,6 +25,7 @@
 #include "dsa/algorithms/reuse_penalty_exact_solvers.h"
 #include "dsa/algorithms/reuse_penalty_local_search_solver.h"
 #include "dsa/algorithms/reuse_penalty_portfolio_solvers.h"
+#include "dsa/algorithms/reuse_penalty_scale_solver.h"
 #include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
@@ -53,6 +54,7 @@ struct Options {
   dsa::PyptoStructuredSearchOptions pypto_structured_search;
   dsa::TvmHillClimbOptions tvm_hill_climb;
   dsa::ReusePenaltyLocalSearchOptions reuse_penalty_local_search;
+  dsa::ScaleSeparatedGridDpOptions scale_separated;
 };
 
 [[noreturn]] void UsageError(const std::string& message) {
@@ -74,7 +76,8 @@ void PrintHelp() {
             << "  --solver first-fit|canonical-greedy|promote-repair|promote-all|"
                "unit-random-coloring|canonical-branch-and-bound|implicit-hitting-set|"
                "capacity-two-exact|span-one-min-cost-flow|treewidth-partition-dp|"
-               "reuse-penalty-portfolio|reuse-penalty-local-search|cypress-relaxation|"
+               "scale-separated-grid-dp|reuse-penalty-portfolio|"
+               "reuse-penalty-local-search|cypress-relaxation|"
                "xla-heap|local-search|pypto-structured-search|tvm-hill-climb\n"
             << "                                   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
@@ -89,6 +92,11 @@ void PrintHelp() {
             << "  --stagnation N                   Iterations before perturbation\n"
             << "  --target-total-peak BYTES        TVM-style early-stop target\n"
             << "  --worse-move-scale PERCENT       TVM-style annealing scale (default: 50)\n"
+            << "  --scale-max-denominator N        Require soft endpoints >= C/N\n"
+            << "  --scale-epsilon-denominator N    Set epsilon=1/N for grid augmentation\n"
+            << "  --scale-max-span N               Maximum soft-edge birth span\n"
+            << "  --scale-max-states N             Scale-DP unique-state guard\n"
+            << "  --scale-max-transitions N        Scale-DP transition guard\n"
             << "  --objective peak|fit-cost        Override the document objective\n"
             << "  --help                           Show this help\n";
 }
@@ -152,6 +160,17 @@ Options ParseOptions(int argc, char** argv) {
       const std::uint64_t scale = ParseUnsigned(next(&i, option), option);
       if (scale > 100) UsageError(option + " must be between 0 and 100");
       options.tvm_hill_climb.worse_move_scale_percent = static_cast<std::uint32_t>(scale);
+    } else if (option == "--scale-max-denominator") {
+      options.scale_separated.max_large_fraction_denominator =
+          ParseUnsigned(next(&i, option), option);
+    } else if (option == "--scale-epsilon-denominator") {
+      options.scale_separated.epsilon_denominator = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--scale-max-span") {
+      options.scale_separated.max_soft_span = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--scale-max-states") {
+      options.scale_separated.max_dp_states = ParseUnsigned(next(&i, option), option);
+    } else if (option == "--scale-max-transitions") {
+      options.scale_separated.max_dp_transitions = ParseUnsigned(next(&i, option), option);
     } else if (option == "--objective") {
       const std::string value(next(&i, option));
       if (value == "peak") {
@@ -171,7 +190,7 @@ Options ParseOptions(int argc, char** argv) {
       options.solver != "unit-random-coloring" && options.solver != "canonical-branch-and-bound" &&
       options.solver != "implicit-hitting-set" && options.solver != "capacity-two-exact" &&
       options.solver != "span-one-min-cost-flow" && options.solver != "treewidth-partition-dp" &&
-      options.solver != "reuse-penalty-portfolio" &&
+      options.solver != "scale-separated-grid-dp" && options.solver != "reuse-penalty-portfolio" &&
       options.solver != "reuse-penalty-local-search" && options.solver != "cypress-relaxation" &&
       options.solver != "xla-heap" && options.solver != "local-search" &&
       options.solver != "pypto-structured-search" && options.solver != "tvm-hill-climb") {
@@ -412,6 +431,8 @@ int main(int argc, char** argv) {
       solver = std::make_unique<dsa::SpanOneMinCostFlowSolver>();
     } else if (options.solver == "treewidth-partition-dp") {
       solver = std::make_unique<dsa::TreewidthPartitionDpSolver>();
+    } else if (options.solver == "scale-separated-grid-dp") {
+      solver = std::make_unique<dsa::ScaleSeparatedGridDpSolver>(options.scale_separated);
     } else if (options.solver == "reuse-penalty-portfolio") {
       dsa::ReusePenaltyPortfolioOptions portfolio_options;
       portfolio_options.capacity_two.max_search_nodes = options.local_search.max_iterations;

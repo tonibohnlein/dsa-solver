@@ -57,6 +57,26 @@ treewidth solver performs exact min-sum variable elimination over the combined
 hard-and-soft graph. Each specialization either proves its stated objective or
 returns `unsupported`; it never silently falls back under its own name.
 
+## Scale-separated bicriteria baseline
+
+`scale_separated_grid_dp` is intentionally outside the exact portfolio. It
+applies when every soft-edge endpoint is large relative to capacity and every
+soft edge has bounded temporal span:
+
+1. choose the largest scale threshold supported by the soft endpoints;
+2. round large sizes to an alignment-compatible grid;
+3. optimize their rounded overlap cost with a sweep dynamic program;
+4. stack soft-edge-free small buffers in harmonic size-class tracks.
+
+The returned penalty is no larger than the capacity-C optimum when the input
+is feasible at C, but the placement may use augmented height. Such a placement
+is reported as `best_effort_no_fit`, remains structurally valid when capacity
+is removed, and records the DP state count, grid size, observed span, and
+small-band height. This is the engineering note's self-contained harmonic-band
+baseline; its small band accepts singleton, single-interval buffers with only
+temporal hard conflicts. It does not claim the tighter BKKRT small-band
+constant.
+
 ## Promoted-set local search
 
 `reuse_penalty_local_search` searches a pair `(order, S)`, where `S` is the set
@@ -79,9 +99,11 @@ dsa-bench --input instance.json --solver reuse-penalty-local-search \
   --seed 7 --iterations 20000 --restarts 4
 dsa-bench --input instance.json --solver reuse-penalty-portfolio \
   --iterations 2000000
+dsa-bench --input instance.json --solver scale-separated-grid-dp \
+  --scale-max-denominator 8 --scale-epsilon-denominator 2 \
+  --scale-max-span 4
 ```
 
-All exact specializations currently target the additive pair-cost model. The
-paper's scale-separated small-buffer band and synchronization-covering
-OR-groups require additional model/output contracts and are not mislabeled as
-implemented solvers.
+All methods currently target the additive pair-cost model.
+Synchronization-covering OR-groups require an additional model/output
+contract and are not mislabeled as implemented pairwise solvers.

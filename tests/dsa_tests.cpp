@@ -24,6 +24,7 @@
 #include "dsa/algorithms/reuse_penalty_exact_solvers.h"
 #include "dsa/algorithms/reuse_penalty_local_search_solver.h"
 #include "dsa/algorithms/reuse_penalty_portfolio_solvers.h"
+#include "dsa/algorithms/reuse_penalty_scale_solver.h"
 #include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
@@ -609,6 +610,87 @@ void TestDsaRpPromotedSetLocalSearch() {
       SolveAndValidate(problem, dsa::ReusePenaltyLocalSearchSolver(options));
   Require(forced.objective.reuse_cost == 14,
           "promoted-set local search mishandled forced full reuse");
+}
+
+void TestDsaRpScaleSeparatedGridDp() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 4), MakeBuffer(1, {{2, 3}}, 4), MakeBuffer(2, {{4, 5}}, 4),
+      MakeBuffer(3, {{6, 7}}, 1), MakeBuffer(4, {{6, 7}}, 1),
+  };
+  problem.pools.front().capacity = 8;
+  problem.cost_model = dsa::CostModel{{
+      {0, 1, 7, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 2, 5, dsa::ReusePenaltyReason::kCrossPipe},
+      {0, 2, 3, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const std::uint64_t original_optimum = BruteForceMinimumReuseCost(problem);
+  Require(original_optimum == 3, "scale-separated fixture has the wrong capacity-C optimum");
+
+  dsa::ScaleSeparatedGridDpOptions options;
+  options.max_large_fraction_denominator = 2;
+  options.epsilon_denominator = 2;
+  options.max_soft_span = 2;
+  const dsa::DsaResult result = dsa::ScaleSeparatedGridDpSolver(options).Solve(problem);
+  Require(result.status == dsa::SolveStatus::kBestEffortNoFit && result.solution.has_value(),
+          "scale-separated solver did not report its augmented-height result");
+  dsa::DsaProblem uncapped = problem;
+  uncapped.pools.front().capacity.reset();
+  Require(dsa::ValidateSolution(uncapped, SolutionOrThrow(result)).empty(),
+          "scale-separated solver returned a structurally invalid placement");
+  Require(result.objective.reuse_cost == 0 && result.objective.reuse_cost <= original_optimum,
+          "scale-separated grid DP did not improve on the capacity-C penalty");
+  Require(result.objective.max_peak == 14 && result.solver_metrics.at("large_nodes") == 3 &&
+              result.solver_metrics.at("small_nodes") == 2 &&
+              result.solver_metrics.at("rounded_dp_cost") == 0,
+          "scale-separated solver did not compose its grid and harmonic bands");
+
+  options.max_soft_span = 1;
+  const dsa::DsaResult span_rejected = dsa::ScaleSeparatedGridDpSolver(options).Solve(problem);
+  Require(span_rejected.status == dsa::SolveStatus::kUnsupported &&
+              ContainsSubstring(span_rejected.diagnostics, "span"),
+          "scale-separated solver silently accepted an out-of-class soft edge");
+
+  std::mt19937_64 random(0x5CA1E2026U);
+  options.max_soft_span = 4;
+  for (std::size_t instance = 0; instance < 12; ++instance) {
+    dsa::DsaProblem generated;
+    generated.pools.front().capacity = 4;
+    for (dsa::BufferId id = 0; id < 4; ++id) {
+      generated.buffers.push_back(MakeBuffer(
+          id, {{static_cast<std::int64_t>(id * 2), static_cast<std::int64_t>(id * 2 + 1)}}, 2));
+    }
+    generated.buffers.push_back(MakeBuffer(4, {{10, 11}}, 1));
+    generated.buffers.push_back(MakeBuffer(5, {{10, 11}}, 1));
+    dsa::CostModel costs;
+    for (dsa::BufferId first = 0; first < 4; ++first) {
+      for (dsa::BufferId second = first + 1; second < 4; ++second) {
+        if (random() % 3 != 0 || (first == 0 && second == 3)) {
+          costs.reuse_penalties.push_back(
+              {first, second, 1 + random() % 9, dsa::ReusePenaltyReason::kCrossPipe});
+        }
+      }
+    }
+    generated.cost_model = std::move(costs);
+    generated.objective = dsa::FitThenMinimizeReuseCostObjective();
+    const std::uint64_t generated_optimum = BruteForceMinimumReuseCost(generated);
+    const dsa::ScaleSeparatedGridDpSolver solver(options);
+    const dsa::DsaResult first = solver.Solve(generated);
+    const dsa::DsaResult second = solver.Solve(generated);
+    Require((first.status == dsa::SolveStatus::kFeasible ||
+             first.status == dsa::SolveStatus::kBestEffortNoFit) &&
+                first.solution.has_value(),
+            "scale-separated solver failed a generated in-class instance");
+    dsa::DsaProblem generated_uncapped = generated;
+    generated_uncapped.pools.front().capacity.reset();
+    Require(dsa::ValidateSolution(generated_uncapped, SolutionOrThrow(first)).empty(),
+            "scale-separated solver produced an invalid generated placement");
+    Require(first.objective.reuse_cost <= generated_optimum,
+            "scale-separated generated result exceeded the capacity-C optimum");
+    Require(SolutionOrThrow(first).placements == SolutionOrThrow(second).placements,
+            "scale-separated grid DP is not deterministic");
+  }
 }
 
 void TestSparseReferenceReducesPhysicalReuse() {
@@ -1478,6 +1560,7 @@ int main() {
       {"DSA-RP constructive baselines", TestDsaRpConstructiveBaselines},
       {"DSA-RP exact solvers", TestDsaRpExactSolvers},
       {"DSA-RP promoted-set local search", TestDsaRpPromotedSetLocalSearch},
+      {"DSA-RP scale-separated grid DP", TestDsaRpScaleSeparatedGridDp},
       {"sparse reference", TestSparseReferenceReducesPhysicalReuse},
       {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},

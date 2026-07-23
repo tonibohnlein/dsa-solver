@@ -47,6 +47,8 @@ add_library(dsa_solver
   src/dsa/algorithms/reuse_penalty_local_search_solver.h
   src/dsa/algorithms/reuse_penalty_portfolio_solvers.cpp
   src/dsa/algorithms/reuse_penalty_portfolio_solvers.h
+  src/dsa/algorithms/reuse_penalty_scale_solver.cpp
+  src/dsa/algorithms/reuse_penalty_scale_solver.h
   src/dsa/algorithms/reuse_penalty_search.cpp
   src/dsa/algorithms/reuse_penalty_search.h
   src/dsa/algorithms/reuse_penalty_treewidth_solver.cpp
@@ -93,6 +95,7 @@ set(DSA_COMPATIBILITY_HEADERS
   src/dsa/algorithms/reuse_penalty_exact_solvers.h
   src/dsa/algorithms/reuse_penalty_local_search_solver.h
   src/dsa/algorithms/reuse_penalty_portfolio_solvers.h
+  src/dsa/algorithms/reuse_penalty_scale_solver.h
   src/dsa/algorithms/reuse_penalty_treewidth_solver.h
   src/dsa/algorithms/solver.h
   src/dsa/algorithms/tvm_hill_climb_solver.h
@@ -387,6 +390,16 @@ if(BUILD_TESTING)
       PASS_REGULAR_EXPRESSION "\"solver\":\"${DSA_RP_SOLVER}\".*\"status\":\"feasible\""
     )
   endforeach()
+  add_test(
+    NAME dsa-cli-scale-separated-grid-dp
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/dsa_rp_scale_v1.json
+      --solver scale-separated-grid-dp
+  )
+  set_tests_properties(dsa-cli-scale-separated-grid-dp PROPERTIES
+    PASS_REGULAR_EXPRESSION
+      "\"solver\":\"scale-separated-grid-dp\".*\"status\":\"feasible\""
+  )
   add_test(
     NAME dsa-cli-xla-heap
     COMMAND dsa-bench
