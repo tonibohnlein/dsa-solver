@@ -59,6 +59,17 @@ same additive optimization semantics; deciding which edges and weights are
 meaningful belongs to the producer. The solver does not infer hardware behavior
 from the reason name.
 
+Reason names do not imply that a corresponding producer policy exists.
+`pipeline_serialization` is emitted by the explicit pipeline fallback;
+`cross_pipe` is the schema-v1 compatibility name emitted by the opt-in
+recognizer for promoted cross-resource route candidates; route/resource
+provenance remains producer metadata rather than solver semantics.
+`load_motion_serialization` and `cross_core` are currently unimplemented
+vocabulary. `event_budget` is retained for schema compatibility but event
+pressure is a global effect and should not be emitted as an ordinary pair
+penalty. The policy audit and PyPTO/PTOAS information boundary are documented in
+[`pypto_dsa.md`](pypto_dsa.md).
+
 For PyPTO's fixed-capacity refinement, accepted placements must fit capacity and
 minimize reuse cost among fitting placements. Schema v1 can represent
 `capacity_overflow`, `reuse_cost`, `total_peak`, `max_peak`, and `bank_cost` as

@@ -6,7 +6,8 @@ This document defines PyPTO memory planning on top of standard Dynamic Storage
 Allocation (DSA) and tracks PyPTO
 [#1980](https://github.com/hw-native-sys/pypto/issues/1980). Operation order,
 tiling, pipeline construction, and physical memory spaces are fixed inputs.
-Schedule/allocation co-optimization is outside the current problem.
+The current problem is schedule-aware but does not change those inputs.
+Schedule/allocation co-optimization is future work.
 
 ## Standard DSA
 
@@ -68,6 +69,45 @@ PTOAS must also validate or synchronize explicit physical-address overlap when
 lowering to asynchronous hardware pipes. PyPTO's lifetime and cost models do
 not replace that downstream correctness check.
 
+## Why study the planner in PyPTO?
+
+The relevant compiler order is:
+
+```text
+PyPTO logical dependency graph and selected operation order
+  -> PyPTO physical placement using abstract access routes
+  -> PTOAS lowering to concrete accesses and resources
+  -> synchronization induced or validated from physical aliasing
+```
+
+The final synchronization set cannot be fixed before placement: assigning two
+buffers overlapping addresses may activate a WAR or WAW dependency absent from
+the logical graph. Conversely, a schedule chosen assuming distinct storage may
+need new waits after reuse. Full scheduling--allocation co-optimization could
+search both decisions, but is a larger problem. The current refinement fixes
+the nominal order and minimizes a surrogate for the address-induced
+dependencies activated by placement. This is schedule-aware memory planning,
+not full co-optimization.
+
+PyPTO and PTOAS observe complementary facts:
+
+| PyPTO-level fact | Use in memory planning | Current adapter status |
+| --- | --- | --- |
+| dependency DAG and the topological order selected by `CanonicalizeIOOrder` | detect absent ordering and eventually explore order/placement together | partial SSA ordering only |
+| knowledge inside the load-motion transformation | identify reuse that defeats a deliberately early load | provenance is not yet recorded or exported |
+| pipeline group, stage, residue, and requested depth | preserve ping-pong intent or warn when capacity forces relaxation | exported |
+| loop, branch, if-phi, and loop-carried semantics | materialize aliases and retain high-level control context | aliases materialized; recognizer support is partial |
+| semantic aliases, shapes, tiling, and source locations | enforce correctness and issue programmer-facing diagnostics | partially exported or used by the adapter |
+
+PyPTO already knows operation kinds, source and destination memory classes,
+logical dependencies, and structured control flow. These facts motivate a
+target-independent route recognizer for potential address-induced WAR/WAW
+relations. The recognizer now derives those routes from resolved operand and
+result memory spaces rather than an operation-name or `PipeType` allowlist.
+PTOAS remains the authoritative correctness layer: it
+sees exact lowered accesses, removes redundant dependencies, allocates events,
+and emits the final synchronization.
+
 ## Capacity-constrained DSA with reuse penalties
 
 Some lifetime-compatible buffers are safe to overlap but introduce additional
@@ -126,173 +166,179 @@ Unit cost per relaxed pipeline pair is reproducible but uncalibrated. It can
 overcount a large group and pipeline membership alone does not prove that reuse
 adds synchronization.
 
-## Hazard categories and pair-edge construction
+## Recognizing address-induced hazards
 
-The portable mechanism is a false physical-memory dependency. Two logical
-buffers may be independent and lifetime-compatible, yet assigning overlapping
-addresses makes accesses to one physical range appear dependent. On hardware
-with asynchronously issued compute and transfer units, enforcing that new
-ordering can reduce concurrency.
+The portable mechanism is a false physical-memory dependency. Two independent
+buffers have disjoint logical lifetimes, but a placement may give them
+overlapping byte ranges. A write that starts the later lifetime must then wait
+for the earlier buffer's final asynchronous access to finish.
 
-A positive edge needs a fixed-placement counterfactual:
+For independent buffers, the later lifetime starts with a write. The relevant
+relations are therefore:
 
-```text
-same program, schedule, and all unrelated offsets
-placement A: pair uses disjoint ranges
-placement B: pair overlaps
-evidence: final PTOAS synchronization or kernel cycles worsen only in B
-```
+| Earlier terminal access | Relation created by reuse |
+| --- | --- |
+| read | WAR |
+| write | WAW |
 
-PTOAS is the current concrete implementation used to discover and test these
-hazards. When both local accesses have known physical addresses, it compares
-their absolute half-open byte ranges across allocation roots. Otherwise it
-falls back to root/view provenance and conservative cases. The general
-categories are:
+RAW describes semantic dataflow rather than optional reuse between independent
+buffers. Target-specific correctness hazards remain hard separations.
 
-| Category | Portable interpretation | PTOAS manifestation | Pair-edge action |
-| --- | --- | --- | --- |
-| Cross-resource RAW, WAR, or WAW | Reuse orders accesses issued on different asynchronous resources | set/wait event pair | positive candidate |
-| Same-resource RAW, WAR, or WAW | A later issue must wait for completion on the same asynchronous resource | pipe barrier | positive candidate, distinct class |
-| Loop-crossing hazard | The reuse dependency recurs across a loop back-edge | retained or multi-event synchronization | positive context modifier |
-| Read/read | Sharing does not order two writes or a read against a write | normally no sync; ACC has a target-specific exception | target-specific: hard only if aliasing is illegal, otherwise a positive candidate for required ordering |
-| Already ordered | A placement-independent dependency already provides the required happens-before relation | candidate sync suppressed or removed | zero; placement-induced ordering is context-dependent |
-| Proven-disjoint rotating slots | The relevant dynamic slots cannot coincide | forward slot-affine disjoint proof | zero |
-| Target-specific safe access pattern | A hardware/compiler rule proves the access chain safe | MTE2 load/load WAW exemption, or exact forward PIPE_V chain with repeat at least 16 | zero only for that target and context |
-| Observed synchronization substitution | Changing one overlap changes which event or barrier represents several dependencies | net synchronization may decrease; exact pass path remains unresolved | record the raw effect; do not emit a negative edge yet |
-| Event-resource pressure | Several dependencies compete for a bounded event palette | coalescing or `PIPE_ALL` fallback | deferred global model |
+### Abstract access routes
 
-Therefore `cross_pipe`, raw event counts, and pipeline membership are too coarse
-to assign a calibrated production cost. The v1 cross-pipe unit policy below is
-only a hypothesis for controlled experiments. Production weights need evidence
-from final barrier/event topology, source/destination pipes, control-flow
-location, and redundant-sync removal.
-
-The current candidate-generation hypothesis is deliberately sparse. Add a
-positive pair edge only when all four statements hold:
+The recognizer classifies **accesses**, not buffers. One buffer can be written
+by one route and later read by another. A transfer access is identified by its
+source and destination memory classes:
 
 ```text
-the buffers are lifetime-compatible and may share an address
-+ their accesses contain a RAW, WAR, or WAW relation if that sharing occurs
-+ the execution-resource assignment can leave the accesses concurrently outstanding
-+ no existing dependency already provides the required ordering
+route = (source class, destination class)
 ```
 
-Pipe category, pipeline membership, or lifetime compatibility alone is not
-enough. The optimizer still receives an ordinary pair `(buffer_i, buffer_j,
-weight)`. Access operations, resources, loop/branch context, and PTOAS output
-are producer-side evidence for deciding whether that pair exists and later
-choosing its weight. They are not part of the pairwise optimization problem.
+The portable classes are `external`, `UB`, `L1`, and `L0`. L0A, L0B, and L0C
+remain separate physical DSA arenas; they are merged only in this access-route
+taxonomy. Compute accesses use abstract `vector` and `matrix` resource classes.
 
-An OR-trigger objective would be a different formulation:
+Each route maps to an abstract resource class. Equal classes are tagged
+`same_resource`; distinct classes are tagged `cross_resource` and may execute
+asynchronously. Route equality is not a happens-before proof: operations on one
+resource may still require completion ordering. A target may later map several
+routes to one resource or reject unsupported routes without changing the
+WAR/WAW construction.
+
+The implemented portable table is:
+
+| Source -> destination | Abstract resource |
+| --- | --- |
+| `external -> {UB, L1}` | `inbound_dma` |
+| `{UB, L1} -> external` | `outbound_dma` |
+| `L0 -> external` | `l0_to_external` |
+| `L1 -> L0`, `L0 -> L1` | directed local-transfer resource |
+| `UB <-> L1`, `UB <-> L0` | directed optional local-transfer resource |
+| `UB -> UB` compute | `vector_compute` |
+| `L0 -> L0` compute | `matrix_compute` |
+| tile/scalar access | `scalar_access` |
+
+Zero-copy view operations add no execution access; their downstream users are
+attributed to the shared physical allocation. Every recorded access still
+retains the exact PyPTO arena, so merging Left/Right/Acc/Bias into the `L0`
+taxonomy does not merge their independent DSA address spaces.
+
+An A2/A3 mapping is useful as a reference, not as the formulation:
+
+| Abstract access | A2/A3 example |
+| --- | --- |
+| `external -> UB` | MTE2 writes UB |
+| `UB -> external` | MTE3 reads UB |
+| `external -> L1` | MTE2 writes L1 |
+| `L1 -> external` | MTE3 reads L1 |
+| `L1 -> L0` | MTE1 writes L0A/L0B |
+| `L0 -> L1` | FIX reads L0C and writes L1 |
+| `L0 -> external` | target drain path for an accumulator store |
+| vector compute | Vector reads/writes UB |
+| matrix compute | Matrix reads L0A/L0B and writes L0C |
+
+A2/A3 has no L0-to-UB or L1-to-UB route; A5 may provide additional mappings.
+Those target differences refine the route table, not the WAR/WAW construction.
+
+### Candidate construction
+
+For each physical arena, examine every lifetime-compatible pair. Orient the
+pair so `A` is the earlier buffer and `B` the later buffer. A single global
+last access is insufficient: a late Vector access does not prove that an
+earlier MTE read has completed. Instead, construct an access frontier containing
+the maximal relevant accesses per resource, control path, loop context, and
+known byte range. Construct the corresponding minimal-write frontier for `B`.
+For every compatible frontier pair, record:
 
 ```text
-pairwise: sum over edges e of w_e * overlap_e
-grouped:  sum over groups g of w_g * OR(overlap_e for e in g)
+maximal read/write of A -> minimal write of B
 ```
 
-The grouped form is non-separable and requires group activation variables. It
-is deferred even though PTOAS sometimes lets several overlaps trigger one sync,
-because the simpler pairwise approximation may be sufficient.
+The candidate is a WAR or WAW record tagged `same_resource` or
+`cross_resource`. The solver still receives an ordinary weighted pair edge,
+activated only when the selected byte ranges overlap. Access routes,
+operations, loop context, and ordering evidence are producer provenance; they
+do not change the pairwise optimization geometry. Initial promotion policy may
+price only cross-resource candidates while retaining same-resource candidates
+for reporting and later study.
 
-### Can PyPTO recognize the edges cheaply?
+Logical SSA reachability is recorded as ordering evidence, not silently used as
+proof that an asynchronous access completed. Redundancy filtering requires a
+completion-aware dependency model. A read and write in the same operation are
+also separate from inter-operation reuse: their legality comes from the
+operation's alias contract and cannot be repaired by inserting a wait.
 
-PyPTO has useful source facts before DSA export:
+Loops do not introduce another dependency type. They add context to WAR/WAW:
 
-- statement order and conservative allocation lifetimes;
-- physical allocation identities and SSA definitions/uses;
-- loop, branch, core, and surviving pipeline membership; and
-- explicit semantic and target-hazard separations.
+- `in_loop`: the relation occurs in the loop body and repeats;
+- `loop_carried`: the relation crosses the backedge into a later iteration.
 
-The first PyPTO recognizer deliberately derives only a high-confidence subset;
-`AllocationPlan` still does not retain general access frontiers, sub-access
-regions, execution resources, or a happens-before summary. Those facts are only
-partly derivable from the current IR:
+The reference recognizer records both body-local distance-zero handoffs and the
+distance-one cyclic handoff from the later value in iteration `k` to the earlier
+value in iteration `k+1`. It considers every shared enclosing-loop backedge;
+opposite branch arms remain exclusive within one iteration but may both execute
+across different iterations. Branch and loop identity remain provenance on the
+access-site record before records are aggregated into a buffer-pair edge.
 
-- `DeriveCallDirections` runs after memory allocation and intentionally skips
-  builtin `tile.*` operations, so it cannot supply tile memory effects here.
-- `Backend::InferPipe` exists, but no backend currently registers per-op pipe
-  callbacks; its fallback `S`/`V` classification is not a PTOAS resource model.
-- `BuildStmtDependencyGraph` provides direct SSA def-use edges per region, not
-  transitive reachability, loop-backedge ordering, or already-inserted sync.
-- one PyPTO call can lower to several PTO operations with different resources
-  and sub-accesses.
+Pipeline membership and load-motion provenance express PyPTO performance
+intent. They may prioritize candidate edges, but do not independently prove an
+address-induced hazard.
 
-Exact PTOAS-equivalent recognition is therefore not currently available. It
-would require a tile-operation memory-effect description, a one-to-many
-lowering/resource description, access-region information, and a stronger order
-analysis.
+### Recognition versus cost
 
-The implemented candidate recognizer has two opt-in modes and is disabled by
-default:
+Candidate recognition is mechanical. Final cost is contextual because PTOAS
+may suppress an already-covered dependency, coalesce several relations into one
+event, substitute a barrier, or exhaust the event-ID budget. Therefore three
+questions remain separate:
 
-1. use an allowlist whose direct tile arguments and result provide provisional
-   full-allocation read/write effects and an execution-resource class;
-2. collect per-allocation access endpoints and structured-region context in one
-   traversal, retaining whether the terminal access is a read or write;
-3. consider only an earlier terminal access and later initial write that are
-   adjacent in the same flat `SeqStmts` region and have no direct SSA edge;
-4. classify the physical handoff as WAR or WAW and same-pipe or cross-pipe; and
-5. apply a separate experimental v1 policy that promotes cross-pipe candidates
-   to unit positive edges while leaving same-pipe candidates report-only.
+1. can overlap create a WAR/WAW relation;
+2. does PTOAS emit additional final synchronization; and
+3. what latency does that synchronization add?
 
-The allowlist and SSA ordering are a candidate-generation hypothesis, not a
-proof that PTOAS inserts additional synchronization. They do not model
-one-to-many lowering, pre-existing memory ordering, synchronization
-substitution, or redundant-sync removal. Those limitations are why the feature
-is opt-in and why candidate counts are reported separately from promoted edges.
+The first question belongs to the recognizer. Fixed-placement PTOAS comparisons
+and isolated kernel measurements answer the second and third. Same-resource and
+structured-control relations remain report-only initially; the first proposed
+promotion family is flat cross-resource WAR/WAW. Loop context is recorded but
+must be validated before it affects promotion or weight.
 
-With a constant-size table of incompatible endpoint signatures, terminal
-accesses can be bucketed by `(flat_region, statement_index, signature)`. An
-initial write queries only incompatible signatures at its immediately preceding
-statement index. This subset can target `O(A + B log B + H)`, where `A` is
-access count, `B` is buffer count, and `H` is the adjacent candidate pairs
-actually enumerated. Ambiguous control flow, unclassified or multi-operation
-lowering, partial regions, and pairs needing a transitive order proof
-remain at zero. This is exposed as `DsaReusePenaltyRecognizer.LINEAR` and is the
-only mode that satisfies PyPTO's production pass-complexity bound.
-
-`DsaReusePenaltyRecognizer.QUADRATIC` is an explicitly experimental reference.
-It scans all lifetime-compatible pairs within each supported simple region,
-including nested regions, and uses transitive intra-region SSA reachability to
-discard already-ordered pairs. Nested candidates are reported but are not
-promoted by the v1 unit policy. Its
-pair scan is `Theta(B^2)` and its cached ancestor construction can add
-`O(B(N+E))`; it must not become the default compiler path. Comparing its edge
-set with `LINEAR` measures the coverage sacrificed for linear scaling.
-
-Schema v1 activates a pair cost on any byte overlap, whereas PTOAS hazards can
-depend on which subranges overlap. Promote an ordinary pair edge only when the
-hazardous accesses cover the allocation sufficiently that every relevant legal
-overlap has the same classification. Otherwise mark the observation as
-geometry-dependent and omit it from the first recognizer.
-
-The relevant PTOAS implementation is under:
+The optimization model remains additive:
 
 ```text
-PTOAS/lib/PTO/Transforms/InsertSync/
-  MemoryDependentAnalyzer.cpp
-  InsertSyncAnalysis.cpp
-  RemoveRedundantSync.cpp
-  SyncEventIdAllocation.cpp
+reuse_cost = sum over pair edges e of weight_e * overlap_e
 ```
 
-As of upstream PTOAS `79463ac8`, this pipeline builds per-operation read/write
-memory information, checks physical aliasing, detects RAW/WAR/WAW relations,
-suppresses already-covered dependencies, inserts same-pipe barriers or
-cross-pipe events, handles loop back-edges and event IDs, and removes redundant
-synchronization. PTOAS PR #948 adds broader explicit-address provenance and
-mixed/inexact-subview handling but is not yet part of that upstream revision.
+Grouped OR triggers, global event budgets, and negative/context-dependent costs
+are deferred until evidence requires a more complex formulation.
 
-The fixed-placement reports below used PTOAS `007f2d63`: PR #948 plus
-sync-summary and debug instrumentation. Upstream `79463ac8` shares the core
-hazard-insertion and redundancy mechanics, but not all explicit-address
-provenance or reporting used by the experiments.
+### Current implementation status
+
+The opt-in `QUADRATIC` implementation is now the coverage-first reference. It
+normalizes semantic aliases to physical allocations, preserves per-resource
+access frontiers, scans flat and nested regions, records logical-order evidence,
+and emits distance-zero and distance-one loop handoffs. A partial or unknown
+byte range and a same-operation handoff remain report-only. `LINEAR` remains an
+adjacent-statement screening heuristic and is not the correctness reference.
+Reference work scales with the product of the two access-frontier sizes for
+every lifetime-compatible buffer pair, not merely with the number of pairs;
+this cost is accepted only in the opt-in research mode.
+
+The remaining recognition gaps are target validation of the abstract-resource
+mapping, precise subrange activation for views, completion-aware redundancy
+filtering, and a complete operation alias-contract table. Only after the
+reference agrees with fixed-placement PTOAS evidence should a production
+linear-time generator be derived.
+
+Schema-v1 reason names remain provenance labels. `pipeline_serialization` is
+emitted by the pipeline fallback and `cross_pipe` by the opt-in recognizer;
+other reason names do not imply implemented producer policies. Event pressure
+is global and must not be represented as an ordinary pair reason.
 
 ## Evidence so far
 
-The current PyPTO adapter emits one live penalty family:
-`pipeline_serialization` from the strict-to-soft fallback. Other schema-v1
-reason names are experimental vocabulary, not independent producer policies.
+The default PyPTO adapter emits `pipeline_serialization` only through the
+strict-to-soft fallback. The opt-in recognizer can additionally emit
+experimental unit `cross_pipe` edges. Other schema-v1 reason names have no
+active PyPTO producer.
 
 Fixed-placement experiments found:
 
