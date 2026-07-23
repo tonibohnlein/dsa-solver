@@ -14,7 +14,7 @@ independent validator.
 | `promote_all` | Exact feasibility test after treating every soft pair as hard | Certified zero-penalty fit or certified no-fit within its search budget |
 | `unit_random_coloring` | Seeded independent-uniform color samples | Geometry-free unit-size control |
 | `unit_low_rank_rounding` | Nonconvex low-rank vector heuristic plus Gaussian argmax rounding | Geometry-free unit-size research baseline; not an SDP solver and has no Frieze-Jerrum guarantee |
-| `canonical_greedy` | Try zero and hard/soft-neighbor tops; choose incremental penalty, then address | Heuristic |
+| `canonical_greedy` | Retain first fit, then try zero and hard/soft-neighbor tops; choose incremental penalty, then address | Never worse than its feasible first-fit incumbent |
 | `promote_repair` | Promote all, then demote the cheapest soft support on an overflowing chain | Heuristic |
 
 Canonical greedy uses the extended support menu:
@@ -22,6 +22,12 @@ Canonical greedy uses the extended support menu:
 ```text
 {0} union {top(i): i is placed and (i,j) is hard or soft}
 ```
+
+It retains the best feasible placement returned by `first_fit` as a fallback.
+Canonical candidates win objective ties to preserve the constructive policy;
+a worse canonical result never replaces the fallback. Local choices can
+therefore miss an improvement, but cannot turn a known first-fit solution into
+a no-fit result or return a worse declared objective.
 
 Promote-and-repair reports demotions and falls back to canonical greedy when
 the decoded overflow chain contains no soft support. A decoder failure is not

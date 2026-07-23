@@ -525,6 +525,32 @@ void TestDsaRpConstructiveBaselines() {
           "unit low-rank rounding did not report its sampling budget");
 }
 
+void TestCanonicalGreedyRetainsFeasibleFirstFitIncumbent() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{3, 7}}, 1),
+      MakeBuffer(1, {{6, 8}}, 3),
+      MakeBuffer(2, {{0, 4}}, 2),
+      MakeBuffer(3, {{6, 8}}, 1),
+  };
+  problem.pools.front().capacity = 5;
+  problem.cost_model = dsa::CostModel{{
+      {1, 2, 1, dsa::ReusePenaltyReason::kCrossPipe},
+      {2, 3, 5, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+
+  const dsa::DsaResult first_fit = SolveAndValidate(problem, dsa::FirstFitSolver());
+  dsa::CanonicalGreedyOptions options;
+  options.random_restarts = 0;
+  const dsa::DsaResult canonical = SolveAndValidate(problem, dsa::CanonicalGreedySolver(options));
+
+  Require(canonical.objective.reuse_cost <= first_fit.objective.reuse_cost,
+          "canonical greedy returned an objective worse than its feasible first-fit incumbent");
+  Require(canonical.solver_metrics.at("first_fit_seed_feasible") == 1,
+          "canonical greedy did not record its feasible first-fit incumbent");
+}
+
 void TestDsaRpExactSolvers() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -1938,6 +1964,7 @@ int main() {
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"DSA-RP constructive baselines", TestDsaRpConstructiveBaselines},
+      {"canonical greedy feasible incumbent", TestCanonicalGreedyRetainsFeasibleFirstFitIncumbent},
       {"DSA-RP exact solvers", TestDsaRpExactSolvers},
       {"DSA-RP promoted-set local search", TestDsaRpPromotedSetLocalSearch},
       {"DSA-RP scale-separated grid DP", TestDsaRpScaleSeparatedGridDp},

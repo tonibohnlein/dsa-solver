@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "dsa/algorithms/canonical_exact_search.h"
+#include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/placement_engine.h"
 #include "dsa/algorithms/reuse_penalty_search.h"
 #include "dsa/algorithms/solver.h"
@@ -286,10 +287,15 @@ DsaResult CanonicalGreedySolver::Solve(const DsaProblem& problem) const {
   }
   const std::vector<std::vector<std::size_t>> orders =
       CanonicalGreedyOrders(problem, prepared, options_);
-  DsaResult result;
-  Score best_score;
+  DsaResult result = FirstFitSolver().Solve(problem);
+  const bool first_fit_seed_feasible =
+      result.status == SolveStatus::kFeasible && result.solution.has_value();
+  Score best_score = first_fit_seed_feasible ? ObjectiveScore(problem, result.objective) : Score{};
+  if (!first_fit_seed_feasible) result = {};
+  result.diagnostics.clear();
   std::uint64_t total_evaluated = 0;
   std::size_t selected_order = 0;
+  bool selected_first_fit_seed = first_fit_seed_feasible;
   std::size_t evaluated_orders = 0;
   for (std::size_t order_index = 0; order_index < orders.size(); ++order_index) {
     const std::vector<std::size_t>& order = orders[order_index];
@@ -323,10 +329,12 @@ DsaResult CanonicalGreedySolver::Solve(const DsaProblem& problem) const {
         detail::BuildValidatedReuseResult(problem, prepared, offsets, SolveStatus::kFeasible);
     if (candidate.status != SolveStatus::kFeasible) continue;
     const Score score = ObjectiveScore(problem, candidate.objective);
-    if (!result.solution.has_value() || score < best_score) {
+    if (!result.solution.has_value() || score < best_score ||
+        (selected_first_fit_seed && score == best_score)) {
       result = std::move(candidate);
       best_score = score;
       selected_order = order_index;
+      selected_first_fit_seed = false;
     }
     if (result.objective.reuse_cost == 0) break;
   }
@@ -339,13 +347,15 @@ DsaResult CanonicalGreedySolver::Solve(const DsaProblem& problem) const {
       {"candidate_offsets_evaluated", total_evaluated},
       {"orders_evaluated", evaluated_orders},
       {"selected_order", selected_order},
+      {"first_fit_seed_feasible", first_fit_seed_feasible ? 1U : 0U},
+      {"selected_first_fit_seed", selected_first_fit_seed ? 1U : 0U},
       {"random_restarts_requested", options_.random_restarts},
       {"seed", options_.seed},
       {"soft_edges", prepared.soft_weights.size()},
   };
   result.diagnostics.emplace_back(
-      "canonical_greedy uses the hard-or-soft support menu under size, birth, "
-      "soft-weight, and seeded random orders");
+      "canonical_greedy retains a feasible first_fit incumbent, then uses the "
+      "hard-or-soft support menu under size, birth, soft-weight, and seeded random orders");
   return result;
 }
 

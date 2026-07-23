@@ -19,7 +19,8 @@ struct CanonicalGreedyOptions {
 // Canonical greedy (CG) baseline from the DSA-RP algorithms section. For each
 // buffer it evaluates offset zero and the aligned tops of already placed hard
 // or soft neighbors, choosing minimum incremental reuse cost and then the
-// lowest offset.
+// lowest offset. It retains first-fit as a feasible incumbent so locally
+// greedy choices cannot turn a known fit into a no-fit result.
 class CanonicalGreedySolver final : public DsaSolver {
  public:
   explicit CanonicalGreedySolver(CanonicalGreedyOptions options = {});
