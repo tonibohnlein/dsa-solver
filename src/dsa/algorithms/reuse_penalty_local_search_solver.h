@@ -18,6 +18,9 @@ struct ReusePenaltyLocalSearchOptions {
   std::size_t stagnation_limit = 250;
   std::size_t soft_moves_per_iteration = 64;
   std::size_t order_moves_per_iteration = 16;
+  // Scale for accepting a bounded number of worsening perturbations. Zero
+  // keeps strict hill climbing.
+  std::uint32_t worse_move_scale_percent = 5;
 };
 
 // Local search over both a first-fit decode order and a set of soft edges

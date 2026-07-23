@@ -14,7 +14,8 @@
 namespace dsa {
 
 struct CapacityTwoExactOptions {
-  // Maximum component-flip search nodes across all pools. Zero is unlimited.
+  // Maximum component-flip search nodes per independent pool. Zero is
+  // unlimited.
   std::uint64_t max_search_nodes = 2'000'000;
 };
 

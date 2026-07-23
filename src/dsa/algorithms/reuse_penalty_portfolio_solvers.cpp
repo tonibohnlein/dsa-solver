@@ -38,7 +38,7 @@ SolverCapabilities CapacityTwoCapabilities() {
   capabilities.multi_pool = true;
   capabilities.lexicographic_objective = true;
   capabilities.capacity_objective = true;
-  capabilities.peak_objective = true;
+  capabilities.peak_objective = false;
   return capabilities;
 }
 
@@ -59,6 +59,16 @@ Score PoolScore(const DsaProblem& problem, std::uint64_t reuse_cost, std::uint64
         score.push_back(peak);
         break;
     }
+  }
+  return score;
+}
+
+Score SolutionScore(const DsaProblem& problem, const DsaSolution& solution) {
+  const ObjectiveValue objective = EvaluateObjective(problem, solution);
+  Score score;
+  score.reserve(problem.objective.terms.size());
+  for (ObjectiveMetric metric : problem.objective.terms) {
+    score.push_back(EvaluateObjectiveMetric(problem, objective, metric));
   }
   return score;
 }
@@ -316,9 +326,8 @@ std::optional<std::string> ValidateCapacityTwoShape(const DsaProblem& problem,
       }
     }
     if (unit.has_value()) {
-      if (detail::AddOverflows(unit.value(), unit.value()) ||
-          capacity != unit.value() + unit.value()) {
-        return "capacity_two_exact requires capacity equal to two units";
+      if (unit.value() == 0 || capacity / unit.value() != 2) {
+        return "capacity_two_exact requires exactly two usable unit addresses";
       }
     }
   }
@@ -391,6 +400,7 @@ DsaResult CapacityTwoExactSolver::Solve(const DsaProblem& problem) const {
   std::vector<std::uint64_t> offsets(search.placement.nodes.size(), 0);
   std::uint64_t search_nodes = 0;
   std::uint64_t bound_prunes = 0;
+  bool any_timeout = false;
   for (const Pool& pool : problem.pools) {
     std::optional<std::uint64_t> unit;
     for (const detail::PlacementSearchNode& node : search.placement.nodes) {
@@ -402,22 +412,13 @@ DsaResult CapacityTwoExactSolver::Solve(const DsaProblem& problem) const {
     if (!unit.has_value()) {
       continue;
     }
-    const std::uint64_t remaining = options_.max_search_nodes == 0
-                                        ? 0
-                                        : (search_nodes >= options_.max_search_nodes
-                                               ? 0
-                                               : options_.max_search_nodes - search_nodes);
-    if (options_.max_search_nodes != 0 && remaining == 0) {
-      DsaResult result;
-      result.status = SolveStatus::kTimeout;
-      result.diagnostics.emplace_back("capacity_two_exact reached its component-flip node limit");
-      return result;
-    }
     const PoolTwoResult pool_result =
-        PoolTwoSearch(problem, search, pool.id, unit.value(), remaining).Run();
+        PoolTwoSearch(problem, search, pool.id, unit.value(), options_.max_search_nodes).Run();
     search_nodes = detail::SaturatingAdd(search_nodes, pool_result.search_nodes);
     bound_prunes = detail::SaturatingAdd(bound_prunes, pool_result.bound_prunes);
-    if (pool_result.status != SolveStatus::kFeasible) {
+    if (pool_result.status == SolveStatus::kTimeout && !pool_result.colors.empty()) {
+      any_timeout = true;
+    } else if (pool_result.status != SolveStatus::kFeasible) {
       DsaResult result;
       result.status = pool_result.status;
       result.solver_metrics = {
@@ -434,16 +435,18 @@ DsaResult CapacityTwoExactSolver::Solve(const DsaProblem& problem) const {
     }
   }
 
-  DsaResult result =
-      detail::BuildValidatedReuseResult(problem, search, offsets, SolveStatus::kFeasible);
+  DsaResult result = detail::BuildValidatedReuseResult(
+      problem, search, offsets, any_timeout ? SolveStatus::kTimeout : SolveStatus::kFeasible);
   result.solver_metrics = {
       {"search_nodes", search_nodes},
       {"bound_prunes", bound_prunes},
-      {"optimality_proven", 1},
+      {"optimality_proven", any_timeout ? 0U : 1U},
   };
   result.diagnostics.emplace_back(
-      "capacity_two_exact proved the optimum by hard-component "
-      "bipartition and weighted flip enumeration");
+      any_timeout ? "capacity_two_exact reached its per-pool node limit and retained "
+                    "the best complete incumbent"
+                  : "capacity_two_exact proved the optimum by hard-component "
+                    "bipartition and weighted flip enumeration");
   return result;
 }
 
@@ -532,9 +535,10 @@ std::optional<std::vector<std::pair<std::size_t, std::size_t>>> MinimumCardinali
           }
           const std::int64_t candidate = distance[from] + arc.cost;
           const std::size_t to = static_cast<std::size_t>(arc.to);
-          if (candidate < distance[to] ||
-              (candidate == distance[to] &&
-               std::tie(from, arc_index) < std::tie(previous_vertex[to], previous_arc[to]))) {
+          // Keep the first shortest predecessor. Rewriting equal-distance
+          // predecessors in a residual graph with zero-cost arcs can create a
+          // predecessor cycle even though the distances are valid.
+          if (candidate < distance[to]) {
             distance[to] = candidate;
             previous_vertex[to] = static_cast<int>(from);
             previous_arc[to] = static_cast<int>(arc_index);
@@ -634,12 +638,6 @@ SpanPool BuildSpanPool(const DsaProblem& problem, const detail::ReusePenaltySear
     result.status = SolveStatus::kFeasible;
     result.phase_by_node.assign(search.placement.nodes.size(),
                                 std::numeric_limits<std::size_t>::max());
-    return result;
-  }
-  if (pool->capacity.value() % result.unit != 0) {
-    result.diagnostic =
-        "span_one_min_cost_flow requires capacity to be a multiple of the "
-        "unit size";
     return result;
   }
   result.colors = pool->capacity.value() / result.unit;
@@ -908,9 +906,24 @@ DsaResult ReusePenaltyPortfolioSolver::Solve(const DsaProblem& problem) const {
       {&general, 4},
   };
   DsaResult last;
+  std::optional<DsaResult> timeout_incumbent;
+  Score timeout_score;
   for (const Method& method : methods) {
     DsaResult result = method.solver->Solve(problem);
     if (result.status == SolveStatus::kUnsupported) {
+      last = std::move(result);
+      continue;
+    }
+    if (result.status == SolveStatus::kTimeout) {
+      if (result.solution.has_value() && ValidateSolution(problem, *result.solution).empty()) {
+        result.objective = EvaluateObjective(problem, *result.solution);
+        const Score score = SolutionScore(problem, *result.solution);
+        if (!timeout_incumbent.has_value() || score < timeout_score) {
+          result.solver_metrics["portfolio_method"] = method.code;
+          timeout_incumbent = result;
+          timeout_score = score;
+        }
+      }
       last = std::move(result);
       continue;
     }
@@ -918,6 +931,12 @@ DsaResult ReusePenaltyPortfolioSolver::Solve(const DsaProblem& problem) const {
     result.diagnostics.emplace_back(std::string("reuse_penalty_portfolio selected ") +
                                     method.solver->Name());
     return result;
+  }
+  if (timeout_incumbent.has_value()) {
+    timeout_incumbent->diagnostics.emplace_back(
+        "reuse_penalty_portfolio exhausted compatible exact methods and "
+        "retained the best timeout incumbent");
+    return *timeout_incumbent;
   }
   last.diagnostics.emplace_back("reuse_penalty_portfolio found no compatible exact method");
   return last;

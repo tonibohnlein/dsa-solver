@@ -16,6 +16,7 @@
 #include "dsa/algorithms/placement_engine.h"
 #include "dsa/algorithms/reuse_penalty_search.h"
 #include "dsa/model/model.h"
+#include "dsa/model/validator.h"
 
 namespace dsa::detail {
 namespace {
@@ -62,6 +63,20 @@ std::uint64_t ReservedPeak(const DsaProblem& problem, PoolId pool_id) {
   return peak;
 }
 
+std::uint64_t PoolReuseCost(const ReusePenaltySearchSpace& search, PoolId pool,
+                            const std::vector<std::uint64_t>& offsets) {
+  std::uint64_t cost = 0;
+  for (const auto& [pair, weight] : search.soft_weights) {
+    const PlacementSearchNode& first = search.placement.nodes[pair.first];
+    const PlacementSearchNode& second = search.placement.nodes[pair.second];
+    if (first.pool == pool &&
+        AddressRangesOverlap(offsets[pair.first], first.size, offsets[pair.second], second.size)) {
+      cost = SaturatingAdd(cost, weight);
+    }
+  }
+  return cost;
+}
+
 class PoolCanonicalSearch {
  public:
   PoolCanonicalSearch(const DsaProblem& problem, const ReusePenaltySearchSpace& search, PoolId pool,
@@ -85,6 +100,28 @@ class PoolCanonicalSearch {
              search_.placement.nodes[second].representative;
     });
     best_score_.assign(problem_.objective.terms.size(), std::numeric_limits<std::uint64_t>::max());
+    if (!options_.stop_after_first && options_.incumbent_offsets.has_value() &&
+        options_.incumbent_offsets->size() == search_.placement.nodes.size()) {
+      const std::vector<std::uint64_t>& incumbent = *options_.incumbent_offsets;
+      bool valid = true;
+      std::vector<bool> seeded(search_.placement.nodes.size(), false);
+      for (std::size_t node : nodes_) {
+        if (!FitsReuseNodeAt(problem_, search_, seeded, incumbent, node, incumbent[node])) {
+          valid = false;
+          break;
+        }
+        seeded[node] = true;
+      }
+      if (valid) {
+        std::uint64_t peak = ReservedPeak(problem_, pool_);
+        for (std::size_t node : nodes_) {
+          peak = std::max(peak, incumbent[node] + search_.placement.nodes[node].size);
+        }
+        found_ = true;
+        best_offsets_ = incumbent;
+        best_score_ = PoolScore(problem_, PoolReuseCost(search_, pool_, incumbent), peak);
+      }
+    }
   }
 
   PoolSearchResult Run() {
@@ -210,7 +247,7 @@ CanonicalExactSearchResult RunCanonicalExactSearch(const DsaProblem& problem,
   }
 
   std::vector<std::uint64_t> offsets(search.placement.nodes.size(), 0);
-  std::uint64_t remaining = options.node_limit == 0 ? 0 : options.node_limit;
+  bool any_timeout = false;
   for (const Pool& pool : problem.pools) {
     const bool has_nodes =
         std::any_of(search.placement.nodes.begin(), search.placement.nodes.end(),
@@ -218,21 +255,18 @@ CanonicalExactSearchResult RunCanonicalExactSearch(const DsaProblem& problem,
     if (!has_nodes) {
       continue;
     }
-    if (options.node_limit != 0 && result.search_nodes >= options.node_limit) {
-      result.status = SolveStatus::kTimeout;
-      return result;
-    }
-    PoolCanonicalSearch pool_search(problem, search, pool.id, options, remaining);
+    // The limit is per independent pool. This preserves a complete incumbent
+    // when one pool times out instead of spending the entire global budget
+    // before later pools have produced any placement.
+    PoolCanonicalSearch pool_search(problem, search, pool.id, options, options.node_limit);
     const PoolSearchResult pool_result = pool_search.Run();
     result.search_nodes = SaturatingAdd(result.search_nodes, pool_result.search_nodes);
     result.candidate_branches =
         SaturatingAdd(result.candidate_branches, pool_result.candidate_branches);
     result.bound_prunes = SaturatingAdd(result.bound_prunes, pool_result.bound_prunes);
-    if (options.node_limit != 0) {
-      remaining =
-          result.search_nodes >= options.node_limit ? 0 : options.node_limit - result.search_nodes;
-    }
-    if (pool_result.status != SolveStatus::kFeasible) {
+    if (pool_result.status == SolveStatus::kTimeout && !pool_result.offsets.empty()) {
+      any_timeout = true;
+    } else if (pool_result.status != SolveStatus::kFeasible) {
       result.status = pool_result.status;
       return result;
     }
@@ -242,7 +276,7 @@ CanonicalExactSearchResult RunCanonicalExactSearch(const DsaProblem& problem,
       }
     }
   }
-  result.status = SolveStatus::kFeasible;
+  result.status = any_timeout ? SolveStatus::kTimeout : SolveStatus::kFeasible;
   result.offsets = std::move(offsets);
   return result;
 }

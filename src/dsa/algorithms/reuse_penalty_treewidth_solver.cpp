@@ -29,15 +29,17 @@ struct TableValue {
   bool feasible = true;
 };
 
+using Partition = std::vector<std::uint32_t>;
+
 struct Factor {
   std::vector<std::size_t> scope;
-  std::vector<TableValue> values;
+  std::map<Partition, TableValue> values;
 };
 
 struct Trace {
   std::size_t variable = 0;
   std::vector<std::size_t> remaining_scope;
-  std::vector<std::uint32_t> best_color;
+  std::map<Partition, std::uint32_t> best_block;
 };
 
 struct PairPotential {
@@ -70,7 +72,7 @@ SolverCapabilities TreewidthCapabilities() {
   capabilities.multi_pool = true;
   capabilities.lexicographic_objective = true;
   capabilities.capacity_objective = true;
-  capabilities.peak_objective = true;
+  capabilities.peak_objective = false;
   return capabilities;
 }
 
@@ -94,17 +96,6 @@ std::optional<std::string> ObjectiveLimitation(const DsaProblem& problem) {
     return "treewidth_partition_dp requires reuse_cost before peak metrics";
   }
   return std::nullopt;
-}
-
-std::optional<std::uint64_t> CheckedPower(std::uint64_t base, std::size_t exponent) {
-  std::uint64_t value = 1;
-  for (std::size_t index = 0; index < exponent; ++index) {
-    if (base != 0 && value > std::numeric_limits<std::uint64_t>::max() / base) {
-      return std::nullopt;
-    }
-    value *= base;
-  }
-  return value;
 }
 
 std::vector<std::size_t> PoolNodes(const detail::ReusePenaltySearchSpace& search, PoolId pool) {
@@ -195,29 +186,56 @@ EliminationOrder MinFillOrder(const detail::ReusePenaltySearchSpace& search,
   return result;
 }
 
-std::size_t FactorIndex(const Factor& factor, const std::vector<std::uint32_t>& colors,
-                        std::uint64_t color_count) {
-  std::size_t index = 0;
+Partition CanonicalizePartition(const Partition& labels) {
+  std::map<std::uint32_t, std::uint32_t> canonical;
+  Partition result;
+  result.reserve(labels.size());
+  for (std::uint32_t label : labels) {
+    const auto [found, inserted] =
+        canonical.emplace(label, static_cast<std::uint32_t>(canonical.size()));
+    static_cast<void>(inserted);
+    result.push_back(found->second);
+  }
+  return result;
+}
+
+template <typename Callback>
+bool EnumeratePartitions(std::size_t size, std::uint32_t max_blocks, Callback callback) {
+  Partition partition(size, 0);
+  if (size == 0) return callback(partition);
+  bool keep_going = true;
+  const auto recurse = [&](const auto& self, std::size_t position, std::uint32_t blocks) -> void {
+    if (!keep_going) return;
+    if (position == size) {
+      keep_going = callback(partition);
+      return;
+    }
+    const std::uint32_t choices = std::min(max_blocks, blocks + 1);
+    for (std::uint32_t block = 0; block < choices; ++block) {
+      partition[position] = block;
+      self(self, position + 1, std::max(blocks, block + 1));
+      if (!keep_going) return;
+    }
+  };
+  partition[0] = 0;
+  recurse(recurse, 1, 1);
+  return keep_going;
+}
+
+TableValue LookupFactor(const Factor& factor, const std::vector<std::uint32_t>& colors) {
+  Partition labels;
+  labels.reserve(factor.scope.size());
   for (std::size_t variable : factor.scope) {
-    index =
-        index * static_cast<std::size_t>(color_count) + static_cast<std::size_t>(colors[variable]);
+    labels.push_back(colors[variable]);
   }
-  return index;
+  const auto found = factor.values.find(CanonicalizePartition(labels));
+  return found == factor.values.end() ? TableValue{0, false} : found->second;
 }
 
-void DecodeAssignment(std::uint64_t encoded, const std::vector<std::size_t>& scope,
-                      std::uint64_t color_count, std::vector<std::uint32_t>* colors) {
-  for (auto iterator = scope.rbegin(); iterator != scope.rend(); ++iterator) {
-    (*colors)[*iterator] = static_cast<std::uint32_t>(encoded % color_count);
-    encoded /= color_count;
-  }
-}
-
-TableValue SumBucket(const std::vector<Factor>& bucket, const std::vector<std::uint32_t>& colors,
-                     std::uint64_t color_count) {
+TableValue SumBucket(const std::vector<Factor>& bucket, const std::vector<std::uint32_t>& colors) {
   TableValue result;
   for (const Factor& factor : bucket) {
-    const TableValue value = factor.values[FactorIndex(factor, colors, color_count)];
+    const TableValue value = LookupFactor(factor, colors);
     if (!value.feasible) {
       return {0, false};
     }
@@ -230,16 +248,9 @@ Factor PairFactor(std::size_t first, std::size_t second, const PairPotential& po
                   std::uint64_t colors) {
   Factor factor;
   factor.scope = {first, second};
-  factor.values.resize(static_cast<std::size_t>(colors * colors));
-  for (std::uint64_t first_color = 0; first_color < colors; ++first_color) {
-    for (std::uint64_t second_color = 0; second_color < colors; ++second_color) {
-      TableValue& value =
-          factor.values[static_cast<std::size_t>(first_color * colors + second_color)];
-      if (first_color == second_color) {
-        value.feasible = !potential.hard;
-        value.cost = potential.soft_weight;
-      }
-    }
+  factor.values[{0, 0}] = {potential.soft_weight, !potential.hard};
+  if (colors >= 2) {
+    factor.values[{0, 1}] = {0, true};
   }
   return factor;
 }
@@ -271,12 +282,7 @@ PoolDpResult SolvePool(const detail::ReusePenaltySearchSpace& search, const Pool
       return result;
     }
   }
-  if (unit == 0 || pool.capacity.value() % unit != 0) {
-    result.diagnostic =
-        "treewidth_partition_dp requires capacity to be a multiple of the "
-        "unit size";
-    return result;
-  }
+  if (unit == 0) return result;
   const std::uint64_t colors = std::min<std::uint64_t>(pool.capacity.value() / unit, nodes.size());
   if (colors == 0 || colors > std::numeric_limits<std::uint32_t>::max()) {
     result.status = SolveStatus::kInfeasibleProven;
@@ -295,12 +301,6 @@ PoolDpResult SolvePool(const detail::ReusePenaltySearchSpace& search, const Pool
   std::vector<Factor> factors;
   factors.reserve(potentials.size() + nodes.size());
   for (const auto& [pair, potential] : potentials) {
-    const auto entries = CheckedPower(colors, 2);
-    if (!entries.has_value() ||
-        (options.max_table_entries != 0 && entries.value() > options.max_table_entries)) {
-      result.diagnostic = "treewidth_partition_dp pair table exceeds max_table_entries";
-      return result;
-    }
     factors.push_back(PairFactor(pair.first, pair.second, potential, colors));
   }
 
@@ -329,36 +329,41 @@ PoolDpResult SolvePool(const detail::ReusePenaltySearchSpace& search, const Pool
     Trace trace;
     trace.variable = variable;
     trace.remaining_scope.assign(remaining_variables.begin(), remaining_variables.end());
-    const auto output_entries = CheckedPower(colors, trace.remaining_scope.size());
-    const auto evaluated_entries = CheckedPower(colors, trace.remaining_scope.size() + 1);
-    if (!output_entries.has_value() || !evaluated_entries.has_value() ||
-        (options.max_table_entries != 0 && evaluated_entries.value() > options.max_table_entries)) {
-      result.diagnostic =
-          "treewidth_partition_dp elimination table exceeds "
-          "max_table_entries";
-      return result;
-    }
-
     Factor output;
     output.scope = trace.remaining_scope;
-    output.values.resize(static_cast<std::size_t>(output_entries.value()), TableValue{0, false});
-    trace.best_color.resize(static_cast<std::size_t>(output_entries.value()), 0);
-    for (std::uint64_t assignment = 0; assignment < output_entries.value(); ++assignment) {
-      DecodeAssignment(assignment, trace.remaining_scope, colors, &working_colors);
-      TableValue best{0, false};
-      std::uint32_t best_color = 0;
-      for (std::uint64_t color = 0; color < colors; ++color) {
-        working_colors[variable] = static_cast<std::uint32_t>(color);
-        const TableValue candidate = SumBucket(bucket, working_colors, colors);
-        ++result.transitions;
-        if (candidate.feasible && (!best.feasible || candidate.cost < best.cost)) {
-          best = candidate;
-          best_color = static_cast<std::uint32_t>(color);
-        }
-      }
-      output.values[static_cast<std::size_t>(assignment)] = best;
-      trace.best_color[static_cast<std::size_t>(assignment)] = best_color;
-      ++result.states;
+    std::uint64_t table_entries = 0;
+    const bool completed = EnumeratePartitions(
+        trace.remaining_scope.size(), static_cast<std::uint32_t>(colors),
+        [&](const Partition& partition) {
+          ++table_entries;
+          if (options.max_table_entries != 0 && table_entries > options.max_table_entries) {
+            return false;
+          }
+          for (std::size_t index = 0; index < trace.remaining_scope.size(); ++index) {
+            working_colors[trace.remaining_scope[index]] = partition[index];
+          }
+          const std::uint32_t existing_blocks =
+              partition.empty() ? 0 : *std::max_element(partition.begin(), partition.end()) + 1;
+          TableValue best{0, false};
+          std::uint32_t best_block = 0;
+          const std::uint32_t choices = existing_blocks + (existing_blocks < colors ? 1U : 0U);
+          for (std::uint32_t block = 0; block < choices; ++block) {
+            working_colors[variable] = block;
+            const TableValue candidate = SumBucket(bucket, working_colors);
+            ++result.transitions;
+            if (candidate.feasible && (!best.feasible || candidate.cost < best.cost)) {
+              best = candidate;
+              best_block = block;
+            }
+          }
+          output.values[partition] = best;
+          trace.best_block[partition] = best_block;
+          ++result.states;
+          return true;
+        });
+    if (!completed) {
+      result.diagnostic = "treewidth_partition_dp partition table exceeds max_table_entries";
+      return result;
     }
     remaining.push_back(std::move(output));
     factors = std::move(remaining);
@@ -367,24 +372,58 @@ PoolDpResult SolvePool(const detail::ReusePenaltySearchSpace& search, const Pool
 
   TableValue optimum;
   for (const Factor& factor : factors) {
-    if (!factor.scope.empty() || factor.values.size() != 1) {
+    const Partition empty_partition;
+    if (!factor.scope.empty() || factor.values.size() != 1 ||
+        factor.values.find(empty_partition) == factor.values.end()) {
       result.diagnostic = "treewidth_partition_dp left a nonconstant terminal factor";
       return result;
     }
-    if (!factor.values.front().feasible) {
+    if (!factor.values.at(empty_partition).feasible) {
       result.status = SolveStatus::kInfeasibleProven;
       return result;
     }
-    optimum.cost = detail::SaturatingAdd(optimum.cost, factor.values.front().cost);
+    optimum.cost = detail::SaturatingAdd(optimum.cost, factor.values.at(empty_partition).cost);
   }
 
-  std::vector<std::uint32_t> colors_by_node(search.placement.nodes.size(), 0);
+  const std::uint32_t unassigned = std::numeric_limits<std::uint32_t>::max();
+  std::vector<std::uint32_t> colors_by_node(search.placement.nodes.size(), unassigned);
   for (auto iterator = traces.rbegin(); iterator != traces.rend(); ++iterator) {
-    std::size_t assignment = 0;
+    Partition actual;
+    actual.reserve(iterator->remaining_scope.size());
     for (std::size_t member : iterator->remaining_scope) {
-      assignment = assignment * static_cast<std::size_t>(colors) + colors_by_node[member];
+      actual.push_back(colors_by_node[member]);
     }
-    colors_by_node[iterator->variable] = iterator->best_color[assignment];
+    const Partition key = CanonicalizePartition(actual);
+    const auto choice = iterator->best_block.find(key);
+    if (choice == iterator->best_block.end()) {
+      result.diagnostic = "treewidth_partition_dp traceback state is missing";
+      return result;
+    }
+    const std::uint32_t existing_blocks =
+        key.empty() ? 0 : *std::max_element(key.begin(), key.end()) + 1;
+    if (choice->second < existing_blocks) {
+      bool assigned = false;
+      for (std::size_t index = 0; index < key.size(); ++index) {
+        if (key[index] == choice->second) {
+          colors_by_node[iterator->variable] = actual[index];
+          assigned = true;
+          break;
+        }
+      }
+      if (!assigned) {
+        result.diagnostic = "treewidth_partition_dp traceback block is missing";
+        return result;
+      }
+    } else {
+      std::set<std::uint32_t> used(actual.begin(), actual.end());
+      std::uint32_t color = 0;
+      while (used.count(color) != 0) ++color;
+      if (color >= colors) {
+        result.diagnostic = "treewidth_partition_dp traceback exceeds capacity colors";
+        return result;
+      }
+      colors_by_node[iterator->variable] = color;
+    }
   }
   for (std::size_t node : nodes) {
     result.offsets[node] = static_cast<std::uint64_t>(colors_by_node[node]) * unit;

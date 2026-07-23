@@ -83,8 +83,8 @@
     "objective": {
       "aggregation": "lexicographic",
       "terms": [
-        "total_peak",
-        "max_peak"
+        "capacity_overflow",
+        "reuse_cost"
       ]
     },
     "pools": [

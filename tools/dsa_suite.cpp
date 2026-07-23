@@ -31,6 +31,11 @@
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
 #include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
+#include "dsa/algorithms/reuse_penalty_exact_solvers.h"
+#include "dsa/algorithms/reuse_penalty_local_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_portfolio_solvers.h"
+#include "dsa/algorithms/reuse_penalty_scale_solver.h"
+#include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/io/minimalloc_csv.h"
@@ -52,6 +57,17 @@ using Json = nlohmann::ordered_json;
 constexpr std::string_view kFirstFit = "first_fit";
 constexpr std::string_view kCanonicalGreedy = "canonical_greedy";
 constexpr std::string_view kPromoteRepair = "promote_repair";
+constexpr std::string_view kPromoteAll = "promote_all";
+constexpr std::string_view kUnitRandom = "unit_random_coloring";
+constexpr std::string_view kUnitLowRank = "unit_low_rank_rounding";
+constexpr std::string_view kCanonicalExact = "canonical_branch_and_bound";
+constexpr std::string_view kImplicitHittingSet = "implicit_hitting_set";
+constexpr std::string_view kCapacityTwo = "capacity_two_exact";
+constexpr std::string_view kSpanOne = "span_one_min_cost_flow";
+constexpr std::string_view kTreewidth = "treewidth_partition_dp";
+constexpr std::string_view kReusePortfolio = "reuse_penalty_portfolio";
+constexpr std::string_view kReuseLocalSearch = "reuse_penalty_local_search";
+constexpr std::string_view kScaleGrid = "scale_separated_grid_dp";
 constexpr std::string_view kCypressRelaxation = "cypress_relaxation";
 constexpr std::string_view kXlaHeap = "xla_heap";
 constexpr std::string_view kTvmHillClimb = "tvm_hill_climb";
@@ -850,9 +866,53 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   if (method == kFirstFit) {
     solver = std::make_unique<dsa::FirstFitSolver>();
   } else if (method == kCanonicalGreedy) {
-    solver = std::make_unique<dsa::CanonicalGreedySolver>();
+    dsa::CanonicalGreedyOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver_options.random_restarts = options.restarts;
+    solver = std::make_unique<dsa::CanonicalGreedySolver>(solver_options);
   } else if (method == kPromoteRepair) {
     solver = std::make_unique<dsa::PromoteRepairSolver>();
+  } else if (method == kPromoteAll) {
+    solver = std::make_unique<dsa::PromoteAllSolver>();
+  } else if (method == kUnitRandom) {
+    dsa::UnitRandomColoringOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver = std::make_unique<dsa::UnitRandomColoringSolver>(solver_options);
+  } else if (method == kUnitLowRank) {
+    dsa::UnitLowRankRoundingOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver = std::make_unique<dsa::UnitLowRankRoundingSolver>(solver_options);
+  } else if (method == kCanonicalExact) {
+    dsa::CanonicalBranchAndBoundOptions solver_options;
+    solver_options.max_search_nodes = options.iterations;
+    solver = std::make_unique<dsa::CanonicalBranchAndBoundSolver>(solver_options);
+  } else if (method == kImplicitHittingSet) {
+    dsa::ImplicitHittingSetOptions solver_options;
+    solver_options.max_oracle_nodes = options.iterations;
+    solver_options.max_master_nodes = options.iterations;
+    solver = std::make_unique<dsa::ImplicitHittingSetSolver>(solver_options);
+  } else if (method == kCapacityTwo) {
+    dsa::CapacityTwoExactOptions solver_options;
+    solver_options.max_search_nodes = options.iterations;
+    solver = std::make_unique<dsa::CapacityTwoExactSolver>(solver_options);
+  } else if (method == kSpanOne) {
+    solver = std::make_unique<dsa::SpanOneMinCostFlowSolver>();
+  } else if (method == kTreewidth) {
+    solver = std::make_unique<dsa::TreewidthPartitionDpSolver>();
+  } else if (method == kReusePortfolio) {
+    dsa::ReusePenaltyPortfolioOptions solver_options;
+    solver_options.capacity_two.max_search_nodes = options.iterations;
+    solver_options.general.max_search_nodes = options.iterations;
+    solver = std::make_unique<dsa::ReusePenaltyPortfolioSolver>(solver_options);
+  } else if (method == kReuseLocalSearch) {
+    dsa::ReusePenaltyLocalSearchOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver_options.max_evaluations = options.iterations;
+    solver_options.restarts = options.restarts;
+    solver_options.stagnation_limit = options.stagnation_limit;
+    solver = std::make_unique<dsa::ReusePenaltyLocalSearchSolver>(solver_options);
+  } else if (method == kScaleGrid) {
+    solver = std::make_unique<dsa::ScaleSeparatedGridDpSolver>();
   } else if (method == kCypressRelaxation) {
     solver = std::make_unique<dsa::CypressRelaxationSolver>();
   } else if (method == kXlaHeap) {
@@ -1044,18 +1104,37 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
     const bool has_fixed_capacity =
         std::all_of(instance.document.problem.pools.begin(), instance.document.problem.pools.end(),
                     [](const dsa::Pool& pool) { return pool.capacity.has_value(); });
+    const bool has_reuse_penalties = instance.document.problem.cost_model.has_value() &&
+                                     !instance.document.problem.cost_model->reuse_penalties.empty();
     for (std::size_t repetition = 0; repetition < deterministic_runs; ++repetition) {
       records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
       if (has_fixed_capacity) {
         records.push_back(RunHeuristic(instance, kCanonicalGreedy, std::nullopt, options));
         records.push_back(RunHeuristic(instance, kPromoteRepair, std::nullopt, options));
+        if (has_reuse_penalties) {
+          records.push_back(RunHeuristic(instance, kPromoteAll, std::nullopt, options));
+        }
         records.push_back(RunHeuristic(instance, kCypressRelaxation, std::nullopt, options));
       }
       records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
     }
+    if (has_fixed_capacity && has_reuse_penalties) {
+      records.push_back(RunHeuristic(instance, kCanonicalExact, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kImplicitHittingSet, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kCapacityTwo, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kSpanOne, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kTreewidth, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kReusePortfolio, std::nullopt, options));
+      records.push_back(RunHeuristic(instance, kScaleGrid, std::nullopt, options));
+    }
     for (std::uint64_t seed : options.seeds) {
       records.push_back(RunHeuristic(instance, kTvmHillClimb, seed, options));
       records.push_back(RunHeuristic(instance, kLocalSearch, seed, options));
+      if (has_fixed_capacity && has_reuse_penalties) {
+        records.push_back(RunHeuristic(instance, kUnitRandom, seed, options));
+        records.push_back(RunHeuristic(instance, kUnitLowRank, seed, options));
+        records.push_back(RunHeuristic(instance, kReuseLocalSearch, seed, options));
+      }
       if (dsa::IsPyptoProfile(instance.document.profile)) {
         records.push_back(RunHeuristic(instance, kPyptoStructuredSearch, seed, options));
       }

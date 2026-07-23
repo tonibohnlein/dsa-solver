@@ -17,6 +17,9 @@ namespace dsa::detail {
 struct CanonicalExactSearchOptions {
   std::uint64_t node_limit = 2'000'000;
   bool stop_after_first = false;
+  // Optional validated node offsets used only as an upper bound. The search
+  // still exhausts its canonical state space unless stop_after_first is set.
+  std::optional<std::vector<std::uint64_t>> incumbent_offsets;
 };
 
 struct CanonicalExactSearchResult {

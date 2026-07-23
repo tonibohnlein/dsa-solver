@@ -15,8 +15,8 @@ struct TreewidthPartitionDpOptions {
   // The induced width of the deterministic min-fill elimination order.
   std::size_t max_treewidth = 14;
 
-  // Maximum C^(bag size) assignments evaluated for one eliminated variable.
-  // Zero disables the guard.
+  // Maximum restricted-growth partition states evaluated for one eliminated
+  // variable. Zero disables the guard.
   std::uint64_t max_table_entries = 4'000'000;
 };
 

@@ -220,6 +220,65 @@ void TestColocation() {
   Require(result.objective.max_peak == 32, "colocation class should use its largest member size");
 }
 
+void TestColocationClassUsesOnePhysicalExtent() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 64),
+      MakeBuffer(1, {{0, 1}}, 8),
+      MakeBuffer(2, {{1, 2}}, 8),
+  };
+  problem.colocations.push_back({0, 1});
+  problem.cost_model = dsa::CostModel{{
+      {1, 2, 7, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 2, std::numeric_limits<std::uint64_t>::max(), dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+
+  dsa::DsaSolution overlapping;
+  overlapping.placements = {
+      {0, {dsa::kDefaultPool, 0}},
+      {1, {dsa::kDefaultPool, 0}},
+      {2, {dsa::kDefaultPool, 32}},
+  };
+  Require(dsa::ValidateSolution(problem, overlapping).empty(),
+          "lifetime-disjoint allocation classes should be allowed to overlap");
+  Require(dsa::EvaluateObjective(problem, overlapping).reuse_cost ==
+              std::numeric_limits<std::uint64_t>::max(),
+          "reuse penalties must use the full allocation-class extent and saturate");
+
+  problem.separations.push_back({1, 2});
+  Require(!dsa::ValidateSolution(problem, overlapping).empty(),
+          "a separation on one member must separate the complete allocation class");
+  const dsa::DsaResult separated = SolveAndValidate(problem, dsa::FirstFitSolver());
+  Require(OffsetOf(separated, 2) >= 64,
+          "placement and validation disagree on a heterogeneous colocation extent");
+  Require(separated.objective.reuse_cost == 0,
+          "a separated allocation class unexpectedly activated a reuse penalty");
+}
+
+void TestObjectiveArithmeticSaturates() {
+  dsa::DsaProblem problem;
+  problem.pools = {
+      {0, "first", std::nullopt, {}, std::nullopt},
+      {1, "second", std::nullopt, {}, std::nullopt},
+  };
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{0, 1}}, 1),
+  };
+  problem.buffers[0].allowed_pools = {0};
+  problem.buffers[1].allowed_pools = {1};
+  dsa::DsaSolution solution;
+  solution.placements = {
+      {0, {0, std::numeric_limits<std::uint64_t>::max() - 1}},
+      {1, {1, std::numeric_limits<std::uint64_t>::max() - 1}},
+  };
+  const dsa::ObjectiveValue objective = dsa::EvaluateObjective(problem, solution);
+  Require(objective.max_peak == std::numeric_limits<std::uint64_t>::max(),
+          "maximum peak near uint64 limit is incorrect");
+  Require(objective.total_peak == std::numeric_limits<std::uint64_t>::max(),
+          "total peak must saturate rather than wrap");
+}
+
 void TestTemporalExclusionOverridesConservativeHulls() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -338,9 +397,16 @@ void TestDsaRpConstructiveBaselines() {
           "promote-repair fixture no longer exposes the heuristic optimality gap");
 
   const dsa::DsaResult strict = dsa::PromoteAllSolver().Solve(problem);
-  Require(strict.status == dsa::SolveStatus::kBestEffortNoFit &&
-              strict.solver_metrics.at("promoted_edges") == 3,
-          "promote-all control did not report the strict capacity failure");
+  Require(strict.status == dsa::SolveStatus::kInfeasibleProven &&
+              strict.solver_metrics.at("promoted_edges") == 3 &&
+              strict.solver_metrics.at("zero_penalty_feasibility_proven") == 1,
+          "promote-all zero detector did not prove the strict capacity failure");
+  dsa::PromoteAllOptions bounded_promote_all_options;
+  bounded_promote_all_options.max_search_nodes = 1;
+  const dsa::DsaResult bounded_strict =
+      dsa::PromoteAllSolver(bounded_promote_all_options).Solve(problem);
+  Require(bounded_strict.status == dsa::SolveStatus::kTimeout,
+          "promote-all ignored its canonical-search node budget");
 
   dsa::UnitRandomColoringOptions random_options;
   random_options.seed = 23;
@@ -349,6 +415,27 @@ void TestDsaRpConstructiveBaselines() {
       SolveAndValidate(problem, dsa::UnitRandomColoringSolver(random_options));
   Require(random.solver_metrics.at("samples") == 8 && random.objective.max_peak <= 2,
           "unit random-coloring control did not produce a sampled fit");
+
+  dsa::DsaProblem slack_capacity = problem;
+  for (dsa::Buffer& buffer : slack_capacity.buffers) buffer.size = 2;
+  slack_capacity.pools.front().capacity = 5;
+  const dsa::DsaResult slack_random =
+      SolveAndValidate(slack_capacity, dsa::UnitRandomColoringSolver(random_options));
+  Require(slack_random.objective.max_peak <= 4,
+          "unit random coloring mishandled capacity slack smaller than one unit");
+
+  dsa::UnitLowRankRoundingOptions low_rank_options;
+  low_rank_options.seed = 29;
+  low_rank_options.relaxation_iterations = 32;
+  low_rank_options.rounding_samples = 16;
+  low_rank_options.rank = 4;
+  const dsa::UnitLowRankRoundingSolver low_rank_solver(low_rank_options);
+  const dsa::DsaResult low_rank_first = SolveAndValidate(problem, low_rank_solver);
+  const dsa::DsaResult low_rank_second = SolveAndValidate(problem, low_rank_solver);
+  Require(SolutionOrThrow(low_rank_first).placements == SolutionOrThrow(low_rank_second).placements,
+          "unit low-rank rounding is not deterministic for a fixed seed");
+  Require(low_rank_first.solver_metrics.at("rounding_samples") == 16,
+          "unit low-rank rounding did not report its sampling budget");
 }
 
 void TestDsaRpExactSolvers() {
@@ -393,6 +480,88 @@ void TestDsaRpExactSolvers() {
   Require(portfolio.objective.reuse_cost == optimum &&
               portfolio.solver_metrics.at("portfolio_method") == 2,
           "portfolio did not dispatch the capacity-two fixture correctly");
+  dsa::ReusePenaltyPortfolioOptions portfolio_fallthrough_options;
+  portfolio_fallthrough_options.capacity_two.max_search_nodes = 1;
+  const dsa::DsaResult portfolio_fallthrough =
+      SolveAndValidate(problem, dsa::ReusePenaltyPortfolioSolver(portfolio_fallthrough_options));
+  Require(portfolio_fallthrough.objective.reuse_cost == optimum &&
+              portfolio_fallthrough.solver_metrics.at("portfolio_method") == 3,
+          "portfolio failed to continue after a capacity-two timeout");
+
+  dsa::DsaProblem heterogeneous = problem;
+  heterogeneous.buffers = {
+      MakeBuffer(0, {{0, 1}}, 4),
+      MakeBuffer(1, {{0, 1}}, 1),
+      MakeBuffer(2, {{1, 2}}, 1),
+  };
+  heterogeneous.colocations = {{0, 1}};
+  heterogeneous.pools.front().capacity = 5;
+  heterogeneous.cost_model = dsa::CostModel{{
+      {1, 2, 11, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  heterogeneous.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const std::uint64_t heterogeneous_optimum = BruteForceMinimumReuseCost(heterogeneous);
+  Require(heterogeneous_optimum == 0,
+          "heterogeneous-colocation fixture has the wrong brute-force optimum");
+  const dsa::DsaResult heterogeneous_cbb =
+      SolveAndValidate(heterogeneous, dsa::CanonicalBranchAndBoundSolver());
+  const dsa::DsaResult heterogeneous_ihs =
+      SolveAndValidate(heterogeneous, dsa::ImplicitHittingSetSolver());
+  Require(heterogeneous_cbb.objective.reuse_cost == heterogeneous_optimum &&
+              heterogeneous_ihs.objective.reuse_cost == heterogeneous_optimum,
+          "exact solvers disagree with allocation-class geometry");
+
+  dsa::DsaProblem peak_tie = problem;
+  peak_tie.objective.terms.push_back(dsa::ObjectiveMetric::kMaxPeak);
+  Require(dsa::ImplicitHittingSetSolver().Solve(peak_tie).status == dsa::SolveStatus::kUnsupported,
+          "implicit hitting set silently claimed a peak tie-break it does not optimize");
+  Require(dsa::CapacityTwoExactSolver().Solve(peak_tie).status == dsa::SolveStatus::kUnsupported,
+          "capacity-two solver silently claimed a peak tie-break it does not optimize");
+  Require(
+      dsa::TreewidthPartitionDpSolver().Solve(peak_tie).status == dsa::SolveStatus::kUnsupported,
+      "treewidth DP silently claimed a peak tie-break it does not optimize");
+
+  dsa::CanonicalBranchAndBoundOptions timeout_options;
+  timeout_options.max_search_nodes = 4;
+  const dsa::DsaResult timeout_cbb =
+      dsa::CanonicalBranchAndBoundSolver(timeout_options).Solve(problem);
+  Require(timeout_cbb.status == dsa::SolveStatus::kTimeout && timeout_cbb.solution.has_value() &&
+              dsa::ValidateSolution(problem, *timeout_cbb.solution).empty(),
+          "canonical branch-and-bound discarded its timeout incumbent");
+
+  dsa::ImplicitHittingSetOptions hitting_timeout_options;
+  hitting_timeout_options.max_iterations = 1;
+  const dsa::DsaResult timeout_hitting_set =
+      dsa::ImplicitHittingSetSolver(hitting_timeout_options).Solve(problem);
+  Require(timeout_hitting_set.status == dsa::SolveStatus::kTimeout &&
+              timeout_hitting_set.solution.has_value() &&
+              dsa::ValidateSolution(problem, *timeout_hitting_set.solution).empty(),
+          "implicit hitting set discarded its timeout incumbent");
+
+  dsa::CapacityTwoExactOptions capacity_timeout_options;
+  capacity_timeout_options.max_search_nodes = 5;
+  const dsa::DsaResult timeout_capacity =
+      dsa::CapacityTwoExactSolver(capacity_timeout_options).Solve(problem);
+  Require(timeout_capacity.status == dsa::SolveStatus::kTimeout &&
+              timeout_capacity.solution.has_value() &&
+              dsa::ValidateSolution(problem, *timeout_capacity.solution).empty(),
+          "capacity-two solver discarded its timeout incumbent");
+
+  dsa::DsaProblem saturated_weight;
+  saturated_weight.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+  };
+  saturated_weight.pools.front().capacity = 1;
+  saturated_weight.cost_model = dsa::CostModel{{
+      {0, 1, std::numeric_limits<std::uint64_t>::max(), dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  saturated_weight.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const dsa::DsaResult saturated_hitting_set =
+      SolveAndValidate(saturated_weight, dsa::ImplicitHittingSetSolver());
+  Require(saturated_hitting_set.objective.reuse_cost == std::numeric_limits<std::uint64_t>::max() &&
+              saturated_hitting_set.solver_metrics.at("optimal_reuse_cost_proven") == 1,
+          "implicit hitting-set master rejected its first saturated-cost solution");
 
   dsa::DsaProblem infeasible;
   infeasible.buffers = {
@@ -535,6 +704,17 @@ void TestDsaRpExactSolvers() {
           "portfolio did not dispatch the bounded-treewidth fixture "
           "correctly");
 
+  dsa::DsaProblem large_color_space = problem;
+  large_color_space.pools.front().capacity = 1'000;
+  dsa::TreewidthPartitionDpOptions partition_options;
+  partition_options.max_treewidth = 2;
+  partition_options.max_table_entries = 32;
+  const dsa::DsaResult partition_result =
+      SolveAndValidate(large_color_space, dsa::TreewidthPartitionDpSolver(partition_options));
+  Require(partition_result.objective.reuse_cost == 0 &&
+              partition_result.solver_metrics.at("dp_states") <= 32,
+          "treewidth DP enumerated explicit colors instead of canonical partitions");
+
   for (std::size_t instance = 0; instance < 16; ++instance) {
     dsa::DsaProblem generated;
     generated.pools.front().capacity = 3;
@@ -610,6 +790,24 @@ void TestDsaRpPromotedSetLocalSearch() {
       SolveAndValidate(problem, dsa::ReusePenaltyLocalSearchSolver(options));
   Require(forced.objective.reuse_cost == 14,
           "promoted-set local search mishandled forced full reuse");
+
+  dsa::DsaProblem hard_capacity;
+  hard_capacity.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+  };
+  hard_capacity.pools.front().capacity = 1;
+  hard_capacity.cost_model = dsa::CostModel{{
+      {0, 1, 10, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  hard_capacity.objective = {
+      dsa::ObjectiveAggregation::kLexicographic,
+      {dsa::ObjectiveMetric::kReuseCost},
+  };
+  const dsa::DsaResult capacity_first =
+      SolveAndValidate(hard_capacity, dsa::ReusePenaltyLocalSearchSolver(options));
+  Require(capacity_first.objective.reuse_cost == 10 && capacity_first.objective.max_peak == 1,
+          "local search preferred a lower-cost over-capacity placement");
 }
 
 void TestDsaRpScaleSeparatedGridDp() {
@@ -1199,12 +1397,12 @@ void TestSolverCapabilityMatching() {
       dsa::CheckSolverCompatibility(document.problem, first_fit.Capabilities());
   Require(first_fit_match.StructurallyCompatible(),
           "first-fit should support the fixture's hard constraints");
-  Require(!first_fit_match.ObjectiveCompatible() &&
-              Contains(first_fit_match.unsupported_objectives, "metric:reuse_cost"),
-          "first-fit did not disclose its unsupported reuse objective");
+  Require(first_fit_match.ObjectiveCompatible(),
+          "first-fit rescoring should accept the reuse objective");
   const dsa::DsaResult baseline = first_fit.Solve(document.problem);
-  Require(baseline.status == dsa::SolveStatus::kFeasible && !baseline.diagnostics.empty(),
-          "first-fit did not provide a disclosed structural baseline");
+  Require(baseline.status == dsa::SolveStatus::kFeasible &&
+              baseline.solver_metrics.at("first_fit_orders_evaluated") >= 1,
+          "first-fit did not evaluate its rescored order portfolio");
 
   const dsa::LocalSearchSolver local_search;
   const dsa::SolverCompatibility local_match =
@@ -1554,6 +1752,8 @@ int main() {
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},
       {"colocation", TestColocation},
+      {"colocation-class-extent", TestColocationClassUsesOnePhysicalExtent},
+      {"objective-saturation", TestObjectiveArithmeticSaturates},
       {"temporal exclusion", TestTemporalExclusionOverridesConservativeHulls},
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},

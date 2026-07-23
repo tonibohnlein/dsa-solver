@@ -60,9 +60,7 @@
       "aggregation": "lexicographic",
       "terms": [
         "capacity_overflow",
-        "reuse_cost",
-        "total_peak",
-        "max_peak"
+        "reuse_cost"
       ]
     }
   }

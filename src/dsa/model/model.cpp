@@ -84,8 +84,7 @@ ObjectiveSpec MinimizePeakObjective() {
 
 ObjectiveSpec FitThenMinimizeReuseCostObjective() {
   return {ObjectiveAggregation::kLexicographic,
-          {ObjectiveMetric::kCapacityOverflow, ObjectiveMetric::kReuseCost,
-           ObjectiveMetric::kTotalPeak, ObjectiveMetric::kMaxPeak}};
+          {ObjectiveMetric::kCapacityOverflow, ObjectiveMetric::kReuseCost}};
 }
 
 }  // namespace dsa

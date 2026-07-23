@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "dsa/algorithms/canonical_exact_search.h"
+#include "dsa/algorithms/first_fit_solver.h"
+#include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
 #include "dsa/algorithms/reuse_penalty_search.h"
 #include "dsa/algorithms/solver.h"
 #include "dsa/model/model.h"
@@ -42,6 +44,12 @@ SolverCapabilities ExactCapabilities() {
   capabilities.lexicographic_objective = true;
   capabilities.capacity_objective = true;
   capabilities.peak_objective = true;
+  return capabilities;
+}
+
+SolverCapabilities ReuseCostExactCapabilities() {
+  SolverCapabilities capabilities = ExactCapabilities();
+  capabilities.peak_objective = false;
   return capabilities;
 }
 
@@ -113,6 +121,29 @@ std::set<detail::ReuseNodePair> PromotedPairs(const std::vector<IndexedSoftEdge>
   return pairs;
 }
 
+std::optional<std::vector<std::uint64_t>> NodeOffsets(const detail::ReusePenaltySearchSpace& search,
+                                                      const DsaSolution& solution) {
+  std::vector<std::uint64_t> offsets(search.placement.nodes.size(), 0);
+  for (std::size_t node = 0; node < search.placement.nodes.size(); ++node) {
+    const Placement* placement = solution.Find(search.placement.nodes[node].representative);
+    if (placement == nullptr || placement->pool != search.placement.nodes[node].pool) {
+      return std::nullopt;
+    }
+    offsets[node] = placement->offset;
+  }
+  return offsets;
+}
+
+std::vector<std::uint64_t> ObjectiveScore(const DsaProblem& problem,
+                                          const ObjectiveValue& objective) {
+  std::vector<std::uint64_t> score;
+  score.reserve(problem.objective.terms.size());
+  for (ObjectiveMetric metric : problem.objective.terms) {
+    score.push_back(EvaluateObjectiveMetric(problem, objective, metric));
+  }
+  return score;
+}
+
 bool IsSubset(const EdgeSet& subset, const EdgeSet& superset) {
   return std::includes(superset.begin(), superset.end(), subset.begin(), subset.end());
 }
@@ -121,25 +152,31 @@ struct HittingSetResult {
   EdgeSet selected;
   std::uint64_t cost = 0;
   std::uint64_t search_nodes = 0;
+  bool limit_hit = false;
+  bool found = false;
 };
 
 class ExactHittingSetMaster {
  public:
   ExactHittingSetMaster(const std::vector<IndexedSoftEdge>& edges,
-                        const std::vector<EdgeSet>& cores)
-      : edges_(edges), cores_(cores), selected_(edges.size(), false) {
+                        const std::vector<EdgeSet>& cores, std::uint64_t node_limit)
+      : edges_(edges), cores_(cores), node_limit_(node_limit), selected_(edges.size(), false) {
     best_cost_ = std::numeric_limits<std::uint64_t>::max();
   }
 
   HittingSetResult Solve() {
     Search(0);
-    return {best_selected_, best_cost_, search_nodes_};
+    return {best_selected_, best_cost_, search_nodes_, limit_hit_, found_};
   }
 
  private:
   void Search(std::uint64_t cost) {
+    if (node_limit_ != 0 && search_nodes_ >= node_limit_) {
+      limit_hit_ = true;
+      return;
+    }
     ++search_nodes_;
-    if (cost > best_cost_) {
+    if (found_ && cost > best_cost_) {
       return;
     }
     const EdgeSet* unhit = nullptr;
@@ -157,7 +194,8 @@ class ExactHittingSetMaster {
           candidate.insert(edge);
         }
       }
-      if (cost < best_cost_ || (cost == best_cost_ && candidate < best_selected_)) {
+      if (!found_ || cost < best_cost_ || (cost == best_cost_ && candidate < best_selected_)) {
+        found_ = true;
         best_cost_ = cost;
         best_selected_ = std::move(candidate);
       }
@@ -176,10 +214,13 @@ class ExactHittingSetMaster {
 
   const std::vector<IndexedSoftEdge>& edges_;
   const std::vector<EdgeSet>& cores_;
+  std::uint64_t node_limit_ = 0;
   std::vector<bool> selected_;
   EdgeSet best_selected_;
   std::uint64_t best_cost_ = 0;
   std::uint64_t search_nodes_ = 0;
+  bool limit_hit_ = false;
+  bool found_ = false;
 };
 
 struct OracleResult {
@@ -322,6 +363,30 @@ DsaResult CanonicalBranchAndBoundSolver::Solve(const DsaProblem& problem) const 
   detail::CanonicalExactSearchOptions search_options;
   search_options.node_limit = options_.max_search_nodes;
   search_options.stop_after_first = false;
+  std::optional<DsaSolution> seed_solution;
+  std::vector<std::uint64_t> seed_score;
+  std::uint64_t feasible_seeds = 0;
+  auto consider_seed = [&](DsaResult candidate) {
+    if (candidate.status != SolveStatus::kFeasible || !candidate.solution.has_value() ||
+        !ValidateSolution(problem, *candidate.solution).empty()) {
+      return;
+    }
+    ++feasible_seeds;
+    const ObjectiveValue objective = EvaluateObjective(problem, *candidate.solution);
+    const std::vector<std::uint64_t> score = ObjectiveScore(problem, objective);
+    if (!seed_solution.has_value() || score < seed_score) {
+      seed_solution = std::move(*candidate.solution);
+      seed_score = score;
+    }
+  };
+  consider_seed(FirstFitSolver().Solve(problem));
+  DsaProblem seed_problem = problem;
+  seed_problem.objective = FitThenMinimizeReuseCostObjective();
+  consider_seed(CanonicalGreedySolver().Solve(seed_problem));
+  consider_seed(PromoteRepairSolver().Solve(seed_problem));
+  if (seed_solution.has_value()) {
+    search_options.incumbent_offsets = NodeOffsets(search, *seed_solution);
+  }
   const detail::CanonicalExactSearchResult exact =
       detail::RunCanonicalExactSearch(problem, search, search_options);
   if (exact.offsets.has_value()) {
@@ -331,6 +396,7 @@ DsaResult CanonicalBranchAndBoundSolver::Solve(const DsaProblem& problem) const 
         {"search_nodes", exact.search_nodes},
         {"candidate_branches", exact.candidate_branches},
         {"bound_prunes", exact.bound_prunes},
+        {"feasible_incumbent_seeds", feasible_seeds},
         {"optimality_proven", exact.status == SolveStatus::kFeasible ? 1U : 0U},
     };
     result.diagnostics.emplace_back(
@@ -347,6 +413,7 @@ DsaResult CanonicalBranchAndBoundSolver::Solve(const DsaProblem& problem) const 
       {"search_nodes", exact.search_nodes},
       {"candidate_branches", exact.candidate_branches},
       {"bound_prunes", exact.bound_prunes},
+      {"feasible_incumbent_seeds", feasible_seeds},
       {"optimality_proven", exact.status == SolveStatus::kInfeasibleProven ? 1U : 0U},
   };
   result.diagnostics.emplace_back(
@@ -364,7 +431,7 @@ ImplicitHittingSetSolver::ImplicitHittingSetSolver(ImplicitHittingSetOptions opt
 const char* ImplicitHittingSetSolver::Name() const noexcept { return "implicit_hitting_set"; }
 
 SolverCapabilities ImplicitHittingSetSolver::Capabilities() const noexcept {
-  return ExactCapabilities();
+  return ReuseCostExactCapabilities();
 }
 
 DsaResult ImplicitHittingSetSolver::Solve(const DsaProblem& problem) const {
@@ -392,13 +459,60 @@ DsaResult ImplicitHittingSetSolver::Solve(const DsaProblem& problem) const {
   std::vector<EdgeSet> cores;
   std::uint64_t master_nodes = 0;
   std::uint64_t shrink_calls = 0;
+  std::optional<DsaSolution> incumbent;
+  std::vector<std::uint64_t> incumbent_score;
+  auto consider_incumbent = [&](const DsaResult& candidate) {
+    if (candidate.status != SolveStatus::kFeasible || !candidate.solution.has_value() ||
+        !ValidateSolution(problem, *candidate.solution).empty()) {
+      return;
+    }
+    const ObjectiveValue objective = EvaluateObjective(problem, *candidate.solution);
+    const std::vector<std::uint64_t> score = ObjectiveScore(problem, objective);
+    if (!incumbent.has_value() || score < incumbent_score) {
+      incumbent = *candidate.solution;
+      incumbent_score = score;
+    }
+  };
+  consider_incumbent(FirstFitSolver().Solve(problem));
+  consider_incumbent(CanonicalGreedySolver().Solve(problem));
+  consider_incumbent(PromoteRepairSolver().Solve(problem));
+  auto attach_incumbent = [&](DsaResult* result) {
+    if (result == nullptr || !incumbent.has_value()) return;
+    result->solution = incumbent;
+    result->objective = EvaluateObjective(problem, *incumbent);
+  };
 
   for (std::size_t iteration = 0; iteration < options_.max_iterations; ++iteration) {
-    const HittingSetResult master = ExactHittingSetMaster(edges, cores).Solve();
+    const HittingSetResult master =
+        ExactHittingSetMaster(edges, cores, options_.max_master_nodes).Solve();
     master_nodes = detail::SaturatingAdd(master_nodes, master.search_nodes);
+    if (master.limit_hit) {
+      DsaResult result;
+      result.status = SolveStatus::kTimeout;
+      result.solver_metrics = {
+          {"iterations", iteration + 1},
+          {"verified_cores", cores.size()},
+          {"master_search_nodes", master_nodes},
+          {"oracle_calls", oracle.calls()},
+      };
+      result.diagnostics.emplace_back("implicit hitting set master reached its search-node limit");
+      attach_incumbent(&result);
+      return result;
+    }
+    if (!master.found) {
+      DsaResult result;
+      result.status = SolveStatus::kInvalidProblem;
+      result.diagnostics.emplace_back(
+          "implicit hitting set master returned no complete hitting set");
+      return result;
+    }
     const EdgeSet promoted = Complement(master.selected, edges.size());
     const OracleResult oracle_result = oracle.Solve(promoted);
     if (oracle_result.status == SolveStatus::kFeasible && oracle_result.solution.has_value()) {
+      DsaResult oracle_incumbent;
+      oracle_incumbent.status = SolveStatus::kFeasible;
+      oracle_incumbent.solution = oracle_result.solution;
+      consider_incumbent(oracle_incumbent);
       DsaResult result;
       result.status = SolveStatus::kFeasible;
       result.solution = oracle_result.solution;
@@ -433,6 +547,7 @@ DsaResult ImplicitHittingSetSolver::Solve(const DsaProblem& problem) const {
       result.diagnostics.emplace_back(
           "implicit hitting set oracle reached its canonical-search node "
           "limit");
+      attach_incumbent(&result);
       return result;
     }
     if (oracle_result.status != SolveStatus::kInfeasibleProven) {
@@ -453,12 +568,19 @@ DsaResult ImplicitHittingSetSolver::Solve(const DsaProblem& problem) const {
         trial.erase(edge);
         const OracleResult trial_result = oracle.Solve(trial);
         ++shrink_calls;
+        if (trial_result.status == SolveStatus::kFeasible && trial_result.solution.has_value()) {
+          DsaResult trial_incumbent;
+          trial_incumbent.status = SolveStatus::kFeasible;
+          trial_incumbent.solution = trial_result.solution;
+          consider_incumbent(trial_incumbent);
+        }
         if (trial_result.status == SolveStatus::kTimeout) {
           DsaResult result;
           result.status = SolveStatus::kTimeout;
           result.diagnostics.emplace_back(
               "implicit hitting set core shrinking reached the oracle node "
               "limit");
+          attach_incumbent(&result);
           return result;
         }
         if (trial_result.status == SolveStatus::kInfeasibleProven) {
@@ -499,6 +621,7 @@ DsaResult ImplicitHittingSetSolver::Solve(const DsaProblem& problem) const {
       {"core_shrink_calls", shrink_calls},
   };
   result.diagnostics.emplace_back("implicit hitting set reached its iteration limit");
+  attach_incumbent(&result);
   return result;
 }
 

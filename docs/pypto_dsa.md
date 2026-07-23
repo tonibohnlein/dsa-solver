@@ -247,8 +247,14 @@ pair so `A` is the earlier buffer and `B` the later buffer. A single global
 last access is insufficient: a late Vector access does not prove that an
 earlier MTE read has completed. Instead, construct an access frontier containing
 the maximal relevant accesses per resource, control path, loop context, and
-known byte range. Construct the corresponding minimal-write frontier for `B`.
-For every compatible frontier pair, record:
+known byte range. Each abstract resource is treated as one completion-ordered
+issue chain. Real SSA def-use is another completion relation; lexical order
+alone is not. Nested accesses are represented by their enclosing structured
+statement in each parent region, and ordering is tested in the nearest common
+region. Thus a branch-local producer is correctly dominated by a consumer of
+the `if` result after the branch. Construct the complete antichain of minimal
+accesses for `B` and require every member to be a verified write. For every
+compatible frontier pair, record:
 
 ```text
 maximal read/write of A -> minimal write of B
@@ -262,11 +268,13 @@ do not change the pairwise optimization geometry. Initial promotion policy may
 price only cross-resource candidates while retaining same-resource candidates
 for reporting and later study.
 
-Logical SSA reachability is recorded as ordering evidence, not silently used as
-proof that an asynchronous access completed. Redundancy filtering requires a
-completion-aware dependency model. A read and write in the same operation are
-also separate from inter-operation reuse: their legality comes from the
-operation's alias contract and cannot be repaired by inserting a wait.
+Same-resource issue order and real SSA def-use are existing completion
+dependencies, so their handoffs need no additional reuse edge. Bare source
+order is not sufficient. If the recognizer cannot prove that every minimal
+access of the later allocation is a write, it retains the record for diagnosis
+but does not promote it. A read and write in the same operation are also
+separate from inter-operation reuse: their legality comes from the operation's
+alias contract and cannot be repaired by inserting a wait.
 
 Loops do not introduce another dependency type. They add context to WAR/WAW:
 
@@ -296,10 +304,10 @@ questions remain separate:
 3. what latency does that synchronization add?
 
 The first question belongs to the recognizer. Fixed-placement PTOAS comparisons
-and isolated kernel measurements answer the second and third. Same-resource and
-structured-control relations remain report-only initially; the first proposed
-promotion family is flat cross-resource WAR/WAW. Loop context is recorded but
-must be validated before it affects promotion or weight.
+and isolated kernel measurements answer the second and third. Complete
+distance-zero cross-resource relations may be promoted even inside structured
+control. Same-resource and loop-carried relations remain report-only; loop
+context must be validated before it affects promotion or weight.
 
 The optimization model remains additive:
 
@@ -314,19 +322,22 @@ are deferred until evidence requires a more complex formulation.
 
 The opt-in `QUADRATIC` implementation is now the coverage-first reference. It
 normalizes semantic aliases to physical allocations, preserves per-resource
-access frontiers, scans flat and nested regions, records logical-order evidence,
-and emits distance-zero and distance-one loop handoffs. A partial or unknown
-byte range and a same-operation handoff remain report-only. `LINEAR` remains an
-adjacent-statement screening heuristic and is not the correctness reference.
+access frontiers, scans flat and nested regions, uses resource issue order and
+SSA def-use to suppress already-completed handoffs, and records distance-zero
+and distance-one loop handoffs. It promotes only complete, full-allocation,
+distance-zero cross-resource evidence. A partial or unknown byte range, an
+uncertain initial-write frontier, a same-operation handoff, and a loop-carried
+handoff remain report-only. The earlier adjacent-only linear mode is disabled.
 Reference work scales with the product of the two access-frontier sizes for
 every lifetime-compatible buffer pair, not merely with the number of pairs;
 this cost is accepted only in the opt-in research mode.
 
 The remaining recognition gaps are target validation of the abstract-resource
-mapping, precise subrange activation for views, completion-aware redundancy
-filtering, and a complete operation alias-contract table. Only after the
-reference agrees with fixed-placement PTOAS evidence should a production
-linear-time generator be derived.
+mapping, precise subrange activation for views, loop-replication promotion, a
+complete operation alias-contract table, and splitting abstract resources that
+have multiple independently completing channels. Only after the reference
+agrees with fixed-placement PTOAS evidence should a faster generator be
+derived.
 
 Schema-v1 reason names remain provenance labels. `pipeline_serialization` is
 emitted by the pipeline fallback and `cross_pipe` by the opt-in recognizer;
