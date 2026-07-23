@@ -534,6 +534,21 @@ def write_report(
                 f"{ratio(row['runtime_ratio'], row['runtime_instances'])} |\n"
             )
 
+        stats_by_method = {row["method"]: row for row in algorithm_stats}
+        cypress = stats_by_method["cypress_relaxation"]
+        canonical = stats_by_method["canonical_greedy"]
+        excess_cost = 100.0 * ((cypress["total_cost"] - canonical["total_cost"]) / canonical["total_cost"])
+        output.write(
+            "\n**Cypress comparison.** On this corpus, Cypress relaxation produces substantially "
+            "worse objectives than canonical greedy at essentially the same measured runtime: "
+            f"its aggregate penalty is {cypress['total_cost']} versus "
+            f"{canonical['total_cost']} ({excess_cost:.1f}% higher), it reaches the best-known "
+            f"objective on {cypress['wins']} versus {canonical['wins']} instances, and it finds "
+            f"{cypress['zero']} versus {canonical['zero']} zero-penalty placements. The runtime "
+            f"ratios are {cypress['runtime_ratio']:.2f}x and "
+            f"{canonical['runtime_ratio']:.2f}x first fit, respectively.\n"
+        )
+
         output.write(
             "\n## Hard-counterpart search\n\n"
             "These rows ask only whether the same relations can all remain hard while fitting "

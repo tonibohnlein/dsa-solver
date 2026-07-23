@@ -59,6 +59,8 @@ No tested method found a capacity-fitting placement for 1 pair(s): `mm_512x512x1
 | Legacy search | `local_search` | 204/204 | 203/204 | 54/204 | 51/204 | 0/204 | 1885 | 49.40% | 246.66x (203) |
 | Legacy search | `pypto_structured_search` | 204/204 | 203/204 | 56/204 | 53/204 | 0/204 | 1873 | 49.39% | 246.42x (203) |
 
+**Cypress comparison.** On this corpus, Cypress relaxation produces substantially worse objectives than canonical greedy at essentially the same measured runtime: its aggregate penalty is 712 versus 529 (34.6% higher), it reaches the best-known objective on 165 versus 203 instances, and it finds 142 versus 155 zero-penalty placements. The runtime ratios are 0.46x and 0.48x first fit, respectively.
+
 ## Hard-counterpart search
 
 These rows ask only whether the same relations can all remain hard while fitting capacity. Failure is a bounded-search result unless an algorithm supplies an infeasibility certificate.
