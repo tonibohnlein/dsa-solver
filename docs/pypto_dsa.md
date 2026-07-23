@@ -420,6 +420,11 @@ mechanical explanation are stable. OR groups, hyperedges, retained-depth
 factors, global event budgets, and negative weights remain deferred until
 repeated evidence justifies the additional optimization complexity.
 
+The compiler corpus provides a policy A/B view of each unique problem with
+current recognized edges. One variant treats those pairs as hard separations;
+the other retains the same unit soft edges. Edge-free kernels are not
+duplicated. Geometry, capacity, and unrelated constraints remain identical.
+
 The loose-placement landscape is exploratory evidence, not an algorithm
 benchmark. Placements should be constructed from the same fingerprinted
 problem with deterministic offset edits. PTOAS rules may guide which overlaps

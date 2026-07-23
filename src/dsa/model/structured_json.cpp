@@ -150,6 +150,7 @@ SeparationReason ReadSeparationReason(const Json& value, const std::string& path
   if (name == "pipeline_stage") return SeparationReason::kPipelineStage;
   if (name == "target_hazard") return SeparationReason::kTargetHazard;
   if (name == "semantic_no_alias") return SeparationReason::kSemanticNoAlias;
+  if (name == "cross_pipe") return SeparationReason::kCrossPipe;
   throw std::runtime_error(path + " has unknown separation reason '" + name + "'");
 }
 

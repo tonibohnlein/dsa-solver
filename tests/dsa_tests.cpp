@@ -1002,6 +1002,98 @@ void TestPipelineIntentRelaxationPreservesNonPipelineReasons() {
           "pipeline relaxation produced an invalid document");
 }
 
+void TestCrossPipeReuseVariantsPreserveOnlyTheSelectedPolicy() {
+  dsa::StructuredProblemDocument document;
+  document.profile = dsa::BenchmarkProfile::kPyptoResearchV1;
+  document.instance = "recognized_cross_pipe";
+  document.metadata = {
+      {"lifetime_ordering", "pypto_read_before_write"},
+      {"solver_input", "pre_memory_reuse"},
+      {"reuse_edge_construction_policy", "cross_resource_pair_v4"},
+      {"recognized_reuse_candidate_records_v3", "large diagnostic trace"},
+      {"recognized_reuse_edge_records_v1", "duplicated edge trace"},
+  };
+  document.problem.pools = {{dsa::kDefaultPool, "Vec", 16, {}, std::nullopt}};
+  document.problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 8),
+      MakeBuffer(1, {{2, 4}}, 8),
+      MakeBuffer(2, {{4, 6}}, 8),
+  };
+  document.problem.separations = {
+      {1, 2, {dsa::SeparationReason::kTargetHazard}},
+  };
+  document.problem.cost_model = dsa::CostModel{{
+      {0, 1, 7, dsa::ReusePenaltyReason::kCrossPipe},
+      {0, 2, 3, dsa::ReusePenaltyReason::kPipelineSerialization},
+  }};
+  document.problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+
+  const dsa::CrossPipeReuseVariants variants = dsa::BuildCrossPipeReuseVariants(document);
+  Require(variants.edge_count == 1, "cross-pipe variant builder counted the wrong edges");
+  const auto metadata_omits = [](const dsa::StructuredProblemDocument& variant,
+                                 const std::string& key) {
+    return variant.metadata.find(key) == variant.metadata.end();
+  };
+  Require(metadata_omits(variants.soft, "recognized_reuse_candidate_records_v3") &&
+              metadata_omits(variants.soft, "recognized_reuse_edge_records_v1") &&
+              metadata_omits(variants.hard, "recognized_reuse_candidate_records_v3") &&
+              metadata_omits(variants.hard, "recognized_reuse_edge_records_v1"),
+          "cross-pipe variants retained redundant recognizer traces");
+  Require(variants.soft.problem.cost_model &&
+              variants.soft.problem.cost_model->reuse_penalties.size() == 2,
+          "soft cross-pipe variant did not preserve the source costs");
+  Require(variants.soft.problem.separations.size() == 1 &&
+              variants.soft.problem.separations.front().first == 1 &&
+              variants.soft.problem.separations.front().second == 2 &&
+              variants.soft.problem.separations.front().reasons ==
+                  std::vector<dsa::SeparationReason>{dsa::SeparationReason::kTargetHazard},
+          "soft cross-pipe variant changed hard constraints");
+  Require(variants.hard.problem.cost_model &&
+              variants.hard.problem.cost_model->reuse_penalties.size() == 1 &&
+              variants.hard.problem.cost_model->reuse_penalties.front().reason ==
+                  dsa::ReusePenaltyReason::kPipelineSerialization,
+          "hard cross-pipe variant did not preserve unrelated soft costs");
+  Require(variants.hard.problem.separations.size() == 2,
+          "hard cross-pipe variant did not add exactly one separation");
+  const auto hard_edge = std::find_if(
+      variants.hard.problem.separations.begin(), variants.hard.problem.separations.end(),
+      [](const dsa::Separation& separation) {
+        return separation.first == 0 && separation.second == 1 &&
+               separation.reasons ==
+                   std::vector<dsa::SeparationReason>{dsa::SeparationReason::kCrossPipe};
+      });
+  Require(hard_edge != variants.hard.problem.separations.end(),
+          "hard cross-pipe variant lost edge provenance");
+  Require(dsa::ValidateStructuredProblemDocument(variants.soft).empty() &&
+              dsa::ValidateStructuredProblemDocument(variants.hard).empty(),
+          "cross-pipe variant builder produced an invalid document");
+
+  dsa::DsaSolution overlapping;
+  overlapping.placements = {
+      {0, {dsa::kDefaultPool, 0}},
+      {1, {dsa::kDefaultPool, 0}},
+      {2, {dsa::kDefaultPool, 8}},
+  };
+  Require(dsa::ValidateSolution(variants.soft.problem, overlapping).empty(),
+          "soft cross-pipe edge unexpectedly forbids reuse");
+  Require(!dsa::ValidateSolution(variants.hard.problem, overlapping).empty(),
+          "hard cross-pipe edge did not forbid reuse");
+
+  std::stringstream encoded;
+  dsa::WriteStructuredProblemJson(encoded, variants.hard);
+  std::istringstream input(encoded.str());
+  const dsa::StructuredProblemDocument decoded = dsa::ReadStructuredProblemJson(input);
+  const auto decoded_hard_edge = std::find_if(
+      decoded.problem.separations.begin(), decoded.problem.separations.end(),
+      [](const dsa::Separation& separation) {
+        return separation.first == 0 && separation.second == 1 &&
+               separation.reasons ==
+                   std::vector<dsa::SeparationReason>{dsa::SeparationReason::kCrossPipe};
+      });
+  Require(decoded_hard_edge != decoded.problem.separations.end(),
+          "hard cross-pipe reason did not round-trip");
+}
+
 void TestLocalSearchClosesOrderingGap() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -1764,6 +1856,7 @@ int main() {
       {"sparse reference", TestSparseReferenceReducesPhysicalReuse},
       {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},
+      {"cross-pipe reuse variants", TestCrossPipeReuseVariantsPreserveOnlyTheSelectedPolicy},
       {"local search", TestLocalSearchClosesOrderingGap},
       {"local search budget", TestLocalSearchUsesGlobalEvaluationBudget},
       {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},

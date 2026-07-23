@@ -78,6 +78,7 @@ enum class SeparationReason : std::uint8_t {
   kPipelineStage,
   kTargetHazard,
   kSemanticNoAlias,
+  kCrossPipe,
 };
 
 struct Separation {

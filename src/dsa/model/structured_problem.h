@@ -66,6 +66,12 @@ struct PipelineIntentRelaxation {
   std::size_t added_penalty_count = 0;
 };
 
+struct CrossPipeReuseVariants {
+  StructuredProblemDocument hard;
+  StructuredProblemDocument soft;
+  std::size_t edge_count = 0;
+};
+
 [[nodiscard]] const char* ToString(BenchmarkProfile profile) noexcept;
 [[nodiscard]] bool IsPyptoProfile(BenchmarkProfile profile) noexcept;
 
@@ -117,6 +123,13 @@ void WriteStructuredSolutionJsonFile(const std::filesystem::path& path,
 // performed by an ordinary DSA solver.
 [[nodiscard]] PipelineIntentRelaxation BuildPipelineIntentRelaxation(
     const StructuredProblemDocument& source, std::uint64_t penalty_per_pair = 1);
+
+// Construct an A/B benchmark pair from mechanically recognized cross-resource
+// WAR/WAW edges. The soft variant retains cross_pipe penalties. The hard
+// variant replaces exactly those records with permanent cross_pipe
+// separations while preserving unrelated constraints and costs.
+[[nodiscard]] CrossPipeReuseVariants BuildCrossPipeReuseVariants(
+    const StructuredProblemDocument& source);
 
 }  // namespace dsa
 

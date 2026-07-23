@@ -1,15 +1,18 @@
 # PyPTO corpus
 
-This directory contains 165 unique schema-v1 problems:
+This directory contains 273 unique schema-v1 problems:
 
-| Source | Instances |
-| --- | ---: |
-| System tests | 161 |
-| Memory-planning fixtures | 4 |
+| Source | Base captures | DSA-RP pairs | Files |
+| --- | ---: | ---: | ---: |
+| System tests | 161 | 54 | 269 |
+| Memory-planning fixtures | 4 | 0 | 4 |
 
 Paths preserve the source suite and program. Programs with one captured kernel
 use `<program>__<kernel>.json`; directories are kept when a program has several
 instances.
+
+Each DSA-RP pair differs only in how the same mechanically recognized
+cross-pipe relations are modeled: hard separations or soft unit penalties.
 
 Each JSON file contains the solver profile, pools, buffers, lifetimes,
 constraints, target, and source/exporter revisions. Structurally duplicate

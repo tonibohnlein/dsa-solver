@@ -432,6 +432,16 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "wrote .*report.md"
   )
   add_test(
+    NAME dsa-suite-features-only-smoke
+    COMMAND dsa-suite
+      --pypto ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/recognized_cross_pipe_v1.json
+      --output-dir ${CMAKE_CURRENT_BINARY_DIR}/suite-features-smoke
+      --features-only
+  )
+  set_tests_properties(dsa-suite-features-only-smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION "wrote .*features.csv"
+  )
+  add_test(
     NAME dsa-corpus-import-smoke
     COMMAND ${CMAKE_COMMAND}
       -DDSA_CORPUS=$<TARGET_FILE:dsa-corpus>
@@ -440,6 +450,15 @@ if(BUILD_TESTING)
       -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
       -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_corpus_smoke.cmake
+  )
+  add_test(
+    NAME dsa-rp-corpus-variants-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_CORPUS=$<TARGET_FILE:dsa-corpus>
+      -DDSA_BENCH=$<TARGET_FILE:dsa-bench>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_rp_corpus_smoke.cmake
   )
   add_test(
     NAME dsa-pypto-corpus-layout

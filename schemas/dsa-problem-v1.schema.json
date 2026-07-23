@@ -133,7 +133,8 @@
               "generic",
               "pipeline_stage",
               "target_hazard",
-              "semantic_no_alias"
+              "semantic_no_alias",
+              "cross_pipe"
             ]
           }
         }

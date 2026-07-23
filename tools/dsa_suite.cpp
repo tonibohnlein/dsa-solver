@@ -90,6 +90,7 @@ struct Options {
   bool build_core_relaxations = true;
   bool standard_only = false;
   bool report_only = false;
+  bool features_only = false;
   std::string run_label = "local";
 };
 
@@ -133,6 +134,7 @@ struct FeatureStats {
   std::size_t pipeline_separations = 0;
   std::size_t target_hazard_separations = 0;
   std::size_t semantic_no_alias_separations = 0;
+  std::size_t cross_pipe_separations = 0;
   std::size_t temporal_exclusions = 0;
   std::size_t pinned_allocations = 0;
   std::size_t reuse_penalties = 0;
@@ -254,6 +256,7 @@ void PrintHelp() {
       << "  --no-minimalloc                 Do not execute the exact baseline\n"
       << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
       << "  --standard-only                 Project PyPTO pools to capacity-free standard DSA\n"
+      << "  --features-only                 Write features.csv without running solvers\n"
       << "  --report-only                   Rebuild the report from existing results.jsonl\n"
       << "  --help                           Show this help\n";
 }
@@ -299,6 +302,8 @@ Options ParseOptions(int argc, char** argv) {
       options.build_core_relaxations = false;
     } else if (option == "--standard-only") {
       options.standard_only = true;
+    } else if (option == "--features-only") {
+      options.features_only = true;
     } else if (option == "--report-only") {
       options.report_only = true;
     } else {
@@ -327,6 +332,10 @@ Options ParseOptions(int argc, char** argv) {
   if (options.report_only && !options.standard_only) {
     UsageError("--report-only currently requires --standard-only");
   }
+  if (options.features_only && (options.report_only || options.standard_only)) {
+    UsageError("--features-only cannot be combined with --report-only or --standard-only");
+  }
+  if (options.features_only) options.build_core_relaxations = false;
   return options;
 }
 
@@ -573,6 +582,9 @@ FeatureStats AnalyzeFeatures(const Instance& instance) {
           break;
         case dsa::SeparationReason::kSemanticNoAlias:
           ++stats.semantic_no_alias_separations;
+          break;
+        case dsa::SeparationReason::kCrossPipe:
+          ++stats.cross_pipe_separations;
           break;
         case dsa::SeparationReason::kGeneric:
           break;
@@ -1397,7 +1409,7 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
             "max_live_capacity_ratio,aligned_buffers,multi_interval_buffers,"
             "flexible_pool_buffers,reserved_ranges,bank_geometries,colocations,separations,"
             "pipeline_separations,target_hazard_separations,semantic_no_alias_separations,"
-            "temporal_exclusions,pinned_allocations,reuse_penalties,"
+            "cross_pipe_separations,temporal_exclusions,pinned_allocations,reuse_penalties,"
             "alias_classes,nontrivial_alias_classes,pipeline_groups,depth_shed_pipeline_groups\n";
   std::vector<FeatureStats> rows;
   for (const Instance& instance : instances) {
@@ -1433,9 +1445,10 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
            << stats.flexible_pool_buffers << ',' << stats.reserved_ranges << ','
            << stats.bank_geometries << ',' << stats.colocations << ',' << stats.separations << ','
            << stats.pipeline_separations << ',' << stats.target_hazard_separations << ','
-           << stats.semantic_no_alias_separations << ',' << stats.temporal_exclusions << ','
-           << stats.pinned_allocations << ',' << stats.reuse_penalties << ',' << stats.alias_classes
-           << ',' << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
+           << stats.semantic_no_alias_separations << ',' << stats.cross_pipe_separations << ','
+           << stats.temporal_exclusions << ',' << stats.pinned_allocations << ','
+           << stats.reuse_penalties << ',' << stats.alias_classes << ','
+           << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
            << stats.depth_shed_pipeline_groups << '\n';
   }
 }
@@ -1588,6 +1601,7 @@ void WriteFeatureOccurrenceReport(std::ostream& output, const std::vector<Instan
   write_count("pipeline-stage separation reasons", &FeatureStats::pipeline_separations);
   write_count("target-hazard separation reasons", &FeatureStats::target_hazard_separations);
   write_count("semantic-no-alias separation reasons", &FeatureStats::semantic_no_alias_separations);
+  write_count("cross-pipe separation reasons", &FeatureStats::cross_pipe_separations);
   write_count("nontrivial alias provenance", &FeatureStats::nontrivial_alias_classes);
   write_count("pipeline groups", &FeatureStats::pipeline_groups);
   write_count("depth-shed pipeline groups", &FeatureStats::depth_shed_pipeline_groups);
@@ -2063,6 +2077,13 @@ int main(int argc, char** argv) {
     std::cout << "dsa-suite: loaded " << instances.size() << " benchmark documents" << std::endl;
     if (options.report_only) {
       RewriteStandardReport(options, instances);
+      return 0;
+    }
+    if (options.features_only) {
+      fs::create_directories(options.output_dir);
+      const fs::path features_path = options.output_dir / "features.csv";
+      WriteFeaturesCsv(features_path, instances);
+      std::cout << "dsa-suite: wrote " << features_path << '\n';
       return 0;
     }
     const std::vector<RunRecord> records = ExecuteSuite(instances, options);

@@ -78,6 +78,13 @@ over-capacity result is not an accepted compiler placement.
 
 The formulation and current evidence are in [`pypto_dsa.md`](pypto_dsa.md).
 
+For controlled A/B benchmarks, `BuildCrossPipeReuseVariants` preserves one
+recognized source problem in two forms. The soft form keeps each `cross_pipe`
+reuse penalty. The hard form removes exactly those costs and adds a
+`cross_pipe` separation for the same pair. A hard variant asks whether all
+recognized reuse can be avoided within capacity; it does not claim that the
+relation is required for correctness.
+
 ## PyPTO provenance
 
 `alias_classes` identify semantic values already materialized as one physical

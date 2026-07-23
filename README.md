@@ -213,8 +213,9 @@ target is missing, an excluded target produces a document, or an unlisted case a
 
 The checked-in corpus stores normalized JSON directly under
 `benchmarks/pypto` and `benchmarks/pypto-lib`, organized by source program. The
-two directories contain 452 unique meaningful problems after structural
-deduplication and removal of no-choice instances.
+two directories contain 452 base captures plus 204 matched hard/soft DSA-RP
+pairs: 860 files after structural deduplication and removal of no-choice
+instances.
 
 The complete per-instance size, lifetime, memory-space, capacity-pressure, and
 structured-constraint inventory is checked in as

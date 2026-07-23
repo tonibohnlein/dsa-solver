@@ -1,0 +1,472 @@
+{
+  "instance": "pypto::tests::st::runtime::ops::test_auto_tile_matmul::pypto_fits_l0c_split_k_fits_l0c_split_k-cross-pipe-soft",
+  "metadata": {
+    "corpus_case_id": "tests__st__runtime__ops__test_auto_tile_matmul",
+    "corpus_export_file": "tests__st__runtime__ops__test_auto_tile_matmul/pypto_fits_l0c_split_k_fits_l0c_split_k.dsa.json",
+    "corpus_family": "pypto-runtime-ops",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto",
+    "corpus_original_instance": "fits_l0c_split_k_fits_l0c_split_k",
+    "corpus_problem_fingerprint_fnv1a64": "eaa566db827b5df9",
+    "corpus_producer_commit": "5f8029f1afdb07d7540967905ecb2b6e331d4147",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "5f8029f1afdb07d7540967905ecb2b6e331d4147",
+    "corpus_source_fingerprint_fnv1a64": "a0599ff5185526b6",
+    "corpus_source_path": "tests/st/runtime/ops/test_auto_tile_matmul.py",
+    "corpus_source_repo": "https://github.com/tonibohnlein/pypto.git",
+    "dsa_rp_cross_pipe_edges": "4",
+    "dsa_rp_edge_policy": "soft_v1",
+    "dsa_rp_source_instance": "fits_l0c_split_k_fits_l0c_split_k",
+    "experimental_features": "recognized_cross_pipe_reuse",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "pipeline_intent_policy": "hard_requested_depth",
+    "producer": "pypto",
+    "recognized_access_routes_v1": "external->l1@inbound_dma;l1->l0@l1_to_l0;l0->external@l0_to_external;l0->l1@l0_to_l1;l0->l0@matrix_compute",
+    "recognized_alias_contract_candidates": "0",
+    "recognized_conservative_initial_anchor_candidates": "2",
+    "recognized_cross_pipe_candidates": "13",
+    "recognized_cross_resource_candidates": "13",
+    "recognized_in_loop_candidates": "12",
+    "recognized_incomplete_access_candidates": "0",
+    "recognized_loop_carried_candidates": "0",
+    "recognized_nested_control_candidates": "12",
+    "recognized_ordered_evidence_candidates": "7",
+    "recognized_partial_access_candidates": "0",
+    "recognized_reuse_candidates": "13",
+    "recognized_reuse_edges": "4",
+    "recognized_reuse_penalties": "4",
+    "recognized_same_pipe_candidates": "0",
+    "recognized_same_resource_candidates": "0",
+    "recognized_write_after_read_candidates": "13",
+    "recognized_write_after_write_candidates": "0",
+    "reuse_cost_model": "cross_resource_pair_v4+unit_v1",
+    "reuse_edge_construction_policy": "cross_resource_pair_v4",
+    "reuse_penalty_already_ordered_pairs": "5",
+    "reuse_penalty_candidate_pairs": "9",
+    "reuse_penalty_partially_supported_allocations": "0",
+    "reuse_penalty_promotion_policy": "cross_resource_pair_unit_v4",
+    "reuse_penalty_recognizer": "quadratic_route_frontier_v3",
+    "reuse_penalty_supported_allocations": "12",
+    "reuse_penalty_weight_model": "unit_v1",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 29,
+            "upper": 59
+          }
+        ],
+        "name": "mem_mat_4",
+        "size": 131072
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 31,
+            "upper": 59
+          }
+        ],
+        "name": "mem_mat_5",
+        "size": 131072
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 33,
+            "upper": 63
+          }
+        ],
+        "name": "mem_acc_6",
+        "size": 65536
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 35,
+            "upper": 47
+          }
+        ],
+        "name": "mem_left_7",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 37,
+            "upper": 47
+          }
+        ],
+        "name": "mem_right_8",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 39,
+            "upper": 55
+          }
+        ],
+        "name": "mem_left_9",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 41,
+            "upper": 55
+          }
+        ],
+        "name": "mem_right_10",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 61,
+            "upper": 67
+          }
+        ],
+        "name": "mem_mat_16",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 8,
+        "live_intervals": [
+          {
+            "lower": 65,
+            "upper": 69
+          }
+        ],
+        "name": "mem_mat_17",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 9,
+        "live_intervals": [
+          {
+            "lower": 67,
+            "upper": 71
+          }
+        ],
+        "name": "mem_left_18",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 10,
+        "live_intervals": [
+          {
+            "lower": 69,
+            "upper": 71
+          }
+        ],
+        "name": "mem_right_19",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 11,
+        "live_intervals": [
+          {
+            "lower": 71,
+            "upper": 73
+          }
+        ],
+        "name": "mem_acc_20",
+        "size": 32768
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 0,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 3
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 5
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 4
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 6
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 5
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "pipeline_stage"
+          ],
+          "second": 6
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "cost_model": {
+      "reuse_penalties": [
+        {
+          "cost": 1,
+          "first": 0,
+          "reason": "cross_pipe",
+          "second": 8
+        },
+        {
+          "cost": 1,
+          "first": 1,
+          "reason": "cross_pipe",
+          "second": 8
+        },
+        {
+          "cost": 1,
+          "first": 4,
+          "reason": "cross_pipe",
+          "second": 10
+        },
+        {
+          "cost": 1,
+          "first": 6,
+          "reason": "cross_pipe",
+          "second": 10
+        }
+      ]
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "capacity_overflow",
+        "reuse_cost"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 524288,
+        "id": 2,
+        "name": "Mat",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 3,
+        "name": "Left",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 4,
+        "name": "Right",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 131072,
+        "id": 5,
+        "name": "Acc",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "a__ssa_v0_mat"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "b__ssa_v0_mat"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "c__tile_l0_init",
+            "c__tile_l0_c_first",
+            "c__tile_l0_c_acc",
+            "c__tile_l0_c_first",
+            "c__tile_l0_c_acc"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "c__tile_l0_a"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "c__tile_l0_b"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "c__tile_l0_a"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "c__tile_l0_b"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "c__tile_mat",
+            "c__tile_mat_t0"
+          ]
+        },
+        {
+          "buffer": 8,
+          "members": [
+            "e__ssa_v0_mat"
+          ]
+        },
+        {
+          "buffer": 9,
+          "members": [
+            "c__tile_mat_t0_Left"
+          ]
+        },
+        {
+          "buffer": 10,
+          "members": [
+            "e__ssa_v0_mat_Right"
+          ]
+        },
+        {
+          "buffer": 11,
+          "members": [
+            "d__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": [
+        {
+          "depth": 2,
+          "effective_depth": 2,
+          "group": 0,
+          "members": [
+            {
+              "buffer": 3,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 5,
+              "residue": 1,
+              "stage": 1
+            }
+          ],
+          "pool": 3,
+          "slot_size": 32768
+        },
+        {
+          "depth": 2,
+          "effective_depth": 2,
+          "group": 0,
+          "members": [
+            {
+              "buffer": 4,
+              "residue": 0,
+              "stage": 0
+            },
+            {
+              "buffer": 6,
+              "residue": 1,
+              "stage": 1
+            }
+          ],
+          "pool": 4,
+          "slot_size": 32768
+        }
+      ]
+    }
+  },
+  "profile": "pypto_research_v1",
+  "schema_version": 1
+}
