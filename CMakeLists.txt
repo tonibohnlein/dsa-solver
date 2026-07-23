@@ -37,6 +37,8 @@ add_library(dsa_solver
   src/dsa/algorithms/placement_engine.h
   src/dsa/algorithms/pypto_structured_search_solver.cpp
   src/dsa/algorithms/pypto_structured_search_solver.h
+  src/dsa/algorithms/reuse_penalty_baseline_solvers.cpp
+  src/dsa/algorithms/reuse_penalty_baseline_solvers.h
   src/dsa/algorithms/solver.cpp
   src/dsa/algorithms/solver.h
   src/dsa/algorithms/tvm_hill_climb_solver.cpp
@@ -75,6 +77,7 @@ set(DSA_COMPATIBILITY_HEADERS
   src/dsa/algorithms/cypress_relaxation_solver.h
   src/dsa/algorithms/local_search_solver.h
   src/dsa/algorithms/pypto_structured_search_solver.h
+  src/dsa/algorithms/reuse_penalty_baseline_solvers.h
   src/dsa/algorithms/solver.h
   src/dsa/algorithms/tvm_hill_climb_solver.h
   src/dsa/algorithms/xla_heap_solver.h
@@ -328,6 +331,24 @@ if(BUILD_TESTING)
   )
   set_tests_properties(dsa-cli-cypress-relaxation PROPERTIES
     PASS_REGULAR_EXPRESSION "\"solver_metrics\":.*\"relaxed_edges\":"
+  )
+  add_test(
+    NAME dsa-cli-canonical-greedy
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/capacity_gated_pipeline_cost_v1.json
+      --solver canonical-greedy
+  )
+  set_tests_properties(dsa-cli-canonical-greedy PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"solver\":\"canonical-greedy\".*\"status\":\"feasible\""
+  )
+  add_test(
+    NAME dsa-cli-promote-repair
+    COMMAND dsa-bench
+      --input ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/pypto/unit-tests/memory-planning/capacity_gated_pipeline_cost_v1.json
+      --solver promote-repair
+  )
+  set_tests_properties(dsa-cli-promote-repair PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"solver\":\"promote-repair\".*\"status\":\"feasible\""
   )
   add_test(
     NAME dsa-cli-xla-heap

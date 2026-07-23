@@ -8,6 +8,7 @@
 | [`architecture_binding.md`](architecture_binding.md) | Binding a lowered program to versioned target resources |
 | [`compiler_corpus.md`](compiler_corpus.md) | Capturing and normalizing PyPTO/PyPTO-Lib instances |
 | [`literature_review.md`](literature_review.md) | Standard-DSA baselines and related compiler planners |
+| [`dsa_rp_constructive_baselines.md`](dsa_rp_constructive_baselines.md) | First-fit, canonical-greedy, and promote-and-repair DSA-RP baselines |
 | [`cypress_relaxation.md`](cypress_relaxation.md) | Cypress capacity-relaxation baseline provenance and exact policy |
 | [`xla_heap.md`](xla_heap.md) | OpenXLA baseline provenance and exact policy |
 | [`tvm_hill_climb.md`](tvm_hill_climb.md) | TVM baseline provenance and exact policy |

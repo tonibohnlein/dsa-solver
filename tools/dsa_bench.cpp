@@ -21,6 +21,7 @@
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/io/minimalloc_csv.h"
@@ -65,8 +66,8 @@ std::uint64_t ParseUnsigned(std::string_view text, const std::string& option) {
 void PrintHelp() {
   std::cout << "Usage: dsa-bench --input INSTANCE.{csv,json} [options]\n\n"
             << "Options:\n"
-            << "  --solver first-fit|cypress-relaxation|xla-heap|local-search|"
-               "pypto-structured-search|tvm-hill-climb\n"
+            << "  --solver first-fit|canonical-greedy|promote-repair|cypress-relaxation|"
+               "xla-heap|local-search|pypto-structured-search|tvm-hill-climb\n"
             << "                                   Solver to run (default: first-fit)\n"
             << "  --capacity BYTES                 Set the default pool capacity\n"
             << "  --output FILE.csv                Write a MiniMalloc-compatible solution\n"
@@ -153,7 +154,8 @@ Options ParseOptions(int argc, char** argv) {
     }
   }
   if (options.input.empty()) UsageError("--input is required");
-  if (options.solver != "first-fit" && options.solver != "cypress-relaxation" &&
+  if (options.solver != "first-fit" && options.solver != "canonical-greedy" &&
+      options.solver != "promote-repair" && options.solver != "cypress-relaxation" &&
       options.solver != "xla-heap" && options.solver != "local-search" &&
       options.solver != "pypto-structured-search" && options.solver != "tvm-hill-climb") {
     UsageError("unknown solver '" + options.solver + "'");
@@ -363,7 +365,11 @@ int main(int argc, char** argv) {
     dsa::StructuredProblemDocument document = LoadProblemDocument(options);
 
     std::unique_ptr<dsa::DsaSolver> solver;
-    if (options.solver == "cypress-relaxation") {
+    if (options.solver == "canonical-greedy") {
+      solver = std::make_unique<dsa::CanonicalGreedySolver>();
+    } else if (options.solver == "promote-repair") {
+      solver = std::make_unique<dsa::PromoteRepairSolver>();
+    } else if (options.solver == "cypress-relaxation") {
       solver = std::make_unique<dsa::CypressRelaxationSolver>();
     } else if (options.solver == "xla-heap") {
       solver = std::make_unique<dsa::XlaHeapSolver>();

@@ -30,6 +30,7 @@
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/io/minimalloc_csv.h"
@@ -49,6 +50,8 @@ namespace fs = std::filesystem;
 using Json = nlohmann::ordered_json;
 
 constexpr std::string_view kFirstFit = "first_fit";
+constexpr std::string_view kCanonicalGreedy = "canonical_greedy";
+constexpr std::string_view kPromoteRepair = "promote_repair";
 constexpr std::string_view kCypressRelaxation = "cypress_relaxation";
 constexpr std::string_view kXlaHeap = "xla_heap";
 constexpr std::string_view kTvmHillClimb = "tvm_hill_climb";
@@ -846,6 +849,10 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   std::unique_ptr<dsa::DsaSolver> solver;
   if (method == kFirstFit) {
     solver = std::make_unique<dsa::FirstFitSolver>();
+  } else if (method == kCanonicalGreedy) {
+    solver = std::make_unique<dsa::CanonicalGreedySolver>();
+  } else if (method == kPromoteRepair) {
+    solver = std::make_unique<dsa::PromoteRepairSolver>();
   } else if (method == kCypressRelaxation) {
     solver = std::make_unique<dsa::CypressRelaxationSolver>();
   } else if (method == kXlaHeap) {
@@ -1040,6 +1047,8 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
     for (std::size_t repetition = 0; repetition < deterministic_runs; ++repetition) {
       records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
       if (has_fixed_capacity) {
+        records.push_back(RunHeuristic(instance, kCanonicalGreedy, std::nullopt, options));
+        records.push_back(RunHeuristic(instance, kPromoteRepair, std::nullopt, options));
         records.push_back(RunHeuristic(instance, kCypressRelaxation, std::nullopt, options));
       }
       records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
@@ -1878,9 +1887,10 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
       << "\n## PyPTO structured DSA\n\n"
       << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
          "lower bound | "
-         "First fit | Cypress relaxation | XLA heap | TVM hill "
+         "First fit | Canonical greedy | Promote-repair | Cypress relaxation | XLA heap | TVM hill "
          "climb | Local search | PyPTO structured search |\n"
-      << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- |\n";
+      << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | "
+         "--- | --- |\n";
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
     if (!dsa::IsPyptoProfile(document.profile)) continue;
@@ -1894,6 +1904,12 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
            << CoreLowerBoundCell(summaries, document.instance) << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), nullptr,
                             true)
+           << " | "
+           << HeuristicCell(FindSummary(summaries, document.instance, profile, kCanonicalGreedy),
+                            nullptr, true)
+           << " | "
+           << HeuristicCell(FindSummary(summaries, document.instance, profile, kPromoteRepair),
+                            nullptr, true)
            << " | "
            << HeuristicCell(FindSummary(summaries, document.instance, profile, kCypressRelaxation),
                             nullptr, true)

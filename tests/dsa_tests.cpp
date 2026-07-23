@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -18,6 +19,7 @@
 #include "dsa/algorithms/first_fit_solver.h"
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/analysis/reuse_geometry.h"
@@ -67,6 +69,31 @@ std::uint64_t OffsetOf(const dsa::DsaResult& result, dsa::BufferId id) {
   const dsa::Placement* placement = SolutionOrThrow(result).Find(id);
   if (placement == nullptr) throw std::runtime_error("solution has no requested placement");
   return placement->offset;
+}
+
+std::uint64_t BruteForceMinimumReuseCost(const dsa::DsaProblem& problem) {
+  Require(problem.pools.size() == 1 && problem.pools.front().capacity.has_value(),
+          "brute-force test helper requires one bounded pool");
+  const std::uint64_t capacity = *problem.pools.front().capacity;
+  dsa::DsaSolution candidate;
+  std::uint64_t best = std::numeric_limits<std::uint64_t>::max();
+  std::function<void(std::size_t)> search = [&](std::size_t index) {
+    if (index == problem.buffers.size()) {
+      if (!dsa::ValidateSolution(problem, candidate).empty()) return;
+      best = std::min(best, dsa::EvaluateObjective(problem, candidate).reuse_cost);
+      return;
+    }
+    const dsa::Buffer& buffer = problem.buffers[index];
+    if (buffer.size > capacity) return;
+    for (std::uint64_t offset = 0; offset <= capacity - buffer.size; ++offset) {
+      if (offset % buffer.alignment != 0) continue;
+      candidate.placements[buffer.id] = {dsa::kDefaultPool, offset};
+      search(index + 1);
+    }
+    candidate.placements.erase(buffer.id);
+  };
+  search(0);
+  return best;
 }
 
 dsa::DsaResult SolveAndValidate(const dsa::DsaProblem& problem, const dsa::DsaSolver& solver) {
@@ -239,6 +266,70 @@ void TestFitCostObjectiveAvoidsExpensiveReuse() {
   const dsa::DsaResult result = SolveAndValidate(problem, dsa::LocalSearchSolver(options));
   Require(result.objective.max_peak <= 14 && result.objective.reuse_cost == 0,
           "fit-cost local search did not avoid the expensive reuse edge");
+}
+
+void TestDsaRpConstructiveBaselines() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+      MakeBuffer(2, {{2, 3}}, 1),
+  };
+  problem.pools.front().capacity = 2;
+  problem.cost_model = dsa::CostModel{{
+      {0, 1, 9, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 2, 4, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+
+  const dsa::DsaResult first_fit = SolveAndValidate(problem, dsa::FirstFitSolver());
+  Require(first_fit.objective.reuse_cost == 13,
+          "first-fit control no longer exposes penalty-blind reuse");
+
+  const dsa::DsaResult canonical = SolveAndValidate(problem, dsa::CanonicalGreedySolver());
+  Require(canonical.objective.reuse_cost == BruteForceMinimumReuseCost(problem) &&
+              canonical.objective.reuse_cost == 0,
+          "canonical greedy missed the zero-cost support placement");
+  Require(OffsetOf(canonical, 0) == OffsetOf(canonical, 2) &&
+              OffsetOf(canonical, 0) != OffsetOf(canonical, 1),
+          "canonical greedy did not select the expected two-color placement");
+  Require(canonical.solver_metrics.at("candidate_offsets_evaluated") > 3,
+          "canonical greedy did not evaluate its extended support menu");
+
+  const dsa::DsaResult promote = SolveAndValidate(problem, dsa::PromoteRepairSolver());
+  Require(promote.objective.reuse_cost == BruteForceMinimumReuseCost(problem) &&
+              promote.objective.reuse_cost == 0,
+          "promote-repair did not retain a feasible zero-penalty placement");
+  Require(promote.solver_metrics.at("demoted_edges") == 0 &&
+              promote.solver_metrics.at("active_soft_edges") == 2,
+          "promote-repair unexpectedly relaxed a fitting promoted problem");
+
+  problem.pools.front().capacity = 1;
+  const std::uint64_t optimum = BruteForceMinimumReuseCost(problem);
+  Require(optimum == 13, "capacity-one fixture has the wrong brute-force optimum");
+  const dsa::DsaResult repaired = SolveAndValidate(problem, dsa::PromoteRepairSolver());
+  Require(repaired.objective.reuse_cost == optimum,
+          "promote-repair did not pay the forced capacity-one penalty");
+  Require(repaired.solver_metrics.at("demoted_edges") == 2 &&
+              repaired.solver_metrics.at("packing_attempts") == 3,
+          "promote-repair did not report its two support-chain demotions");
+  const dsa::DsaResult constrained = SolveAndValidate(problem, dsa::CanonicalGreedySolver());
+  Require(constrained.objective.reuse_cost == optimum,
+          "canonical greedy did not return the capacity-one optimum");
+
+  problem.pools.front().capacity = 2;
+  problem.cost_model->reuse_penalties.push_back({0, 2, 1, dsa::ReusePenaltyReason::kCrossPipe});
+  const std::uint64_t triangle_optimum = BruteForceMinimumReuseCost(problem);
+  Require(triangle_optimum == 1, "soft-triangle fixture has the wrong brute-force optimum");
+  const dsa::DsaResult triangle_canonical = SolveAndValidate(problem, dsa::CanonicalGreedySolver());
+  Require(triangle_canonical.objective.reuse_cost == triangle_optimum,
+          "canonical greedy missed the cheapest overlap in the soft triangle");
+  const dsa::DsaResult triangle_repair = SolveAndValidate(problem, dsa::PromoteRepairSolver());
+  Require(triangle_repair.objective.reuse_cost == 4,
+          "promote-repair did not demote the cheapest edge on its support chain");
+  Require(triangle_repair.solver_metrics.at("demoted_edges") == 1 &&
+              triangle_repair.objective.reuse_cost > triangle_optimum,
+          "promote-repair fixture no longer exposes the heuristic optimality gap");
 }
 
 void TestSparseReferenceReducesPhysicalReuse() {
@@ -1109,6 +1200,7 @@ int main() {
       {"temporal exclusion", TestTemporalExclusionOverridesConservativeHulls},
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
+      {"DSA-RP constructive baselines", TestDsaRpConstructiveBaselines},
       {"sparse reference", TestSparseReferenceReducesPhysicalReuse},
       {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},
