@@ -41,25 +41,25 @@ No tested method found a capacity-fitting placement for 1 pair(s): `mm_512x512x1
 | Class | Algorithm | Applicable | Fits | Best | Zero | Proven | Sum cost | Mean active | Runtime / FF |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Baseline | `first_fit` | 204/204 | 203/204 | 26/204 | 23/204 | 0/204 | 2355 | 62.64% | 1.00x (203) |
-| Baseline | `cypress_relaxation` | 204/204 | 203/204 | 165/204 | 142/204 | 0/204 | 712 | 14.35% | 0.46x (203) |
-| Constructive | `canonical_greedy` | 204/204 | 203/204 | 203/204 | 155/204 | 0/204 | 529 | 9.17% | 0.48x (203) |
-| Constructive | `promote_repair` | 204/204 | 203/204 | 194/204 | 155/204 | 0/204 | 580 | 9.63% | 0.80x (203) |
-| Constructive | `promote_all` | 204/204 | 155/204 | 155/204 | 155/204 | 155/204 | 0 | 0.00% | 0.76x (155) |
-| Local search | `reuse_penalty_local_search` | 204/204 | 203/204 | 203/204 | 155/204 | 0/204 | 529 | 9.17% | 343.46x (203) |
-| Exact | `canonical_branch_and_bound` | 204/204 | 203/204 | 203/204 | 155/204 | 186/204 | 529 | 9.17% | 2.64x (203) |
-| Exact | `implicit_hitting_set` | 204/204 | 203/204 | 203/204 | 155/204 | 186/204 | 529 | 9.17% | 4.81x (203) |
-| Exact | `capacity_two_exact` | 2/204 | 2/204 | 2/204 | 2/204 | 2/204 | 0 | 0.00% | 0.58x (2) |
-| Exact | `span_one_min_cost_flow` | 15/204 | 15/204 | 15/204 | 12/204 | 15/204 | 5 | 15.00% | 0.49x (15) |
-| Exact | `treewidth_partition_dp` | 25/204 | 25/204 | 25/204 | 21/204 | 25/204 | 9 | 10.33% | 1.30x (25) |
-| Exact | `reuse_penalty_portfolio` | 204/204 | 203/204 | 203/204 | 155/204 | 186/204 | 529 | 9.17% | 2.37x (203) |
-| Bicriteria | `scale_separated_grid_dp` | 13/204 | 11/204 | 11/204 | 10/204 | 0/204 | 1 | 9.09% | 1.37x (11) |
-| Unit control | `unit_random_coloring` | 6/204 | 6/204 | 6/204 | 6/204 | 0/204 | 0 | 0.00% | 0.44x (6) |
-| Unit control | `unit_low_rank_rounding` | 6/204 | 6/204 | 6/204 | 6/204 | 0/204 | 0 | 0.00% | 5.80x (6) |
-| Legacy search | `tvm_hill_climb` | 204/204 | 203/204 | 27/204 | 24/204 | 0/204 | 2186 | 62.09% | 57.36x (203) |
-| Legacy search | `local_search` | 204/204 | 203/204 | 54/204 | 51/204 | 0/204 | 1885 | 49.40% | 246.66x (203) |
-| Legacy search | `pypto_structured_search` | 204/204 | 203/204 | 56/204 | 53/204 | 0/204 | 1873 | 49.39% | 246.42x (203) |
+| Baseline | `cypress_relaxation` | 204/204 | 203/204 | 165/204 | 142/204 | 0/204 | 712 | 14.35% | 0.60x (203) |
+| Constructive | `canonical_greedy` | 204/204 | 203/204 | 203/204 | 155/204 | 0/204 | 529 | 9.17% | 1.50x (203) |
+| Constructive | `promote_repair` | 204/204 | 203/204 | 194/204 | 155/204 | 0/204 | 580 | 9.63% | 1.00x (203) |
+| Constructive | `promote_all` | 204/204 | 155/204 | 155/204 | 155/204 | 155/204 | 0 | 0.00% | 1.01x (155) |
+| Local search | `reuse_penalty_local_search` | 204/204 | 203/204 | 203/204 | 155/204 | 0/204 | 529 | 9.17% | 467.74x (203) |
+| Exact | `canonical_branch_and_bound` | 204/204 | 203/204 | 203/204 | 155/204 | 186/204 | 529 | 9.17% | 4.46x (203) |
+| Exact | `implicit_hitting_set` | 204/204 | 203/204 | 203/204 | 155/204 | 186/204 | 529 | 9.17% | 7.58x (203) |
+| Exact | `capacity_two_exact` | 2/204 | 2/204 | 2/204 | 2/204 | 2/204 | 0 | 0.00% | 8.01x (2) |
+| Exact | `span_one_min_cost_flow` | 15/204 | 15/204 | 15/204 | 12/204 | 15/204 | 5 | 15.00% | 0.63x (15) |
+| Exact | `treewidth_partition_dp` | 23/204 | 23/204 | 23/204 | 19/204 | 23/204 | 9 | 11.23% | 1.15x (23) |
+| Exact | `reuse_penalty_portfolio` | 204/204 | 203/204 | 203/204 | 155/204 | 186/204 | 529 | 9.17% | 3.81x (203) |
+| Bicriteria | `scale_separated_grid_dp` | 13/204 | 11/204 | 11/204 | 10/204 | 0/204 | 1 | 9.09% | 1.53x (11) |
+| Unit control | `unit_random_coloring` | 6/204 | 6/204 | 6/204 | 6/204 | 0/204 | 0 | 0.00% | 0.39x (6) |
+| Unit control | `unit_low_rank_rounding` | 6/204 | 6/204 | 6/204 | 6/204 | 0/204 | 0 | 0.00% | 6.31x (6) |
+| Legacy search | `tvm_hill_climb` | 204/204 | 203/204 | 27/204 | 24/204 | 0/204 | 2186 | 62.09% | 74.82x (203) |
+| Legacy search | `local_search` | 204/204 | 203/204 | 54/204 | 51/204 | 0/204 | 1885 | 49.40% | 324.01x (203) |
+| Legacy search | `pypto_structured_search` | 204/204 | 203/204 | 56/204 | 53/204 | 0/204 | 1873 | 49.39% | 323.75x (203) |
 
-**Cypress comparison.** On this corpus, Cypress relaxation produces substantially worse objectives than canonical greedy at essentially the same measured runtime: its aggregate penalty is 712 versus 529 (34.6% higher), it reaches the best-known objective on 165 versus 203 instances, and it finds 142 versus 155 zero-penalty placements. The runtime ratios are 0.46x and 0.48x first fit, respectively.
+**Cypress comparison.** On this corpus, Cypress relaxation produces substantially worse objectives than canonical greedy: its aggregate penalty is 712 versus 529 (34.6% higher), it reaches the best-known objective on 165 versus 203 instances, and it finds 142 versus 155 zero-penalty placements. The runtime ratios are 0.60x and 1.50x first fit, respectively.
 
 ## Hard-counterpart search
 
@@ -68,9 +68,9 @@ These rows ask only whether the same relations can all remain hard while fitting
 | Algorithm | Applicable | Fits | Runtime / FF |
 | --- | ---: | ---: | ---: |
 | `first_fit` | 204/204 | 166/204 | 1.00x (166) |
-| `canonical_greedy` | 204/204 | 166/204 | 1.42x (166) |
-| `promote_repair` | 204/204 | 166/204 | 1.43x (166) |
-| `cypress_relaxation` | 204/204 | 166/204 | 1.71x (166) |
-| `tvm_hill_climb` | 204/204 | 166/204 | 359.09x (166) |
-| `local_search` | 204/204 | 166/204 | 719.07x (166) |
-| `pypto_structured_search` | 204/204 | 166/204 | 719.65x (166) |
+| `canonical_greedy` | 204/204 | 166/204 | 2.25x (166) |
+| `promote_repair` | 204/204 | 166/204 | 1.68x (166) |
+| `cypress_relaxation` | 204/204 | 166/204 | 1.68x (166) |
+| `tvm_hill_climb` | 204/204 | 166/204 | 432.62x (166) |
+| `local_search` | 204/204 | 166/204 | 867.96x (166) |
+| `pypto_structured_search` | 204/204 | 166/204 | 869.10x (166) |

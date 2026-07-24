@@ -540,7 +540,7 @@ def write_report(
         excess_cost = 100.0 * ((cypress["total_cost"] - canonical["total_cost"]) / canonical["total_cost"])
         output.write(
             "\n**Cypress comparison.** On this corpus, Cypress relaxation produces substantially "
-            "worse objectives than canonical greedy at essentially the same measured runtime: "
+            "worse objectives than canonical greedy: "
             f"its aggregate penalty is {cypress['total_cost']} versus "
             f"{canonical['total_cost']} ({excess_cost:.1f}% higher), it reaches the best-known "
             f"objective on {cypress['wins']} versus {canonical['wins']} instances, and it finds "

@@ -34,29 +34,29 @@ For fitting instances, quality is the geometric mean of `(cost + 1) / (best vali
 
 | Method | Fits | Cost ratio | Wins | Runtime vs first fit |
 | --- | ---: | ---: | ---: | ---: |
-| `canonical_branch_and_bound` | 11/11 | 1.126 | 0 | 628.36x |
-| `canonical_greedy` | 11/11 | 1.126 | 0 | 1.57x |
-| `cypress_relaxation` | 11/11 | 1.724 | 0 | 1685.77x |
+| `canonical_branch_and_bound` | 11/11 | 1.126 | 0 | 615.53x |
+| `canonical_greedy` | 11/11 | 1.126 | 0 | 1.56x |
+| `cypress_relaxation` | 11/11 | 1.724 | 0 | 1655.74x |
 | `first_fit` | 11/11 | 1.292 | 0 | 1.00x |
-| `implicit_hitting_set` | 11/11 | 1.126 | 0 | 630.25x |
-| `local_search` | 11/11 | 1.146 | 6 | 123.77x |
-| `promote_repair` | 11/11 | 1.126 | 0 | 579.16x |
-| `reuse_penalty_local_search` | 11/11 | 1.046 | 2 | 925.69x |
-| `reuse_penalty_portfolio` | 11/11 | 1.126 | 0 | 631.45x |
-| `tvm_hill_climb` | 11/11 | 1.194 | 3 | 166.15x |
+| `implicit_hitting_set` | 11/11 | 1.126 | 0 | 617.62x |
+| `local_search` | 11/11 | 1.146 | 6 | 121.68x |
+| `promote_repair` | 11/11 | 1.126 | 0 | 569.83x |
+| `reuse_penalty_local_search` | 11/11 | 1.053 | 2 | 935.48x |
+| `reuse_penalty_portfolio` | 11/11 | 1.126 | 0 | 617.54x |
+| `tvm_hill_climb` | 11/11 | 1.194 | 3 | 163.82x |
 
 ### Per-instance results
 
 | Instance | Buffers | Penalties | Capacity | First fit | Canonical greedy | Promote-repair | Cypress relaxation | Exact/portfolio | Local search |
 | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- |
-| minimalloc_challenging_A_dsa_rp_k4_seed0 | 154 | 1928 | 1352704 | 326 @ 1352704 | 326 @ 1352704 | 326 @ 1352704 | 468 @ 1341440 [structural-only] | 326 @ 1352704 [timeout] | 307 @ 1352704 |
-| minimalloc_challenging_B_dsa_rp_k4_seed0 | 170 | 2139 | 1412096 | 370 @ 1412096 | 370 @ 1412096 | 370 @ 1412096 | 449 @ 1276928 [structural-only] | 370 @ 1412096 [timeout] | 363 @ 1412096 |
-| minimalloc_challenging_C_dsa_rp_k4_seed0 | 203 | 2180 | 1417216 | 418 @ 1417216 | 418 @ 1417216 | 418 @ 1417216 | 535 @ 1320960 [structural-only] | 418 @ 1417216 [timeout] | 381 @ 1417216 |
+| minimalloc_challenging_A_dsa_rp_k4_seed0 | 154 | 1928 | 1352704 | 326 @ 1352704 | 326 @ 1352704 | 326 @ 1352704 | 468 @ 1341440 [structural-only] | 326 @ 1352704 [timeout] | 306 @ 1352704 |
+| minimalloc_challenging_B_dsa_rp_k4_seed0 | 170 | 2139 | 1412096 | 370 @ 1412096 | 370 @ 1412096 | 370 @ 1412096 | 449 @ 1276928 [structural-only] | 370 @ 1412096 [timeout] | 364 @ 1412096 |
+| minimalloc_challenging_C_dsa_rp_k4_seed0 | 203 | 2180 | 1417216 | 418 @ 1417216 | 418 @ 1417216 | 418 @ 1417216 | 535 @ 1320960 [structural-only] | 418 @ 1417216 [timeout] | 402 @ 1417216 |
 | minimalloc_challenging_D_dsa_rp_k4_seed0 | 213 | 3015 | 1291264 | 271 @ 1291264 | 271 @ 1291264 | 271 @ 1291264 | 385 @ 1273856 [structural-only] | 271 @ 1291264 [timeout] | 250 @ 1291264 |
 | minimalloc_challenging_E_dsa_rp_k4_seed0 | 215 | 2902 | 1435648 | 461 @ 1435648 | 461 @ 1435648 | 461 @ 1435648 | 669 @ 1400832 [structural-only] | 461 @ 1435648 [timeout] | 403 @ 1435648 |
 | minimalloc_challenging_F_dsa_rp_k4_seed0 | 296 | 4865 | 1441792 | 616 @ 1441792 | 135 @ 1441792 | 135 @ 1441792 | 784 @ 1419264 [structural-only] | 135 @ 1441792 [timeout] | 129 @ 1441792 |
-| minimalloc_challenging_G_dsa_rp_k4_seed0 | 308 | 4673 | 1396736 | 529 @ 1396736 | 529 @ 1396736 | 529 @ 1396736 | 680 @ 1375232 [structural-only] | 529 @ 1396736 [timeout] | 480 @ 1396736 |
-| minimalloc_challenging_H_dsa_rp_k4_seed0 | 316 | 4907 | 1421312 | 581 @ 1421312 | 581 @ 1421312 | 581 @ 1421312 | 748 @ 1383424 [structural-only] | 581 @ 1421312 [timeout] | 504 @ 1421312 |
-| minimalloc_challenging_I_dsa_rp_k4_seed0 | 374 | 5708 | 1478656 | 973 @ 1478656 | 973 @ 1478656 | 973 @ 1478656 | 1349 @ 1464320 [structural-only] | 973 @ 1478656 [timeout] | 923 @ 1478656 |
-| minimalloc_challenging_J_dsa_rp_k4_seed0 | 409 | 9890 | 1303552 | 668 @ 1303552 | 668 @ 1303552 | 668 @ 1303552 | 928 @ 1261568 [structural-only] | 668 @ 1303552 [timeout] | 624 @ 1303552 |
-| minimalloc_challenging_K_dsa_rp_k4_seed0 | 454 | 6462 | 1352704 | 1485 @ 1352704 | 1485 @ 1352704 | 1485 @ 1352704 | 1918 @ 1288192 [structural-only] | 1485 @ 1352704 [timeout] | 1455 @ 1352704 |
+| minimalloc_challenging_G_dsa_rp_k4_seed0 | 308 | 4673 | 1396736 | 529 @ 1396736 | 529 @ 1396736 | 529 @ 1396736 | 680 @ 1375232 [structural-only] | 529 @ 1396736 [timeout] | 471 @ 1396736 |
+| minimalloc_challenging_H_dsa_rp_k4_seed0 | 316 | 4907 | 1421312 | 581 @ 1421312 | 581 @ 1421312 | 581 @ 1421312 | 748 @ 1383424 [structural-only] | 581 @ 1421312 [timeout] | 497 @ 1421312 |
+| minimalloc_challenging_I_dsa_rp_k4_seed0 | 374 | 5708 | 1478656 | 973 @ 1478656 | 973 @ 1478656 | 973 @ 1478656 | 1349 @ 1464320 [structural-only] | 973 @ 1478656 [timeout] | 928 @ 1478656 |
+| minimalloc_challenging_J_dsa_rp_k4_seed0 | 409 | 9890 | 1303552 | 668 @ 1303552 | 668 @ 1303552 | 668 @ 1303552 | 928 @ 1261568 [structural-only] | 668 @ 1303552 [timeout] | 657 @ 1303552 |
+| minimalloc_challenging_K_dsa_rp_k4_seed0 | 454 | 6462 | 1352704 | 1485 @ 1352704 | 1485 @ 1352704 | 1485 @ 1352704 | 1918 @ 1288192 [structural-only] | 1485 @ 1352704 [timeout] | 1461 @ 1352704 |
