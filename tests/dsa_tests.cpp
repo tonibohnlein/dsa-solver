@@ -375,6 +375,15 @@ void TestDsaRpExactSolvers() {
   Require(branch_and_bound.solver_metrics.at("optimality_proven") == 1,
           "canonical branch-and-bound did not certify its result");
 
+  dsa::CanonicalBranchAndBoundOptions bounded_options;
+  bounded_options.max_search_nodes = 1;
+  const dsa::DsaResult bounded = dsa::CanonicalBranchAndBoundSolver(bounded_options).Solve(problem);
+  Require(bounded.status == dsa::SolveStatus::kTimeout && bounded.solution.has_value() &&
+              dsa::ValidateSolution(problem, SolutionOrThrow(bounded)).empty() &&
+              bounded.solver_metrics.at("heuristic_incumbent") == 1 &&
+              bounded.solver_metrics.at("optimality_proven") == 0,
+          "canonical branch-and-bound discarded its incumbent at the node limit");
+
   const dsa::DsaResult hitting_set = SolveAndValidate(problem, dsa::ImplicitHittingSetSolver());
   Require(hitting_set.objective.reuse_cost == optimum,
           "implicit hitting set disagrees with brute force");
@@ -526,6 +535,61 @@ void TestDsaRpExactSolvers() {
               phase_portfolio.solver_metrics.at("portfolio_method") == 1,
           "portfolio did not dispatch the span-one fixture correctly");
 
+  dsa::DsaProblem symmetric_colors;
+  symmetric_colors.pools.front().capacity = 100;
+  symmetric_colors.buffers = {
+      MakeBuffer(0, {{0, 2}}, 1),
+      MakeBuffer(1, {{1, 3}}, 1),
+      MakeBuffer(2, {{2, 4}}, 1),
+  };
+  symmetric_colors.cost_model = dsa::CostModel{{
+      {0, 2, 5, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  symmetric_colors.objective = dsa::FitThenMinimizeReuseCostObjective();
+  dsa::TreewidthPartitionDpOptions partition_options;
+  partition_options.max_treewidth = 2;
+  partition_options.max_table_entries = 4;
+  const dsa::DsaResult partition_result =
+      SolveAndValidate(symmetric_colors, dsa::TreewidthPartitionDpSolver(partition_options));
+  Require(partition_result.objective.reuse_cost == 0 &&
+              partition_result.solver_metrics.at("partition_state_dp") == 1 &&
+              partition_result.solver_metrics.at("dp_states") <= 5,
+          "treewidth solver did not quotient interchangeable address colors");
+
+  for (std::size_t instance = 0; instance < 16; ++instance) {
+    dsa::DsaProblem generated;
+    generated.pools.front().capacity = 3 + random() % 3;
+    for (dsa::BufferId id = 0; id < 5; ++id) {
+      const std::int64_t begin = static_cast<std::int64_t>(random() % 5);
+      const std::int64_t end = begin + 1 + static_cast<std::int64_t>(random() % 2);
+      generated.buffers.push_back(MakeBuffer(id, {{begin, end}}, 1));
+    }
+    dsa::CostModel costs;
+    for (std::size_t first = 0; first < generated.buffers.size(); ++first) {
+      for (std::size_t second = first + 1; second < generated.buffers.size(); ++second) {
+        if (!generated.buffers[first].live_intervals.front().Overlaps(
+                generated.buffers[second].live_intervals.front()) &&
+            random() % 3 != 0) {
+          costs.reuse_penalties.push_back({generated.buffers[first].id,
+                                           generated.buffers[second].id, 1 + random() % 11,
+                                           dsa::ReusePenaltyReason::kCrossPipe});
+        }
+      }
+    }
+    generated.cost_model = std::move(costs);
+    generated.objective = dsa::FitThenMinimizeReuseCostObjective();
+    const std::uint64_t generated_optimum = BruteForceMinimumReuseCost(generated);
+    const dsa::DsaResult generated_partition = dsa::TreewidthPartitionDpSolver().Solve(generated);
+    if (generated_optimum == std::numeric_limits<std::uint64_t>::max()) {
+      Require(generated_partition.status == dsa::SolveStatus::kInfeasibleProven,
+              "partition-state treewidth DP missed generated infeasibility");
+    } else {
+      Require(generated_partition.status == dsa::SolveStatus::kFeasible &&
+                  generated_partition.objective.reuse_cost == generated_optimum,
+              "partition-state treewidth DP disagreed with brute force");
+    }
+  }
+
   dsa::DsaProblem treewidth_only = problem;
   treewidth_only.pools.front().capacity = 3;
   const dsa::DsaResult treewidth_portfolio =
@@ -601,9 +665,11 @@ void TestDsaRpPromotedSetLocalSearch() {
   Require(result.objective.reuse_cost == BruteForceMinimumReuseCost(problem) &&
               result.objective.reuse_cost == 1,
           "promoted-set local search missed the soft-triangle optimum");
-  Require(
-      result.solver_metrics.at("soft_moves") > 0 && result.solver_metrics.at("promoted_edges") == 2,
-      "promoted-set local search did not expose its soft-edge state");
+  Require(result.solver_metrics.at("soft_moves") > 0 &&
+              result.solver_metrics.at("targeted_order_moves") > 0 &&
+              result.solver_metrics.at("constructive_seeds") == 2 &&
+              result.solver_metrics.at("promoted_edges") == 2,
+          "promoted-set local search did not expose its soft-edge state");
 
   problem.pools.front().capacity = 1;
   const dsa::DsaResult forced =

@@ -54,8 +54,11 @@ The span-one solver reduces each adjacent phase boundary to a
 minimum-cardinality, minimum-cost bipartite matching. The capacity-two solver
 bipartitions hard components and exactly enumerates component flips. The
 treewidth solver performs exact min-sum variable elimination over the combined
-hard-and-soft graph. Each specialization either proves its stated objective or
-returns `unsupported`; it never silently falls back under its own name.
+hard-and-soft graph. Its tables store canonical partitions of each elimination
+bag, not explicit address colors, so its state bound follows the paper's
+Bell-number formulation rather than `capacity^(width+1)`. Each specialization
+either proves its stated objective or returns `unsupported`; it never silently
+falls back under its own name.
 
 ## Scale-separated bicriteria baseline
 
@@ -84,12 +87,15 @@ of soft pairs temporarily promoted to hard separations. Its neighborhood
 contains:
 
 - promotion and demotion of one soft pair;
-- order swaps and relocations;
+- order swaps and relocations selected from two-level hard/soft neighborhoods
+  of activated-edge endpoints or peak-realizing buffers;
+- a linearly decaying probability of accepting a non-improving proposal;
 - deterministic full first-fit re-decoding after each move.
 
 This reaches placements unavailable to order-only first-fit search. It is a
-heuristic and reports evaluations, accepted moves, order moves, soft moves,
-and the final promoted-set size.
+heuristic seeded from canonical-greedy and promote-repair placements and
+reports evaluations, accepted moves, order moves, soft moves, constructive
+seeds, and the final promoted-set size.
 
 ## CLI
 
@@ -107,3 +113,30 @@ dsa-bench --input instance.json --solver scale-separated-grid-dp \
 All methods currently target the additive pair-cost model.
 Synchronization-covering OR-groups require an additional model/output
 contract and are not mislabeled as implemented pairwise solvers.
+
+## Paper fidelity boundary
+
+The implemented methods solve the paper's additive, capacity-constrained
+DSA-RP objective. Guarantees are claimed only for machinery present in the
+repository:
+
+- CG and PR implement the paper's constructive policies.
+- Canonical branch-and-bound exhausts the proved hard-or-soft support search.
+  It currently uses monotone activated-cost and peak bounds and retains a
+  heuristic incumbent on timeout. The paper's load and odd-cycle cuts, shared
+  hitting-set LP bound, and cross-engine certificate pool are accelerations,
+  not part of this implementation.
+- IHS implements the exact additive weighted-edge master, promoted-DSA oracle,
+  feasible-set cache, and deletion-shrunk cores. Synchronization-covering
+  objectives and shared frontier sweeps require a different objective/model
+  API and are not implemented here.
+- `capacity_two_exact` is exact by enumerating orientations of hard
+  bipartite components. It does not claim the paper's
+  optimum-parameterized `1.977^k` Edge Bipartization running time.
+- `scale_separated_grid_dp` implements the rounded large-buffer sweep and a
+  self-contained harmonic small-buffer baseline. It is not an implementation
+  of the paper's BKKRT small-band subroutine and therefore makes only the
+  engineering guarantee above.
+
+These boundaries affect running-time and resource-augmentation claims, not the
+definition or scoring of additive DSA-RP placements.

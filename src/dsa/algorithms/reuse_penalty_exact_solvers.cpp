@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "dsa/algorithms/canonical_exact_search.h"
+#include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
 #include "dsa/algorithms/reuse_penalty_search.h"
 #include "dsa/algorithms/solver.h"
 #include "dsa/model/model.h"
@@ -24,11 +25,21 @@ namespace dsa {
 namespace {
 
 using EdgeSet = std::set<std::size_t>;
+using ObjectiveScore = std::vector<std::uint64_t>;
 
 struct IndexedSoftEdge {
   detail::ReuseNodePair pair;
   std::uint64_t weight = 0;
 };
+
+ObjectiveScore ScoreResult(const DsaProblem& problem, const DsaResult& result) {
+  ObjectiveScore score;
+  score.reserve(problem.objective.terms.size());
+  for (ObjectiveMetric metric : problem.objective.terms) {
+    score.push_back(EvaluateObjectiveMetric(problem, result.objective, metric));
+  }
+  return score;
+}
 
 SolverCapabilities ExactCapabilities() {
   SolverCapabilities capabilities;
@@ -319,6 +330,23 @@ DsaResult CanonicalBranchAndBoundSolver::Solve(const DsaProblem& problem) const 
     result.diagnostics = search.placement.errors;
     return result;
   }
+
+  std::optional<DsaResult> heuristic_incumbent;
+  if (options_.max_search_nodes != 0) {
+    const CanonicalGreedySolver canonical_greedy;
+    const PromoteRepairSolver promote_repair;
+    for (const DsaSolver* solver :
+         std::vector<const DsaSolver*>{&canonical_greedy, &promote_repair}) {
+      DsaResult candidate = solver->Solve(problem);
+      if (candidate.status != SolveStatus::kFeasible || !candidate.solution.has_value()) {
+        continue;
+      }
+      if (!heuristic_incumbent.has_value() ||
+          ScoreResult(problem, candidate) < ScoreResult(problem, heuristic_incumbent.value())) {
+        heuristic_incumbent = std::move(candidate);
+      }
+    }
+  }
   detail::CanonicalExactSearchOptions search_options;
   search_options.node_limit = options_.max_search_nodes;
   search_options.stop_after_first = false;
@@ -339,6 +367,19 @@ DsaResult CanonicalBranchAndBoundSolver::Solve(const DsaProblem& problem) const 
               "search and proved the lexicographic optimum"
             : "canonical branch-and-bound reached its node limit with an "
               "incumbent");
+    return result;
+  }
+  if (exact.status == SolveStatus::kTimeout && heuristic_incumbent.has_value()) {
+    DsaResult result = std::move(heuristic_incumbent).value();
+    result.status = SolveStatus::kTimeout;
+    result.solver_metrics = {
+        {"search_nodes", exact.search_nodes}, {"candidate_branches", exact.candidate_branches},
+        {"bound_prunes", exact.bound_prunes}, {"optimality_proven", 0},
+        {"heuristic_incumbent", 1},
+    };
+    result.diagnostics.emplace_back(
+        "canonical branch-and-bound reached its node limit and retained the "
+        "best canonical-greedy/promote-repair incumbent");
     return result;
   }
   DsaResult result;

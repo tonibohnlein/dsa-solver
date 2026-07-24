@@ -211,7 +211,8 @@ CanonicalExactSearchResult RunCanonicalExactSearch(const DsaProblem& problem,
 
   std::vector<std::uint64_t> offsets(search.placement.nodes.size(), 0);
   std::uint64_t remaining = options.node_limit == 0 ? 0 : options.node_limit;
-  for (const Pool& pool : problem.pools) {
+  for (std::size_t pool_index = 0; pool_index < problem.pools.size(); ++pool_index) {
+    const Pool& pool = problem.pools[pool_index];
     const bool has_nodes =
         std::any_of(search.placement.nodes.begin(), search.placement.nodes.end(),
                     [&](const PlacementSearchNode& node) { return node.pool == pool.id; });
@@ -233,6 +234,25 @@ CanonicalExactSearchResult RunCanonicalExactSearch(const DsaProblem& problem,
           result.search_nodes >= options.node_limit ? 0 : options.node_limit - result.search_nodes;
     }
     if (pool_result.status != SolveStatus::kFeasible) {
+      if (pool_result.status == SolveStatus::kTimeout && !pool_result.offsets.empty()) {
+        bool has_later_nodes = false;
+        for (std::size_t later = pool_index + 1; later < problem.pools.size(); ++later) {
+          has_later_nodes =
+              has_later_nodes ||
+              std::any_of(search.placement.nodes.begin(), search.placement.nodes.end(),
+                          [&](const PlacementSearchNode& node) {
+                            return node.pool == problem.pools[later].id;
+                          });
+        }
+        if (!has_later_nodes) {
+          for (std::size_t index = 0; index < offsets.size(); ++index) {
+            if (search.placement.nodes[index].pool == pool.id) {
+              offsets[index] = pool_result.offsets[index];
+            }
+          }
+          result.offsets = offsets;
+        }
+      }
       result.status = pool_result.status;
       return result;
     }

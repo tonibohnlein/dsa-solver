@@ -18,6 +18,9 @@ struct ReusePenaltyLocalSearchOptions {
   std::size_t stagnation_limit = 250;
   std::size_t soft_moves_per_iteration = 64;
   std::size_t order_moves_per_iteration = 16;
+  // Initial probability of accepting a non-improving proposal. The
+  // probability decays linearly to zero over max_evaluations.
+  double initial_worse_acceptance_probability = 0.05;
 };
 
 // Local search over both a first-fit decode order and a set of soft edges
