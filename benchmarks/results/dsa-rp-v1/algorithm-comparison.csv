@@ -1,0 +1,19 @@
+category,method,label,applicable,fits,wins,zero,proofs,total_cost,mean_active,runtime_ratio,runtime_instances
+Baseline,first_fit,First fit,204,203,26,23,0,2355,0.6263886242931864,1.0,203
+Baseline,cypress_relaxation,Cypress relaxation,204,203,165,142,0,712,0.14353520067931175,0.4584532708379848,203
+Constructive,canonical_greedy,Canonical greedy,204,203,203,155,0,529,0.09171256971085613,0.475284881425456,203
+Constructive,promote_repair,Promote-repair,204,203,194,155,0,580,0.09634335512257461,0.8043795133921138,203
+Constructive,promote_all,Promote-all,204,155,155,155,155,0,0.0,0.7577234341666742,155
+Local search,reuse_penalty_local_search,DSA-RP local search,204,203,203,155,0,529,0.09171256971085613,343.4608335992933,203
+Exact,canonical_branch_and_bound,Canonical B&B,204,203,203,155,186,529,0.09171256971085613,2.63863347244644,203
+Exact,implicit_hitting_set,Implicit hitting set,204,203,203,155,186,529,0.09171256971085613,4.806765339114257,203
+Exact,capacity_two_exact,Capacity-two exact,2,2,2,2,2,0,0.0,0.5810872031479765,2
+Exact,span_one_min_cost_flow,Span-one min-cost flow,15,15,15,12,15,5,0.15,0.49196740039588477,15
+Exact,treewidth_partition_dp,Treewidth DP,25,25,25,21,25,9,0.10333333333333333,1.3013576315039412,25
+Exact,reuse_penalty_portfolio,Exact portfolio,204,203,203,155,186,529,0.09171256971085613,2.3690988059745774,203
+Bicriteria,scale_separated_grid_dp,Scale-separated grid DP,13,11,11,10,0,1,0.09090909090909091,1.3691445573659926,11
+Unit control,unit_random_coloring,Unit random coloring,6,6,6,6,0,0,0.0,0.44070152983248806,6
+Unit control,unit_low_rank_rounding,Unit low-rank rounding,6,6,6,6,0,0,0.0,5.803142311691147,6
+Legacy search,tvm_hill_climb,TVM hill climb,204,203,27,24,0,2186,0.6208781660230239,57.360815194318924,203
+Legacy search,local_search,Local search,204,203,54,51,0,1885,0.49398132959541957,246.6628888628162,203
+Legacy search,pypto_structured_search,PyPTO structured search,204,203,56,53,0,1873,0.49387437259365635,246.41543396930817,203

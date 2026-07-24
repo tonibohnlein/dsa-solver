@@ -1,0 +1,485 @@
+{
+  "instance": "pypto-lib::models::qwen3::14b::prefill_fwd::pypto_rmsnorm-cross-pipe-soft",
+  "metadata": {
+    "corpus_case_id": "models__qwen3__14b__prefill_fwd",
+    "corpus_export_file": "models__qwen3__14b__prefill_fwd/call-001/pypto_rmsnorm.dsa.json",
+    "corpus_family": "qwen3-14b",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto-lib",
+    "corpus_original_instance": "rmsnorm",
+    "corpus_problem_fingerprint_fnv1a64": "db77be5a8c78edb6",
+    "corpus_producer_commit": "5f8029f1afdb07d7540967905ecb2b6e331d4147",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
+    "corpus_source_fingerprint_fnv1a64": "e958907bd4ff4798",
+    "corpus_source_path": "models/qwen3/14b/prefill_fwd.py",
+    "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
+    "dsa_rp_cross_pipe_edges": "1",
+    "dsa_rp_edge_policy": "soft_v1",
+    "dsa_rp_source_instance": "rmsnorm",
+    "experimental_features": "recognized_cross_pipe_reuse",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "recognized_access_routes_v1": "external->ub@inbound_dma;ub->external@outbound_dma;ub->ub@vector_compute",
+    "recognized_alias_contract_candidates": "7",
+    "recognized_conservative_initial_anchor_candidates": "12",
+    "recognized_cross_pipe_candidates": "59",
+    "recognized_cross_resource_candidates": "59",
+    "recognized_in_loop_candidates": "217",
+    "recognized_incomplete_access_candidates": "0",
+    "recognized_loop_carried_candidates": "117",
+    "recognized_nested_control_candidates": "217",
+    "recognized_ordered_evidence_candidates": "92",
+    "recognized_partial_access_candidates": "0",
+    "recognized_reuse_candidates": "217",
+    "recognized_reuse_edges": "1",
+    "recognized_reuse_penalties": "1",
+    "recognized_same_pipe_candidates": "158",
+    "recognized_same_resource_candidates": "158",
+    "recognized_write_after_read_candidates": "217",
+    "recognized_write_after_write_candidates": "0",
+    "reuse_cost_model": "cross_resource_pair_v4+unit_v1",
+    "reuse_edge_construction_policy": "cross_resource_pair_v4",
+    "reuse_penalty_already_ordered_pairs": "92",
+    "reuse_penalty_candidate_pairs": "100",
+    "reuse_penalty_partially_supported_allocations": "0",
+    "reuse_penalty_promotion_policy": "cross_resource_pair_unit_v4",
+    "reuse_penalty_recognizer": "quadratic_route_frontier_v3",
+    "reuse_penalty_supported_allocations": "16",
+    "reuse_penalty_weight_model": "unit_v1",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 41,
+            "upper": 61
+          }
+        ],
+        "name": "mem_vec_3",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 45,
+            "upper": 47
+          }
+        ],
+        "name": "mem_vec_4",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 47,
+            "upper": 49
+          }
+        ],
+        "name": "mem_vec_5",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 49,
+            "upper": 53
+          }
+        ],
+        "name": "mem_vec_6",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 51,
+            "upper": 53
+          }
+        ],
+        "name": "mem_vec_7",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 53,
+            "upper": 57
+          }
+        ],
+        "name": "mem_vec_8",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 61,
+            "upper": 63
+          }
+        ],
+        "name": "mem_vec_11",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 63,
+            "upper": 65
+          }
+        ],
+        "name": "mem_vec_12",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 8,
+        "live_intervals": [
+          {
+            "lower": 65,
+            "upper": 67
+          }
+        ],
+        "name": "mem_vec_13",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 9,
+        "live_intervals": [
+          {
+            "lower": 67,
+            "upper": 87
+          }
+        ],
+        "name": "mem_vec_14",
+        "size": 32
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 10,
+        "live_intervals": [
+          {
+            "lower": 73,
+            "upper": 75
+          }
+        ],
+        "name": "mem_vec_15",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 11,
+        "live_intervals": [
+          {
+            "lower": 75,
+            "upper": 79
+          }
+        ],
+        "name": "mem_vec_16",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 12,
+        "live_intervals": [
+          {
+            "lower": 77,
+            "upper": 81
+          }
+        ],
+        "name": "mem_vec_17",
+        "size": 1024
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 13,
+        "live_intervals": [
+          {
+            "lower": 79,
+            "upper": 81
+          }
+        ],
+        "name": "mem_vec_18",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 14,
+        "live_intervals": [
+          {
+            "lower": 81,
+            "upper": 83
+          }
+        ],
+        "name": "mem_vec_19",
+        "size": 8192
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 15,
+        "live_intervals": [
+          {
+            "lower": 83,
+            "upper": 85
+          }
+        ],
+        "name": "mem_vec_20",
+        "size": 4096
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 2
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 5
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 5
+        },
+        {
+          "first": 8,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 9
+        },
+        {
+          "first": 9,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 13
+        },
+        {
+          "first": 10,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 11
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 14
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "cost_model": {
+      "reuse_penalties": [
+        {
+          "cost": 1,
+          "first": 10,
+          "reason": "cross_pipe",
+          "second": 12
+        }
+      ]
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "capacity_overflow",
+        "reuse_cost"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "sq_sum_inline291__tile",
+            "sq_sum_inline291__tile"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "x_chunk_inline284__tile"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "tmp_tile"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "t__tile",
+            "sq_part_inline281__tile"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 8,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 9,
+          "members": [
+            "t__tile",
+            "inv_rms_inline309__tile"
+          ]
+        },
+        {
+          "buffer": 10,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 11,
+          "members": [
+            "x_chunk_inline284__tile"
+          ]
+        },
+        {
+          "buffer": 12,
+          "members": [
+            "gamma_inline277__tile"
+          ]
+        },
+        {
+          "buffer": 13,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 14,
+          "members": [
+            "normed_inline323__tile"
+          ]
+        },
+        {
+          "buffer": 15,
+          "members": [
+            "t__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": []
+    }
+  },
+  "profile": "pypto_research_v1",
+  "schema_version": 1
+}

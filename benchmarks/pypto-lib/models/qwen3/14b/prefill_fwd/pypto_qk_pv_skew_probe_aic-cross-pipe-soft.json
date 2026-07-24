@@ -1,0 +1,302 @@
+{
+  "instance": "pypto-lib::models::qwen3::14b::prefill_fwd::pypto_qk_pv_skew_probe_aic-cross-pipe-soft",
+  "metadata": {
+    "corpus_case_id": "models__qwen3__14b__prefill_fwd",
+    "corpus_export_file": "models__qwen3__14b__prefill_fwd/call-001/pypto_qk_pv_skew_probe_aic.dsa.json",
+    "corpus_family": "qwen3-14b",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto-lib",
+    "corpus_original_instance": "qk_pv_skew_probe_aic",
+    "corpus_problem_fingerprint_fnv1a64": "e346a20e15e89637",
+    "corpus_producer_commit": "5f8029f1afdb07d7540967905ecb2b6e331d4147",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
+    "corpus_source_fingerprint_fnv1a64": "de6312fbb14efb7f",
+    "corpus_source_path": "models/qwen3/14b/prefill_fwd.py",
+    "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
+    "dsa_rp_cross_pipe_edges": "2",
+    "dsa_rp_edge_policy": "soft_v1",
+    "dsa_rp_source_instance": "qk_pv_skew_probe_aic",
+    "experimental_features": "recognized_cross_pipe_reuse",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "recognized_access_routes_v1": "external->l1@inbound_dma;l1->l0@l1_to_l0;l0->external@l0_to_external;l0->l0@matrix_compute",
+    "recognized_alias_contract_candidates": "0",
+    "recognized_conservative_initial_anchor_candidates": "0",
+    "recognized_cross_pipe_candidates": "8",
+    "recognized_cross_resource_candidates": "8",
+    "recognized_in_loop_candidates": "9",
+    "recognized_incomplete_access_candidates": "3",
+    "recognized_loop_carried_candidates": "6",
+    "recognized_nested_control_candidates": "9",
+    "recognized_ordered_evidence_candidates": "0",
+    "recognized_partial_access_candidates": "2",
+    "recognized_reuse_candidates": "9",
+    "recognized_reuse_edges": "2",
+    "recognized_reuse_penalties": "2",
+    "recognized_same_pipe_candidates": "1",
+    "recognized_same_resource_candidates": "1",
+    "recognized_write_after_read_candidates": "8",
+    "recognized_write_after_write_candidates": "1",
+    "reuse_cost_model": "cross_resource_pair_v4+unit_v1",
+    "reuse_edge_construction_policy": "cross_resource_pair_v4",
+    "reuse_penalty_already_ordered_pairs": "0",
+    "reuse_penalty_candidate_pairs": "3",
+    "reuse_penalty_partially_supported_allocations": "1",
+    "reuse_penalty_promotion_policy": "cross_resource_pair_unit_v4",
+    "reuse_penalty_recognizer": "quadratic_route_frontier_v3",
+    "reuse_penalty_supported_allocations": "7",
+    "reuse_penalty_weight_model": "unit_v1",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 43,
+            "upper": 103
+          }
+        ],
+        "name": "mem_mat_8",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          2
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 45,
+            "upper": 103
+          }
+        ],
+        "name": "mem_mat_9",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 51,
+            "upper": 57
+          }
+        ],
+        "name": "mem_left_10",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 55,
+            "upper": 57
+          }
+        ],
+        "name": "mem_right_11",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 57,
+            "upper": 73
+          }
+        ],
+        "name": "mem_acc_12",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          3
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 77,
+            "upper": 83
+          }
+        ],
+        "name": "mem_left_13",
+        "size": 16384
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          4
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 81,
+            "upper": 83
+          }
+        ],
+        "name": "mem_right_14",
+        "size": 32768
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          5
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 83,
+            "upper": 101
+          }
+        ],
+        "name": "mem_acc_15",
+        "size": 32768
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [],
+      "temporal_exclusions": []
+    },
+    "cost_model": {
+      "reuse_penalties": [
+        {
+          "cost": 1,
+          "first": 2,
+          "reason": "cross_pipe",
+          "second": 5
+        },
+        {
+          "cost": 1,
+          "first": 3,
+          "reason": "cross_pipe",
+          "second": 6
+        }
+      ]
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "capacity_overflow",
+        "reuse_cost"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 524288,
+        "id": 2,
+        "name": "Mat",
+        "reserved_ranges": [
+          {
+            "begin": 0,
+            "end": 65536
+          }
+        ]
+      },
+      {
+        "capacity": 65536,
+        "id": 3,
+        "name": "Left",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 65536,
+        "id": 4,
+        "name": "Right",
+        "reserved_ranges": []
+      },
+      {
+        "capacity": 131072,
+        "id": 5,
+        "name": "Acc",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "k_tile_inline493__tile",
+            "k_tile_inline493__tile_t"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "v_tile_inline468__tile"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "q_batch_inline503__tile_Left"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "k_tile_inline493__tile_t_Right"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "raw_scores_batch_inline508__tile",
+            "raw_scores0_inline510__tile",
+            "raw_scores1_inline494__tile",
+            "raw_scores2_inline497__tile",
+            "raw_scores3_inline499__tile"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "exp_scores_bf16_batch_inline478__tile_Left"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "v_tile_inline468__tile_Right"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "oi_tmp_batch_inline456__tile",
+            "t__tile",
+            "t__tile",
+            "t__tile",
+            "t__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": []
+    }
+  },
+  "profile": "pypto_research_v1",
+  "schema_version": 1
+}

@@ -54,6 +54,13 @@ cost crosses between them.
 memory and their placed byte ranges overlap. Any positive overlap activates the
 full edge cost.
 
+The portable `dsa_rp_v1` profile is the standard single-pool geometry plus a
+fixed capacity and an explicit reuse-cost model, which may be empty for a
+sequential schedule. It requires the objective
+`[capacity_overflow, reuse_cost]`: accepted solutions fit capacity, and fitting
+solutions are ranked only by activated penalty cost. The profile says nothing
+about how an edge was discovered.
+
 The required `reason` records producer provenance only. All reasons have the
 same additive optimization semantics; deciding which edges and weights are
 meaningful belongs to the producer. The solver does not infer hardware behavior
@@ -78,6 +85,13 @@ over-capacity result is not an accepted compiler placement.
 
 The formulation and current evidence are in [`pypto_dsa.md`](pypto_dsa.md).
 
+For controlled A/B benchmarks, `BuildCrossPipeReuseVariants` preserves one
+recognized source problem in two forms. The soft form keeps each `cross_pipe`
+reuse penalty. The hard form removes exactly those costs and adds a
+`cross_pipe` separation for the same pair. A hard variant asks whether all
+recognized reuse can be avoided within capacity; it does not claim that the
+relation is required for correctness.
+
 ## PyPTO provenance
 
 `alias_classes` identify semantic values already materialized as one physical
@@ -99,6 +113,7 @@ geometry.
 | Profile | Contract |
 | --- | --- |
 | `standard_dsa` | one pool, one interval per buffer, unit alignment, no compiler constraints/costs |
+| `dsa_rp_v1` | standard geometry, fixed capacity, weighted soft anti-alias edges, fit-then-cost objective |
 | `pypto_hard_v1` | fixed pools and conservative single intervals; validated hard constraints and provenance; peak objective |
 | `pypto_research_v1` | PyPTO document with explicit experimental fields or costs |
 | `pypto_structured` | readable legacy profile; new producers must not emit it |

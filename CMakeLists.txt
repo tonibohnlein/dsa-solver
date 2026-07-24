@@ -16,6 +16,8 @@ if(NOT EXISTS "${DSA_NLOHMANN_JSON_INCLUDE_DIR}/nlohmann/json.hpp")
 endif()
 
 add_library(dsa_solver
+  src/dsa/analysis/penalty_edge_derivation.cpp
+  src/dsa/analysis/penalty_edge_derivation.h
   src/dsa/analysis/reuse_geometry.cpp
   src/dsa/analysis/reuse_geometry.h
   src/dsa/algorithms/canonical_exact_search.cpp
@@ -82,6 +84,7 @@ target_include_directories(dsa_solver
 # Keep the original flat dsa/*.h include paths available to existing consumers
 # while the source tree and preferred API use dsa/{model,algorithms,io}/*.h.
 set(DSA_COMPATIBILITY_HEADERS
+  src/dsa/analysis/penalty_edge_derivation.h
   src/dsa/analysis/reuse_geometry.h
   src/dsa/model/architecture.h
   src/dsa/model/model.h
@@ -153,6 +156,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(dsa-corpus PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 elseif(MSVC)
   target_compile_options(dsa-corpus PRIVATE /W4 /permissive-)
+endif()
+
+add_executable(dsa-rp-lift tools/dsa_rp_lift.cpp)
+target_link_libraries(dsa-rp-lift PRIVATE dsa::solver)
+set_target_properties(dsa-rp-lift PROPERTIES
+  CXX_EXTENSIONS OFF
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED YES
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(dsa-rp-lift PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+elseif(MSVC)
+  target_compile_options(dsa-rp-lift PRIVATE /W4 /permissive-)
 endif()
 
 add_executable(dsa-placement-study tools/dsa_placement_study.cpp)
@@ -432,6 +448,16 @@ if(BUILD_TESTING)
     PASS_REGULAR_EXPRESSION "wrote .*report.md"
   )
   add_test(
+    NAME dsa-suite-features-only-smoke
+    COMMAND dsa-suite
+      --pypto ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/recognized_cross_pipe_v1.json
+      --output-dir ${CMAKE_CURRENT_BINARY_DIR}/suite-features-smoke
+      --features-only
+  )
+  set_tests_properties(dsa-suite-features-only-smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION "wrote .*features.csv"
+  )
+  add_test(
     NAME dsa-corpus-import-smoke
     COMMAND ${CMAKE_COMMAND}
       -DDSA_CORPUS=$<TARGET_FILE:dsa-corpus>
@@ -440,6 +466,34 @@ if(BUILD_TESTING)
       -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
       -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_corpus_smoke.cmake
+  )
+  add_test(
+    NAME dsa-rp-corpus-variants-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_CORPUS=$<TARGET_FILE:dsa-corpus>
+      -DDSA_BENCH=$<TARGET_FILE:dsa-bench>
+      -DDSA_SUITE=$<TARGET_FILE:dsa-suite>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_rp_corpus_smoke.cmake
+  )
+  add_test(
+    NAME dsa-rp-lift-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_RP_LIFT=$<TARGET_FILE:dsa-rp-lift>
+      -DDSA_BENCH=$<TARGET_FILE:dsa-bench>
+      -DDSA_SUITE=$<TARGET_FILE:dsa-suite>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsa_rp_lift_smoke.cmake
+  )
+  add_test(
+    NAME dsa-minimalloc-rp-corpus-smoke
+    COMMAND ${CMAKE_COMMAND}
+      -DDSA_SUITE=$<TARGET_FILE:dsa-suite>
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/minimalloc_dsa_rp_corpus_smoke.cmake
   )
   add_test(
     NAME dsa-pypto-corpus-layout
@@ -466,7 +520,7 @@ if(BUILD_TESTING)
   )
 endif()
 
-install(TARGETS dsa_solver dsa-bench dsa-bind dsa-corpus dsa-placement-study dsa-suite
+install(TARGETS dsa_solver dsa-bench dsa-bind dsa-corpus dsa-rp-lift dsa-placement-study dsa-suite
   EXPORT dsa-solver-targets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

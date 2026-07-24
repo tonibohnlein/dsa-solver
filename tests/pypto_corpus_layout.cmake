@@ -13,8 +13,8 @@ file(GLOB_RECURSE ALL_INSTANCES
   "${PYPTO_LIB_ROOT}/*.json"
 )
 list(LENGTH ALL_INSTANCES INSTANCE_COUNT)
-if(NOT INSTANCE_COUNT EQUAL 452)
-  message(FATAL_ERROR "expected 452 PyPTO instances, found ${INSTANCE_COUNT}")
+if(NOT INSTANCE_COUNT EQUAL 860)
+  message(FATAL_ERROR "expected 860 PyPTO instances, found ${INSTANCE_COUNT}")
 endif()
 
 set(CORPUS_TABLE "${SOURCE_DIR}/benchmarks/corpus.csv")
@@ -23,9 +23,9 @@ if(NOT EXISTS "${CORPUS_TABLE}")
 endif()
 file(STRINGS "${CORPUS_TABLE}" CORPUS_TABLE_ROWS)
 list(LENGTH CORPUS_TABLE_ROWS CORPUS_TABLE_ROW_COUNT)
-if(NOT CORPUS_TABLE_ROW_COUNT EQUAL 453)
+if(NOT CORPUS_TABLE_ROW_COUNT EQUAL 861)
   message(FATAL_ERROR
-    "expected a header plus 452 corpus statistics rows, found ${CORPUS_TABLE_ROW_COUNT}")
+    "expected a header plus 860 corpus statistics rows, found ${CORPUS_TABLE_ROW_COUNT}")
 endif()
 list(GET CORPUS_TABLE_ROWS 0 CORPUS_TABLE_HEADER)
 foreach(REQUIRED_COLUMN
@@ -37,6 +37,7 @@ foreach(REQUIRED_COLUMN
     "uniform_buffer_size"
     "temporal_conflicts"
     "max_live_capacity_ratio"
+    "cross_pipe_separations"
     "alias_classes"
     "pipeline_groups")
   string(FIND "${CORPUS_TABLE_HEADER}" "${REQUIRED_COLUMN}" COLUMN_INDEX)
@@ -52,7 +53,7 @@ set(FAMILIES
   "${PYPTO_ROOT}/system-tests"
   "${PYPTO_ROOT}/unit-tests"
 )
-set(EXPECTED_COUNTS 11 163 113 161 4)
+set(EXPECTED_COUNTS 17 335 235 269 4)
 foreach(FAMILY COUNT IN ZIP_LISTS FAMILIES EXPECTED_COUNTS)
   file(GLOB_RECURSE FAMILY_INSTANCES "${FAMILY}/*.json")
   list(LENGTH FAMILY_INSTANCES FAMILY_COUNT)

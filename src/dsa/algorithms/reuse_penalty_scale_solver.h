@@ -28,10 +28,13 @@ struct ScaleSeparatedGridDpOptions {
   std::size_t max_grid_offsets = 256;
 };
 
-// Bicriteria solver for scale-separated, bounded-span DSA-RP. Large buffers
-// are optimized by a rounded-offset sweep DP; soft-edge-free small buffers are
-// placed in stacked harmonic tracks. The result can exceed the input capacity
-// and is then reported as BestEffortNoFit with a structurally valid solution.
+// Pragmatic bicriteria solver for scale-separated, bounded-span DSA-RP. Large
+// buffers are optimized by a rounded-offset sweep DP; soft-edge-free buffers
+// use a harmonic-track band. The current small-band construction is a
+// deterministic research heuristic with no constant height-augmentation
+// guarantee; it is not the paper's BKKRT-based (2+epsilon) construction.
+// Buffers must lie on one common alignment grid. Resource-augmented results are
+// reported as BestEffortNoFit with a structurally valid solution.
 class ScaleSeparatedGridDpSolver final : public DsaSolver {
  public:
   explicit ScaleSeparatedGridDpSolver(ScaleSeparatedGridDpOptions options = {});

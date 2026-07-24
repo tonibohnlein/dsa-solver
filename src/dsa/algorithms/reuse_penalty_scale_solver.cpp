@@ -72,7 +72,7 @@ SolverCapabilities ScaleCapabilities() {
   capabilities.multi_pool = true;
   capabilities.lexicographic_objective = true;
   capabilities.capacity_objective = true;
-  capabilities.peak_objective = true;
+  capabilities.peak_objective = false;
   return capabilities;
 }
 
@@ -433,41 +433,34 @@ std::optional<std::vector<std::uint32_t>> RunGridDp(
   return colors;
 }
 
-std::uint64_t HarmonicUpper(std::uint64_t size, std::uint64_t threshold) {
-  std::uint64_t upper = threshold;
+std::uint64_t HarmonicUpper(std::uint64_t size, std::uint64_t threshold,
+                            std::uint64_t address_quantum) {
+  std::uint64_t upper = CeilDivide(threshold, address_quantum);
+  const std::uint64_t size_units = size / address_quantum;
   while (upper > 1) {
     const std::uint64_t next = (upper + 1) / 2;
-    if (next < size || next == upper) {
+    if (next < size_units || next == upper) {
       break;
     }
     upper = next;
   }
-  return upper;
+  return upper * address_quantum;
 }
 
 bool PlaceSmallBand(const DsaProblem& problem, const detail::ReusePenaltySearchSpace& search,
                     const std::vector<std::size_t>& small_nodes, std::uint64_t threshold,
-                    std::uint64_t start, std::vector<std::uint64_t>* offsets,
-                    PoolScaleResult* result) {
+                    std::uint64_t address_quantum, std::uint64_t start,
+                    std::vector<std::uint64_t>* offsets, PoolScaleResult* result) {
   std::map<std::uint64_t, std::vector<std::size_t>, std::greater<>> classes;
   for (std::size_t node : small_nodes) {
-    classes[HarmonicUpper(search.placement.nodes[node].size, threshold)].push_back(node);
+    classes[HarmonicUpper(search.placement.nodes[node].size, threshold, address_quantum)].push_back(
+        node);
   }
 
   std::uint64_t top = start;
   for (auto& [upper, nodes] : classes) {
-    std::uint64_t class_alignment = 1;
-    for (std::size_t node : nodes) {
-      const auto merged =
-          LeastCommonMultiple(class_alignment, search.placement.nodes[node].alignment);
-      if (!merged.has_value()) {
-        result->diagnostic = "scale_separated_grid_dp small-band alignment overflows";
-        return false;
-      }
-      class_alignment = merged.value();
-    }
-    const std::optional<std::uint64_t> track_size = detail::AlignUp(upper, class_alignment);
-    const std::optional<std::uint64_t> base = detail::AlignUp(top, class_alignment);
+    const std::optional<std::uint64_t> track_size = detail::AlignUp(upper, address_quantum);
+    const std::optional<std::uint64_t> base = detail::AlignUp(top, address_quantum);
     if (!track_size.has_value() || !base.has_value()) {
       result->diagnostic = "scale_separated_grid_dp small-band address overflows";
       return false;
@@ -542,13 +535,40 @@ PoolScaleResult SolvePool(const DsaProblem& problem, const detail::ReusePenaltyS
     return result;
   }
 
+  std::uint64_t pool_alignment = 1;
+  for (std::size_t node : pool_nodes) {
+    const auto merged = LeastCommonMultiple(pool_alignment, search.placement.nodes[node].alignment);
+    if (!merged.has_value()) {
+      result.diagnostic = "scale_separated_grid_dp pool alignment overflows";
+      return result;
+    }
+    pool_alignment = merged.value();
+  }
+  for (std::size_t node : pool_nodes) {
+    if (search.placement.nodes[node].size % pool_alignment != 0) {
+      result.diagnostic = "scale_separated_grid_dp requires sizes on the common alignment grid";
+      return result;
+    }
+  }
+
   const std::optional<std::uint64_t> minimum_soft_size = MinimumSoftEndpointSize(search, pool.id);
+  const std::uint64_t capacity = pool.capacity.value();
   if (!minimum_soft_size.has_value()) {
-    result.status = SolveStatus::kUnsupported;
-    result.diagnostic = "scale_separated_grid_dp pool has no soft edges";
+    result.small_nodes = pool_nodes.size();
+    if (!IsIntervalSmallBand(problem, search, pool_nodes)) {
+      result.diagnostic =
+          "scale_separated_grid_dp soft-free pool requires the interval "
+          "small-band profile";
+      return result;
+    }
+    if (!PlaceSmallBand(problem, search, pool_nodes, capacity, pool_alignment, 0, &result.offsets,
+                        &result)) {
+      result.status = SolveStatus::kInvalidProblem;
+      return result;
+    }
+    result.status = SolveStatus::kFeasible;
     return result;
   }
-  const std::uint64_t capacity = pool.capacity.value();
   const std::uint64_t minimum_large_size = minimum_soft_size.value();
   if (minimum_large_size < CeilDivide(capacity, options.max_large_fraction_denominator)) {
     result.diagnostic =
@@ -574,7 +594,7 @@ PoolScaleResult SolvePool(const DsaProblem& problem, const detail::ReusePenaltyS
     return result;
   }
 
-  std::uint64_t grid_alignment = 1;
+  std::uint64_t grid_alignment = pool_alignment;
   for (std::size_t node : large_nodes) {
     const auto merged = LeastCommonMultiple(grid_alignment, search.placement.nodes[node].alignment);
     if (!merged.has_value()) {
@@ -631,8 +651,8 @@ PoolScaleResult SolvePool(const DsaProblem& problem, const detail::ReusePenaltyS
         std::max(result.large_peak,
                  result.offsets[timed[rank].node] + search.placement.nodes[timed[rank].node].size);
   }
-  if (!PlaceSmallBand(problem, search, small_nodes, minimum_large_size, result.large_peak,
-                      &result.offsets, &result)) {
+  if (!PlaceSmallBand(problem, search, small_nodes, minimum_large_size, pool_alignment,
+                      result.large_peak, &result.offsets, &result)) {
     result.status = SolveStatus::kInvalidProblem;
     return result;
   }
@@ -736,26 +756,7 @@ DsaResult ScaleSeparatedGridDpSolver::Solve(const DsaProblem& problem) const {
     return result;
   }
 
-  const DsaResult baseline =
-      detail::PlaceWithOrder(problem, detail::DefaultPlacementOrder(problem));
-  if (!baseline.solution.has_value()) {
-    DsaResult result;
-    result.status = baseline.status;
-    result.diagnostics = baseline.diagnostics;
-    return result;
-  }
   std::vector<std::uint64_t> offsets(search.placement.nodes.size(), 0);
-  for (std::size_t node = 0; node < search.placement.nodes.size(); ++node) {
-    const Placement* placement =
-        baseline.solution->Find(search.placement.nodes[node].representative);
-    if (placement == nullptr) {
-      DsaResult result;
-      result.status = SolveStatus::kInvalidProblem;
-      result.diagnostics.emplace_back("scale_separated_grid_dp baseline omitted a normalized node");
-      return result;
-    }
-    offsets[node] = placement->offset;
-  }
 
   std::uint64_t rounded_cost = 0;
   std::uint64_t grid_quantum = 0;
@@ -771,9 +772,6 @@ DsaResult ScaleSeparatedGridDpSolver::Solve(const DsaProblem& problem) const {
   std::uint64_t max_grid_offsets = 0;
   std::uint64_t optimized_pools = 0;
   for (const Pool& pool : problem.pools) {
-    if (!MinimumSoftEndpointSize(search, pool.id).has_value()) {
-      continue;
-    }
     const PoolScaleResult pool_result = SolvePool(problem, search, pool, options_);
     if (pool_result.status != SolveStatus::kFeasible) {
       DsaResult result;

@@ -65,6 +65,11 @@ struct Colocation {
   BufferId second = 0;
 };
 
+// A transitive colocation class is one physical allocation. Its address extent
+// is the maximum size of any member, and every hard separation, temporal
+// conflict, exclusive pin, and reuse penalty incident on a member applies to
+// that complete extent.
+
 // Separations remain portable hard keep-apart constraints. Reasons are
 // optional provenance: solvers enforce the pair independently of which
 // compiler rule produced it.
@@ -73,6 +78,7 @@ enum class SeparationReason : std::uint8_t {
   kPipelineStage,
   kTargetHazard,
   kSemanticNoAlias,
+  kCrossPipe,
 };
 
 struct Separation {
@@ -240,6 +246,9 @@ struct DsaResult {
 [[nodiscard]] const char* ToString(ObjectiveAggregation aggregation) noexcept;
 
 [[nodiscard]] ObjectiveSpec MinimizePeakObjective();
+// Capacity is a hard acceptance condition for DSA-RP. Among fitting
+// placements, this objective minimizes only activated reuse penalties; peak is
+// reported separately and is not an implicit performance tie-break.
 [[nodiscard]] ObjectiveSpec FitThenMinimizeReuseCostObjective();
 
 }  // namespace dsa

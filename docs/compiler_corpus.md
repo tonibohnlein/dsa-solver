@@ -9,6 +9,8 @@ PyPTO exports schema-v1 JSON before memory reuse. Coverage contracts in
 `benchmarks/capture/` list every expected source entry point and reviewed
 exclusion. `tools/capture_pypto_program.py` performs a host-only compile with
 one process and one codegen worker; capture does not validate device numerics.
+Pass `--reuse-penalty-recognizer quadratic` to export the current mechanical
+cross-resource WAR/WAW candidates.
 
 Raw outputs use one stable directory per source case because kernel-local names
 are not globally unique.
@@ -27,6 +29,16 @@ are not globally unique.
 All solver-visible geometry, constraints, costs, aliases, and pipeline
 provenance remain in the canonical fingerprint. Canonical bytes are compared
 when fingerprints collide.
+
+`--cross-pipe-variants` selects current `cross_resource_pair_v4` exports with
+at least one `cross_pipe` edge and emits two documents per unique shape:
+
+- `hard_v1`: recognized pairs become typed hard separations;
+- `soft_v1`: the same pairs remain unit reuse penalties.
+
+Other constraints and costs are preserved. Edge-free exports stay in the
+manifest but are not duplicated. Normalized files omit verbose per-candidate
+traces while retaining the modeled edges, policies, counts, and source hashes.
 
 A capture is excluded from aggregate solver results only when it has no
 placement choice: all buffers can share one address and no constraint, pin,
@@ -47,8 +59,9 @@ Current counts and statistics are generated in
   --source-repo https://github.com/hw-native-sys/pypto-lib.git \
   --source-commit 6e897cd99c28767b22e05f209da3e041f15c3dfc \
   --producer-repo https://github.com/tonibohnlein/pypto.git \
-  --producer-commit 8df2ed4bc56d73a9db434f42a6c6fe937dcb08d1 \
-  --namespace pypto-lib
+  --producer-commit 5f8029f1afdb07d7540967905ecb2b6e331d4147 \
+  --namespace pypto-lib \
+  --cross-pipe-variants
 ```
 
 The output directory must be new or empty. Import fails for invalid input,
@@ -65,6 +78,9 @@ For a new source or producer revision:
 5. verify that selected inputs use a device-validated, sound lifetime exporter;
 6. independently validate all reported placements; and
 7. update checked-in representatives deliberately.
+
+Use `dsa-suite --features-only` to refresh `benchmarks/corpus.csv` without
+running placement algorithms.
 
 Exact commits are the provenance authority; hashes detect accidental content
 changes.

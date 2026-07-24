@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "profile": "pypto_research_v1",
+  "instance": "recognized_cross_pipe",
+  "metadata": {
+    "lifetime_ordering": "pypto_read_before_write",
+    "reuse_edge_construction_policy": "cross_resource_pair_v4",
+    "reuse_penalty_weight_model": "unit_v1",
+    "solver_input": "pre_memory_reuse",
+    "target": "test"
+  },
+  "problem": {
+    "pools": [
+      {
+        "id": 0,
+        "name": "Vec",
+        "capacity": 16,
+        "reserved_ranges": []
+      }
+    ],
+    "buffers": [
+      {
+        "id": 0,
+        "name": "earlier",
+        "size": 8,
+        "alignment": 1,
+        "live_intervals": [
+          {
+            "lower": 0,
+            "upper": 2
+          }
+        ],
+        "allowed_pools": [
+          0
+        ]
+      },
+      {
+        "id": 1,
+        "name": "later",
+        "size": 8,
+        "alignment": 1,
+        "live_intervals": [
+          {
+            "lower": 2,
+            "upper": 4
+          }
+        ],
+        "allowed_pools": [
+          0
+        ]
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "separations": [],
+      "temporal_exclusions": [],
+      "pinned_allocations": []
+    },
+    "cost_model": {
+      "reuse_penalties": [
+        {
+          "first": 0,
+          "second": 1,
+          "cost": 1,
+          "reason": "cross_pipe"
+        }
+      ]
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "capacity_overflow",
+        "reuse_cost"
+      ]
+    }
+  }
+}

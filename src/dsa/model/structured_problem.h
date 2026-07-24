@@ -21,6 +21,11 @@ enum class BenchmarkProfile : std::uint8_t {
   // directly with exact standard solvers.
   kStandardDsa,
 
+  // Standard single-pool DSA geometry with a fixed capacity and weighted soft
+  // anti-alias edges. This is the portable DSA-RP problem, independent of any
+  // compiler-specific edge producer.
+  kDsaRpV1,
+
   // Legacy schema-v1 compiler profile. Kept readable for existing artifacts;
   // new producers must choose the explicit hard or research profile below.
   kPyptoStructured,
@@ -64,6 +69,12 @@ struct PipelineIntentRelaxation {
   std::size_t removed_pipeline_reason_count = 0;
   std::size_t relaxed_separation_count = 0;
   std::size_t added_penalty_count = 0;
+};
+
+struct CrossPipeReuseVariants {
+  StructuredProblemDocument hard;
+  StructuredProblemDocument soft;
+  std::size_t edge_count = 0;
 };
 
 [[nodiscard]] const char* ToString(BenchmarkProfile profile) noexcept;
@@ -117,6 +128,13 @@ void WriteStructuredSolutionJsonFile(const std::filesystem::path& path,
 // performed by an ordinary DSA solver.
 [[nodiscard]] PipelineIntentRelaxation BuildPipelineIntentRelaxation(
     const StructuredProblemDocument& source, std::uint64_t penalty_per_pair = 1);
+
+// Construct an A/B benchmark pair from mechanically recognized cross-resource
+// WAR/WAW edges. The soft variant retains cross_pipe penalties. The hard
+// variant replaces exactly those records with permanent cross_pipe
+// separations while preserving unrelated constraints and costs.
+[[nodiscard]] CrossPipeReuseVariants BuildCrossPipeReuseVariants(
+    const StructuredProblemDocument& source);
 
 }  // namespace dsa
 

@@ -49,6 +49,8 @@ const char* ToString(SeparationReason reason) noexcept {
       return "target_hazard";
     case SeparationReason::kSemanticNoAlias:
       return "semantic_no_alias";
+    case SeparationReason::kCrossPipe:
+      return "cross_pipe";
   }
   return "unknown";
 }
@@ -84,8 +86,7 @@ ObjectiveSpec MinimizePeakObjective() {
 
 ObjectiveSpec FitThenMinimizeReuseCostObjective() {
   return {ObjectiveAggregation::kLexicographic,
-          {ObjectiveMetric::kCapacityOverflow, ObjectiveMetric::kReuseCost,
-           ObjectiveMetric::kTotalPeak, ObjectiveMetric::kMaxPeak}};
+          {ObjectiveMetric::kCapacityOverflow, ObjectiveMetric::kReuseCost}};
 }
 
 }  // namespace dsa

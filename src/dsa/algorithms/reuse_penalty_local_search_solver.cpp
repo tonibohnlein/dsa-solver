@@ -54,10 +54,17 @@ SolverCapabilities LocalSearchCapabilities() {
 Score ResultScore(const DsaProblem& problem, const DsaResult& result) {
   if (!result.solution.has_value() ||
       (result.status != SolveStatus::kFeasible && result.status != SolveStatus::kBestEffortNoFit)) {
-    return Score(problem.objective.terms.size(), std::numeric_limits<std::uint64_t>::max());
+    return Score(problem.objective.terms.size() + 2,
+                 std::numeric_limits<std::uint64_t>::max());
   }
   Score score;
-  score.reserve(problem.objective.terms.size());
+  score.reserve(problem.objective.terms.size() + 2);
+  // Capacity is a hard acceptance condition even when a reporting objective
+  // omits capacity_overflow. Infeasible states remain searchable for repair,
+  // but no lower reuse cost can make one outrank a fitting placement.
+  score.push_back(result.status == SolveStatus::kFeasible ? 0U : 1U);
+  score.push_back(
+      EvaluateObjectiveMetric(problem, result.objective, ObjectiveMetric::kCapacityOverflow));
   for (ObjectiveMetric metric : problem.objective.terms) {
     score.push_back(EvaluateObjectiveMetric(problem, result.objective, metric));
   }
@@ -404,6 +411,18 @@ DsaResult ReusePenaltyLocalSearchSolver::Solve(const DsaProblem& problem) const 
   Candidate best = Evaluate(problem, search, seed_order, {});
   ++evaluations;
   std::uint64_t constructive_seeds = 0;
+  std::optional<DsaResult> constructive_incumbent;
+  Score constructive_score;
+  auto retain_constructive_incumbent = [&](const DsaResult& candidate) {
+    if (candidate.status != SolveStatus::kFeasible || !candidate.solution.has_value()) {
+      return;
+    }
+    const Score score = ResultScore(problem, candidate);
+    if (!constructive_incumbent.has_value() || score < constructive_score) {
+      constructive_incumbent = candidate;
+      constructive_score = score;
+    }
+  };
   if (evaluations < options_.max_evaluations) {
     Candidate strict = Evaluate(problem, search, seed_order, all_promoted);
     ++evaluations;
@@ -412,7 +431,10 @@ DsaResult ReusePenaltyLocalSearchSolver::Solve(const DsaProblem& problem) const 
     }
   }
   if (evaluations < options_.max_evaluations) {
-    const DsaResult canonical = CanonicalGreedySolver().Solve(problem);
+    DsaProblem seed_problem = problem;
+    seed_problem.objective = FitThenMinimizeReuseCostObjective();
+    const DsaResult canonical = CanonicalGreedySolver().Solve(seed_problem);
+    retain_constructive_incumbent(canonical);
     if (std::optional<Candidate> seed = ConstructiveSeed(problem, search, canonical, false);
         seed.has_value()) {
       ++evaluations;
@@ -423,7 +445,10 @@ DsaResult ReusePenaltyLocalSearchSolver::Solve(const DsaProblem& problem) const 
     }
   }
   if (evaluations < options_.max_evaluations) {
-    const DsaResult repaired = PromoteRepairSolver().Solve(problem);
+    DsaProblem seed_problem = problem;
+    seed_problem.objective = FitThenMinimizeReuseCostObjective();
+    const DsaResult repaired = PromoteRepairSolver().Solve(seed_problem);
+    retain_constructive_incumbent(repaired);
     if (std::optional<Candidate> seed = ConstructiveSeed(problem, search, repaired, true);
         seed.has_value()) {
       ++evaluations;
@@ -435,13 +460,20 @@ DsaResult ReusePenaltyLocalSearchSolver::Solve(const DsaProblem& problem) const 
   }
   if (options_.max_evaluations <= evaluations || options_.restarts == 0 ||
       (seed_order.size() < 2 && search.soft_weights.empty())) {
-    best.result.solver_metrics = {
+    DsaResult output = best.result;
+    const bool output_from_constructive =
+        constructive_incumbent.has_value() && constructive_score < best.score;
+    if (output_from_constructive) {
+      output = constructive_incumbent.value();
+    }
+    output.solver_metrics = {
         {"evaluations", evaluations},
         {"accepted_moves", 0},
         {"promoted_edges", best.promoted.size()},
         {"constructive_seeds", constructive_seeds},
+        {"output_from_constructive", output_from_constructive ? 1U : 0U},
     };
-    return best.result;
+    return output;
   }
 
   std::mt19937_64 random(options_.seed);
@@ -546,7 +578,13 @@ DsaResult ReusePenaltyLocalSearchSolver::Solve(const DsaProblem& problem) const 
     }
   }
 
-  best.result.solver_metrics = {
+  DsaResult output = best.result;
+  const bool output_from_constructive =
+      constructive_incumbent.has_value() && constructive_score < best.score;
+  if (output_from_constructive) {
+    output = constructive_incumbent.value();
+  }
+  output.solver_metrics = {
       {"evaluations", evaluations},
       {"accepted_moves", accepted_moves},
       {"accepted_non_improving_moves", accepted_non_improving_moves},
@@ -556,12 +594,13 @@ DsaResult ReusePenaltyLocalSearchSolver::Solve(const DsaProblem& problem) const 
       {"promoted_edges", best.promoted.size()},
       {"soft_edges", search.soft_weights.size()},
       {"constructive_seeds", constructive_seeds},
+      {"output_from_constructive", output_from_constructive ? 1U : 0U},
   };
-  best.result.diagnostics.emplace_back(
+  output.diagnostics.emplace_back(
       "reuse_penalty_local_search searched both the placement order and "
       "the promoted soft-edge set using targeted two-level neighborhoods, "
       "decaying non-improving acceptance, and full deterministic re-decodes");
-  return best.result;
+  return output;
 }
 
 }  // namespace dsa

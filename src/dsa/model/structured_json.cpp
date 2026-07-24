@@ -1,4 +1,6 @@
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <initializer_list>
 #include <iomanip>
@@ -14,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "dsa/model/model.h"
 #include "dsa/model/structured_problem.h"
 
 namespace dsa {
@@ -108,6 +111,7 @@ bool ReadBool(const Json& value, const std::string& path) {
 BenchmarkProfile ReadProfile(const Json& value, const std::string& path) {
   const std::string name = ReadString(value, path);
   if (name == "standard_dsa") return BenchmarkProfile::kStandardDsa;
+  if (name == "dsa_rp_v1") return BenchmarkProfile::kDsaRpV1;
   if (name == "pypto_structured") return BenchmarkProfile::kPyptoStructured;
   if (name == "pypto_hard_v1") return BenchmarkProfile::kPyptoHardV1;
   if (name == "pypto_research_v1") return BenchmarkProfile::kPyptoResearchV1;
@@ -150,6 +154,7 @@ SeparationReason ReadSeparationReason(const Json& value, const std::string& path
   if (name == "pipeline_stage") return SeparationReason::kPipelineStage;
   if (name == "target_hazard") return SeparationReason::kTargetHazard;
   if (name == "semantic_no_alias") return SeparationReason::kSemanticNoAlias;
+  if (name == "cross_pipe") return SeparationReason::kCrossPipe;
   throw std::runtime_error(path + " has unknown separation reason '" + name + "'");
 }
 

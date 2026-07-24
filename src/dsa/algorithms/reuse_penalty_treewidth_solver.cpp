@@ -70,7 +70,7 @@ SolverCapabilities TreewidthCapabilities() {
   capabilities.multi_pool = true;
   capabilities.lexicographic_objective = true;
   capabilities.capacity_objective = true;
-  capabilities.peak_objective = true;
+  capabilities.peak_objective = false;
   return capabilities;
 }
 

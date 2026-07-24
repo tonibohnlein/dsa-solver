@@ -1,0 +1,1235 @@
+{
+  "instance": "pypto-lib::models::qwen3::32b::qwen3_32b_decode_4d::pypto_rope_kv_cache-cross-pipe-hard",
+  "metadata": {
+    "corpus_case_id": "models__qwen3__32b__qwen3_32b_decode_4d",
+    "corpus_export_file": "models__qwen3__32b__qwen3_32b_decode_4d/call-001/pypto_rope_kv_cache.dsa.json",
+    "corpus_family": "qwen3-32b",
+    "corpus_importer": "dsa-corpus-v1",
+    "corpus_namespace": "pypto-lib",
+    "corpus_original_instance": "rope_kv_cache",
+    "corpus_problem_fingerprint_fnv1a64": "615d52239d695a8d",
+    "corpus_producer_commit": "5f8029f1afdb07d7540967905ecb2b6e331d4147",
+    "corpus_producer_repo": "https://github.com/tonibohnlein/pypto.git",
+    "corpus_source_commit": "6e897cd99c28767b22e05f209da3e041f15c3dfc",
+    "corpus_source_fingerprint_fnv1a64": "ea2e1964fb6a2bbd",
+    "corpus_source_path": "models/qwen3/32b/qwen3_32b_decode_4d.py",
+    "corpus_source_repo": "https://github.com/hw-native-sys/pypto-lib.git",
+    "dsa_rp_cross_pipe_edges": "72",
+    "dsa_rp_edge_policy": "hard_v1",
+    "dsa_rp_source_instance": "rope_kv_cache",
+    "experimental_features": "recognized_cross_pipe_reuse",
+    "lifetime_ordering": "pypto_read_before_write",
+    "memory_space_ids": "pypto_memory_space_enum_v1",
+    "producer": "pypto",
+    "recognized_access_routes_v1": "external->ub@inbound_dma;ub->external@outbound_dma;ub->ub@vector_compute",
+    "recognized_alias_contract_candidates": "18",
+    "recognized_conservative_initial_anchor_candidates": "0",
+    "recognized_cross_pipe_candidates": "224",
+    "recognized_cross_resource_candidates": "224",
+    "recognized_in_loop_candidates": "527",
+    "recognized_incomplete_access_candidates": "0",
+    "recognized_loop_carried_candidates": "279",
+    "recognized_nested_control_candidates": "527",
+    "recognized_ordered_evidence_candidates": "16",
+    "recognized_partial_access_candidates": "0",
+    "recognized_reuse_candidates": "527",
+    "recognized_reuse_edges": "72",
+    "recognized_reuse_penalties": "72",
+    "recognized_same_pipe_candidates": "303",
+    "recognized_same_resource_candidates": "303",
+    "recognized_write_after_read_candidates": "527",
+    "recognized_write_after_write_candidates": "0",
+    "reuse_cost_model": "cross_resource_pair_v4+unit_v1",
+    "reuse_edge_construction_policy": "cross_resource_pair_v4",
+    "reuse_penalty_already_ordered_pairs": "16",
+    "reuse_penalty_candidate_pairs": "248",
+    "reuse_penalty_partially_supported_allocations": "0",
+    "reuse_penalty_promotion_policy": "cross_resource_pair_unit_v4",
+    "reuse_penalty_recognizer": "quadratic_route_frontier_v3",
+    "reuse_penalty_supported_allocations": "28",
+    "reuse_penalty_weight_model": "unit_v1",
+    "solver_input": "pre_memory_reuse",
+    "target": "Ascend910B"
+  },
+  "problem": {
+    "buffers": [
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 0,
+        "live_intervals": [
+          {
+            "lower": 57,
+            "upper": 145
+          }
+        ],
+        "name": "mem_vec_10",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 1,
+        "live_intervals": [
+          {
+            "lower": 59,
+            "upper": 145
+          }
+        ],
+        "name": "mem_vec_11",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 2,
+        "live_intervals": [
+          {
+            "lower": 61,
+            "upper": 145
+          }
+        ],
+        "name": "mem_vec_12",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 3,
+        "live_intervals": [
+          {
+            "lower": 63,
+            "upper": 145
+          }
+        ],
+        "name": "mem_vec_13",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 4,
+        "live_intervals": [
+          {
+            "lower": 73,
+            "upper": 85
+          }
+        ],
+        "name": "mem_vec_14",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 5,
+        "live_intervals": [
+          {
+            "lower": 75,
+            "upper": 83
+          }
+        ],
+        "name": "mem_vec_15",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 6,
+        "live_intervals": [
+          {
+            "lower": 77,
+            "upper": 81
+          }
+        ],
+        "name": "mem_vec_16",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 7,
+        "live_intervals": [
+          {
+            "lower": 79,
+            "upper": 81
+          }
+        ],
+        "name": "mem_vec_17",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 8,
+        "live_intervals": [
+          {
+            "lower": 81,
+            "upper": 89
+          }
+        ],
+        "name": "mem_vec_18",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 9,
+        "live_intervals": [
+          {
+            "lower": 83,
+            "upper": 87
+          }
+        ],
+        "name": "mem_vec_19",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 10,
+        "live_intervals": [
+          {
+            "lower": 85,
+            "upper": 87
+          }
+        ],
+        "name": "mem_vec_20",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 11,
+        "live_intervals": [
+          {
+            "lower": 87,
+            "upper": 93
+          }
+        ],
+        "name": "mem_vec_21",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 12,
+        "live_intervals": [
+          {
+            "lower": 89,
+            "upper": 91
+          }
+        ],
+        "name": "mem_vec_22",
+        "size": 128
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 13,
+        "live_intervals": [
+          {
+            "lower": 93,
+            "upper": 95
+          }
+        ],
+        "name": "mem_vec_23",
+        "size": 128
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 14,
+        "live_intervals": [
+          {
+            "lower": 97,
+            "upper": 99
+          }
+        ],
+        "name": "mem_vec_24",
+        "size": 512
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 15,
+        "live_intervals": [
+          {
+            "lower": 99,
+            "upper": 101
+          }
+        ],
+        "name": "mem_vec_25",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 16,
+        "live_intervals": [
+          {
+            "lower": 113,
+            "upper": 125
+          }
+        ],
+        "name": "mem_vec_26",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 17,
+        "live_intervals": [
+          {
+            "lower": 115,
+            "upper": 123
+          }
+        ],
+        "name": "mem_vec_27",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 18,
+        "live_intervals": [
+          {
+            "lower": 117,
+            "upper": 121
+          }
+        ],
+        "name": "mem_vec_28",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 19,
+        "live_intervals": [
+          {
+            "lower": 119,
+            "upper": 121
+          }
+        ],
+        "name": "mem_vec_29",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 20,
+        "live_intervals": [
+          {
+            "lower": 121,
+            "upper": 129
+          }
+        ],
+        "name": "mem_vec_30",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 21,
+        "live_intervals": [
+          {
+            "lower": 123,
+            "upper": 127
+          }
+        ],
+        "name": "mem_vec_31",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 22,
+        "live_intervals": [
+          {
+            "lower": 125,
+            "upper": 127
+          }
+        ],
+        "name": "mem_vec_32",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 23,
+        "live_intervals": [
+          {
+            "lower": 127,
+            "upper": 133
+          }
+        ],
+        "name": "mem_vec_33",
+        "size": 256
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 24,
+        "live_intervals": [
+          {
+            "lower": 129,
+            "upper": 131
+          }
+        ],
+        "name": "mem_vec_34",
+        "size": 128
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 25,
+        "live_intervals": [
+          {
+            "lower": 133,
+            "upper": 135
+          }
+        ],
+        "name": "mem_vec_35",
+        "size": 128
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 26,
+        "live_intervals": [
+          {
+            "lower": 139,
+            "upper": 141
+          }
+        ],
+        "name": "mem_vec_37",
+        "size": 4096
+      },
+      {
+        "alignment": 32,
+        "allowed_pools": [
+          1
+        ],
+        "id": 27,
+        "live_intervals": [
+          {
+            "lower": 141,
+            "upper": 143
+          }
+        ],
+        "name": "mem_vec_38",
+        "size": 2048
+      }
+    ],
+    "constraints": {
+      "colocations": [],
+      "pinned_allocations": [],
+      "separations": [
+        {
+          "first": 0,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 6
+        },
+        {
+          "first": 0,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 18
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 7
+        },
+        {
+          "first": 1,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 19
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 9
+        },
+        {
+          "first": 2,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 21
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 10
+        },
+        {
+          "first": 3,
+          "reasons": [
+            "semantic_no_alias"
+          ],
+          "second": 22
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 4,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 5,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 6,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 7,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 8,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 8,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 8,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 9,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 9,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 9,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 10,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 10,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 10,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 11,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 11,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 11,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 13
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 15
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 18
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 19
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 20
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 21
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 22
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 23
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 24
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 25
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 26
+        },
+        {
+          "first": 12,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 27
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 14
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 15
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 18
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 19
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 20
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 21
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 22
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 23
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 24
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 25
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 26
+        },
+        {
+          "first": 13,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 27
+        },
+        {
+          "first": 14,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 14,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 16
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 17
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 18
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 19
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 20
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 21
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 22
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 23
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 24
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 25
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 26
+        },
+        {
+          "first": 15,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 27
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 25
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 26
+        },
+        {
+          "first": 24,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 27
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 26
+        },
+        {
+          "first": 25,
+          "reasons": [
+            "cross_pipe"
+          ],
+          "second": 27
+        }
+      ],
+      "temporal_exclusions": []
+    },
+    "objective": {
+      "aggregation": "lexicographic",
+      "terms": [
+        "capacity_overflow",
+        "reuse_cost"
+      ]
+    },
+    "pools": [
+      {
+        "capacity": 188416,
+        "id": 1,
+        "name": "Vec",
+        "reserved_ranges": []
+      }
+    ],
+    "pypto_structure": {
+      "alias_classes": [
+        {
+          "buffer": 0,
+          "members": [
+            "cos_lo__tile"
+          ]
+        },
+        {
+          "buffer": 1,
+          "members": [
+            "sin_lo__tile"
+          ]
+        },
+        {
+          "buffer": 2,
+          "members": [
+            "cos_hi__tile"
+          ]
+        },
+        {
+          "buffer": 3,
+          "members": [
+            "sin_hi__tile"
+          ]
+        },
+        {
+          "buffer": 4,
+          "members": [
+            "k_lo__tile"
+          ]
+        },
+        {
+          "buffer": 5,
+          "members": [
+            "k_hi__tile"
+          ]
+        },
+        {
+          "buffer": 6,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 7,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 8,
+          "members": [
+            "rot_lo__tile"
+          ]
+        },
+        {
+          "buffer": 9,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 10,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 11,
+          "members": [
+            "rot_hi__tile"
+          ]
+        },
+        {
+          "buffer": 12,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 13,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 14,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 15,
+          "members": [
+            "v_row_bf16__tile"
+          ]
+        },
+        {
+          "buffer": 16,
+          "members": [
+            "q_lo__tile"
+          ]
+        },
+        {
+          "buffer": 17,
+          "members": [
+            "q_hi__tile"
+          ]
+        },
+        {
+          "buffer": 18,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 19,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 20,
+          "members": [
+            "q_rot_lo__tile"
+          ]
+        },
+        {
+          "buffer": 21,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 22,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 23,
+          "members": [
+            "q_rot_hi__tile"
+          ]
+        },
+        {
+          "buffer": 24,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 25,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 26,
+          "members": [
+            "t__tile"
+          ]
+        },
+        {
+          "buffer": 27,
+          "members": [
+            "q_pad_zero__tile"
+          ]
+        }
+      ],
+      "pipeline_groups": []
+    }
+  },
+  "profile": "pypto_research_v1",
+  "schema_version": 1
+}

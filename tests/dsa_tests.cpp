@@ -28,6 +28,7 @@
 #include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
+#include "dsa/analysis/penalty_edge_derivation.h"
 #include "dsa/analysis/reuse_geometry.h"
 #include "dsa/io/minimalloc_csv.h"
 #include "dsa/model/architecture.h"
@@ -175,6 +176,92 @@ void TestFirstFitSubdividesFreedRegion() {
           "consumers did not subdivide the freed producer region");
 }
 
+void TestPenaltyEdgesFollowMaximalAccessHappensBefore() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 4),
+      MakeBuffer(1, {{2, 4}}, 4),
+      MakeBuffer(2, {{4, 6}}, 4),
+  };
+  problem.pools.front().capacity = 8;
+
+  dsa::ScheduledProgram program;
+  program.stream_count = 2;
+  program.operations = {
+      {0, 0, 0, 0}, {1, 1, 0, 3}, {2, 0, 1, 4}, {3, 0, 2, 7}, {4, 1, 1, 8}, {5, 1, 2, 11},
+  };
+  program.cross_dependencies = {{0, 1}, {2, 3}, {4, 5}};
+  program.accesses = {
+      {0, 0, dsa::AccessKind::kWrite}, {0, 1, dsa::AccessKind::kRead},
+      {1, 2, dsa::AccessKind::kWrite}, {1, 3, dsa::AccessKind::kRead},
+      {2, 4, dsa::AccessKind::kWrite}, {2, 5, dsa::AccessKind::kRead},
+  };
+  const dsa::PenaltyEdgeDerivation derivation =
+      dsa::DerivePenaltyEdges(problem, program, {{0, 5}, {7, 0}});
+  Require(derivation.lifetime_compatible_pairs == 3,
+          "derivation did not inspect every lifetime-compatible pair");
+  Require(derivation.ordered_pairs == 1 && derivation.edges.size() == 2,
+          "derivation did not distinguish ordered and unordered handoffs");
+  Require(derivation.edges[0].first == 0 && derivation.edges[0].second == 1 &&
+              derivation.edges[0].cost == 7 &&
+              derivation.edges[0].needed_syncs == std::vector<dsa::DerivedSyncAnchor>{{1, 2}},
+          "first unordered maximal-access handoff was derived incorrectly");
+  Require(derivation.edges[1].first == 1 && derivation.edges[1].second == 2 &&
+              derivation.edges[1].cost == 5 &&
+              derivation.edges[1].needed_syncs == std::vector<dsa::DerivedSyncAnchor>{{3, 4}},
+          "second unordered maximal-access handoff was derived incorrectly");
+
+  dsa::DsaProblem antichain_problem;
+  antichain_problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 4),
+      MakeBuffer(1, {{2, 4}}, 4),
+  };
+  antichain_problem.pools.front().capacity = 8;
+  dsa::ScheduledProgram antichain_program;
+  antichain_program.stream_count = 3;
+  antichain_program.operations = {
+      {0, 0, 0, 0}, {1, 0, 1, 3}, {2, 1, 0, 3}, {3, 2, 0, 4}, {4, 2, 1, 7},
+  };
+  antichain_program.cross_dependencies = {{0, 2}, {3, 4}};
+  antichain_program.accesses = {
+      {0, 0, dsa::AccessKind::kWrite}, {0, 1, dsa::AccessKind::kRead},
+      {0, 2, dsa::AccessKind::kRead},  {1, 3, dsa::AccessKind::kWrite},
+      {1, 4, dsa::AccessKind::kRead},
+  };
+  const dsa::PenaltyEdgeDerivation antichain = dsa::DerivePenaltyEdges(
+      antichain_problem, antichain_program, {{0, 0, 3}, {0, 0, 5}, {0, 0, 0}});
+  Require(
+      antichain.edges.size() == 1 && antichain.edges[0].cost == 8 &&
+          antichain.edges[0].needed_syncs == std::vector<dsa::DerivedSyncAnchor>{{1, 3}, {2, 3}},
+      "maximal-access antichain costs were not combined on one buffer pair");
+
+  dsa::ApplyPenaltyEdgeDerivation(&problem, derivation);
+  dsa::StructuredProblemDocument document;
+  document.profile = dsa::BenchmarkProfile::kDsaRpV1;
+  document.instance = "scheduled_handoff";
+  document.problem = problem;
+  Require(dsa::ValidateStructuredProblemDocument(document).empty(),
+          "derived generic DSA-RP document did not satisfy its profile");
+
+  std::ostringstream output;
+  dsa::WriteStructuredProblemJson(output, document);
+  std::istringstream input(output.str());
+  const dsa::StructuredProblemDocument parsed = dsa::ReadStructuredProblemJson(input);
+  Require(parsed.profile == dsa::BenchmarkProfile::kDsaRpV1 && parsed.problem.cost_model &&
+              parsed.problem.cost_model->reuse_penalties.size() == 2,
+          "generic DSA-RP profile or penalties did not round-trip");
+
+  dsa::StructuredProblemDocument no_capacity = document;
+  no_capacity.problem.pools.front().capacity.reset();
+  Require(!dsa::ValidateStructuredProblemDocument(no_capacity).empty(),
+          "dsa_rp_v1 silently accepted an unbounded arena");
+
+  dsa::StructuredProblemDocument sequential = document;
+  sequential.problem.cost_model = dsa::CostModel{};
+  Require(dsa::ValidateStructuredProblemDocument(sequential).empty(),
+          "dsa_rp_v1 rejected the empty edge set of a sequential schedule");
+}
+
 void TestMultiIntervalLiveness() {
   dsa::DsaProblem problem;
   problem.buffers = {
@@ -218,6 +305,65 @@ void TestColocation() {
   const dsa::DsaResult result = SolveAndValidate(problem, dsa::FirstFitSolver());
   Require(OffsetOf(result, 0) == OffsetOf(result, 1), "colocated buffers did not share an offset");
   Require(result.objective.max_peak == 32, "colocation class should use its largest member size");
+}
+
+void TestColocationClassUsesOnePhysicalExtent() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 64),
+      MakeBuffer(1, {{0, 1}}, 8),
+      MakeBuffer(2, {{1, 2}}, 8),
+  };
+  problem.colocations.push_back({0, 1});
+  problem.cost_model = dsa::CostModel{{
+      {1, 2, 7, dsa::ReusePenaltyReason::kCrossPipe},
+      {1, 2, std::numeric_limits<std::uint64_t>::max(), dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+
+  dsa::DsaSolution overlapping;
+  overlapping.placements = {
+      {0, {dsa::kDefaultPool, 0}},
+      {1, {dsa::kDefaultPool, 0}},
+      {2, {dsa::kDefaultPool, 32}},
+  };
+  Require(dsa::ValidateSolution(problem, overlapping).empty(),
+          "lifetime-disjoint allocation classes should be allowed to overlap");
+  Require(dsa::EvaluateObjective(problem, overlapping).reuse_cost ==
+              std::numeric_limits<std::uint64_t>::max(),
+          "reuse penalties must use the full allocation-class extent and saturate");
+
+  problem.separations.push_back({1, 2});
+  Require(!dsa::ValidateSolution(problem, overlapping).empty(),
+          "a separation on one member must separate the complete allocation class");
+  const dsa::DsaResult separated = SolveAndValidate(problem, dsa::FirstFitSolver());
+  Require(OffsetOf(separated, 2) >= 64,
+          "placement and validation disagree on a heterogeneous colocation extent");
+  Require(separated.objective.reuse_cost == 0,
+          "a separated allocation class unexpectedly activated a reuse penalty");
+}
+
+void TestObjectiveArithmeticSaturates() {
+  dsa::DsaProblem problem;
+  problem.pools = {
+      {0, "first", std::nullopt, {}, std::nullopt},
+      {1, "second", std::nullopt, {}, std::nullopt},
+  };
+  problem.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{0, 1}}, 1),
+  };
+  problem.buffers[0].allowed_pools = {0};
+  problem.buffers[1].allowed_pools = {1};
+  dsa::DsaSolution solution;
+  solution.placements = {
+      {0, {0, std::numeric_limits<std::uint64_t>::max() - 1}},
+      {1, {1, std::numeric_limits<std::uint64_t>::max() - 1}},
+  };
+  const dsa::ObjectiveValue objective = dsa::EvaluateObjective(problem, solution);
+  Require(objective.max_peak == std::numeric_limits<std::uint64_t>::max(),
+          "maximum peak near uint64 limit is incorrect");
+  Require(objective.total_peak == std::numeric_limits<std::uint64_t>::max(),
+          "total peak must saturate rather than wrap");
 }
 
 void TestTemporalExclusionOverridesConservativeHulls() {
@@ -338,9 +484,16 @@ void TestDsaRpConstructiveBaselines() {
           "promote-repair fixture no longer exposes the heuristic optimality gap");
 
   const dsa::DsaResult strict = dsa::PromoteAllSolver().Solve(problem);
-  Require(strict.status == dsa::SolveStatus::kBestEffortNoFit &&
-              strict.solver_metrics.at("promoted_edges") == 3,
-          "promote-all control did not report the strict capacity failure");
+  Require(strict.status == dsa::SolveStatus::kInfeasibleProven &&
+              strict.solver_metrics.at("promoted_edges") == 3 &&
+              strict.solver_metrics.at("zero_penalty_feasibility_proven") == 1,
+          "promote-all zero detector did not prove the strict capacity failure");
+  dsa::PromoteAllOptions bounded_promote_all_options;
+  bounded_promote_all_options.max_search_nodes = 1;
+  const dsa::DsaResult bounded_strict =
+      dsa::PromoteAllSolver(bounded_promote_all_options).Solve(problem);
+  Require(bounded_strict.status == dsa::SolveStatus::kTimeout,
+          "promote-all ignored its canonical-search node budget");
 
   dsa::UnitRandomColoringOptions random_options;
   random_options.seed = 23;
@@ -349,6 +502,53 @@ void TestDsaRpConstructiveBaselines() {
       SolveAndValidate(problem, dsa::UnitRandomColoringSolver(random_options));
   Require(random.solver_metrics.at("samples") == 8 && random.objective.max_peak <= 2,
           "unit random-coloring control did not produce a sampled fit");
+
+  dsa::DsaProblem slack_capacity = problem;
+  for (dsa::Buffer& buffer : slack_capacity.buffers) buffer.size = 2;
+  slack_capacity.pools.front().capacity = 5;
+  const dsa::DsaResult slack_random =
+      SolveAndValidate(slack_capacity, dsa::UnitRandomColoringSolver(random_options));
+  Require(slack_random.objective.max_peak <= 4,
+          "unit random coloring mishandled capacity slack smaller than one unit");
+
+  dsa::UnitLowRankRoundingOptions low_rank_options;
+  low_rank_options.seed = 29;
+  low_rank_options.relaxation_iterations = 32;
+  low_rank_options.rounding_samples = 16;
+  low_rank_options.rank = 4;
+  const dsa::UnitLowRankRoundingSolver low_rank_solver(low_rank_options);
+  const dsa::DsaResult low_rank_first = SolveAndValidate(problem, low_rank_solver);
+  const dsa::DsaResult low_rank_second = SolveAndValidate(problem, low_rank_solver);
+  Require(SolutionOrThrow(low_rank_first).placements == SolutionOrThrow(low_rank_second).placements,
+          "unit low-rank rounding is not deterministic for a fixed seed");
+  Require(low_rank_first.solver_metrics.at("rounding_samples") == 16,
+          "unit low-rank rounding did not report its sampling budget");
+}
+
+void TestCanonicalGreedyRetainsFeasibleFirstFitIncumbent() {
+  dsa::DsaProblem problem;
+  problem.buffers = {
+      MakeBuffer(0, {{3, 7}}, 1),
+      MakeBuffer(1, {{6, 8}}, 3),
+      MakeBuffer(2, {{0, 4}}, 2),
+      MakeBuffer(3, {{6, 8}}, 1),
+  };
+  problem.pools.front().capacity = 5;
+  problem.cost_model = dsa::CostModel{{
+      {1, 2, 1, dsa::ReusePenaltyReason::kCrossPipe},
+      {2, 3, 5, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+
+  const dsa::DsaResult first_fit = SolveAndValidate(problem, dsa::FirstFitSolver());
+  dsa::CanonicalGreedyOptions options;
+  options.random_restarts = 0;
+  const dsa::DsaResult canonical = SolveAndValidate(problem, dsa::CanonicalGreedySolver(options));
+
+  Require(canonical.objective.reuse_cost <= first_fit.objective.reuse_cost,
+          "canonical greedy returned an objective worse than its feasible first-fit incumbent");
+  Require(canonical.solver_metrics.at("first_fit_seed_feasible") == 1,
+          "canonical greedy did not record its feasible first-fit incumbent");
 }
 
 void TestDsaRpExactSolvers() {
@@ -402,6 +602,89 @@ void TestDsaRpExactSolvers() {
   Require(portfolio.objective.reuse_cost == optimum &&
               portfolio.solver_metrics.at("portfolio_method") == 2,
           "portfolio did not dispatch the capacity-two fixture correctly");
+  dsa::ReusePenaltyPortfolioOptions portfolio_fallthrough_options;
+  portfolio_fallthrough_options.capacity_two.max_search_nodes = 1;
+  const dsa::DsaResult portfolio_fallthrough =
+      SolveAndValidate(problem, dsa::ReusePenaltyPortfolioSolver(portfolio_fallthrough_options));
+  Require(portfolio_fallthrough.objective.reuse_cost == optimum &&
+              portfolio_fallthrough.solver_metrics.at("portfolio_method") == 3,
+          "portfolio failed to continue after a capacity-two timeout");
+
+  dsa::DsaProblem heterogeneous = problem;
+  heterogeneous.buffers = {
+      MakeBuffer(0, {{0, 1}}, 4),
+      MakeBuffer(1, {{0, 1}}, 1),
+      MakeBuffer(2, {{1, 2}}, 1),
+  };
+  heterogeneous.colocations = {{0, 1}};
+  heterogeneous.pools.front().capacity = 5;
+  heterogeneous.cost_model = dsa::CostModel{{
+      {1, 2, 11, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  heterogeneous.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const std::uint64_t heterogeneous_optimum = BruteForceMinimumReuseCost(heterogeneous);
+  Require(heterogeneous_optimum == 0,
+          "heterogeneous-colocation fixture has the wrong brute-force optimum");
+  const dsa::DsaResult heterogeneous_cbb =
+      SolveAndValidate(heterogeneous, dsa::CanonicalBranchAndBoundSolver());
+  const dsa::DsaResult heterogeneous_ihs =
+      SolveAndValidate(heterogeneous, dsa::ImplicitHittingSetSolver());
+  Require(heterogeneous_cbb.objective.reuse_cost == heterogeneous_optimum &&
+              heterogeneous_ihs.objective.reuse_cost == heterogeneous_optimum,
+          "exact solvers disagree with allocation-class geometry");
+
+  dsa::DsaProblem peak_tie = problem;
+  peak_tie.objective.terms.push_back(dsa::ObjectiveMetric::kMaxPeak);
+  Require(dsa::ImplicitHittingSetSolver().Solve(peak_tie).status == dsa::SolveStatus::kUnsupported,
+          "implicit hitting set silently claimed a peak tie-break it does not optimize");
+  Require(dsa::CapacityTwoExactSolver().Solve(peak_tie).status == dsa::SolveStatus::kUnsupported,
+          "capacity-two solver silently claimed a peak tie-break it does not optimize");
+  Require(
+      dsa::TreewidthPartitionDpSolver().Solve(peak_tie).status == dsa::SolveStatus::kUnsupported,
+      "treewidth DP silently claimed a peak tie-break it does not optimize");
+
+  dsa::CanonicalBranchAndBoundOptions timeout_options;
+  timeout_options.max_search_nodes = 4;
+  const dsa::DsaResult timeout_cbb =
+      dsa::CanonicalBranchAndBoundSolver(timeout_options).Solve(problem);
+  Require(timeout_cbb.status == dsa::SolveStatus::kTimeout && timeout_cbb.solution.has_value() &&
+              dsa::ValidateSolution(problem, *timeout_cbb.solution).empty(),
+          "canonical branch-and-bound discarded its timeout incumbent");
+
+  dsa::ImplicitHittingSetOptions hitting_timeout_options;
+  hitting_timeout_options.max_iterations = 1;
+  const dsa::DsaResult timeout_hitting_set =
+      dsa::ImplicitHittingSetSolver(hitting_timeout_options).Solve(problem);
+  Require(timeout_hitting_set.status == dsa::SolveStatus::kTimeout &&
+              timeout_hitting_set.solution.has_value() &&
+              dsa::ValidateSolution(problem, *timeout_hitting_set.solution).empty(),
+          "implicit hitting set discarded its timeout incumbent");
+
+  dsa::CapacityTwoExactOptions capacity_timeout_options;
+  capacity_timeout_options.max_search_nodes = 5;
+  const dsa::DsaResult timeout_capacity =
+      dsa::CapacityTwoExactSolver(capacity_timeout_options).Solve(problem);
+  Require(timeout_capacity.status == dsa::SolveStatus::kTimeout &&
+              timeout_capacity.solution.has_value() &&
+              dsa::ValidateSolution(problem, *timeout_capacity.solution).empty(),
+          "capacity-two solver discarded its timeout incumbent");
+
+  dsa::DsaProblem saturated_weight;
+  saturated_weight.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+  };
+  saturated_weight.pools.front().capacity = 1;
+  saturated_weight.cost_model = dsa::CostModel{{
+      {0, 1, std::numeric_limits<std::uint64_t>::max(), dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  saturated_weight.objective = dsa::FitThenMinimizeReuseCostObjective();
+  const dsa::DsaResult saturated_hitting_set =
+      SolveAndValidate(saturated_weight, dsa::ImplicitHittingSetSolver());
+  Require(saturated_hitting_set.objective.reuse_cost == std::numeric_limits<std::uint64_t>::max() &&
+              saturated_hitting_set.solver_metrics.count("optimal_reuse_cost_proven") != 0 &&
+              saturated_hitting_set.solver_metrics.at("optimal_reuse_cost_proven") == 1,
+          "implicit hitting-set master rejected its first saturated-cost solution");
 
   dsa::DsaProblem infeasible;
   infeasible.buffers = {
@@ -523,6 +806,7 @@ void TestDsaRpExactSolvers() {
   const std::uint64_t phase_optimum = BruteForceMinimumReuseCost(phases);
   const dsa::DsaResult flow = SolveAndValidate(phases, dsa::SpanOneMinCostFlowSolver());
   Require(flow.objective.reuse_cost == phase_optimum &&
+              flow.solver_metrics.count("optimal_reuse_cost_proven") != 0 &&
               flow.solver_metrics.at("optimal_reuse_cost_proven") == 1,
           "span-one flow specialization disagrees with brute force");
   const dsa::DsaResult phase_treewidth =
@@ -532,6 +816,7 @@ void TestDsaRpExactSolvers() {
   const dsa::DsaResult phase_portfolio =
       SolveAndValidate(phases, dsa::ReusePenaltyPortfolioSolver());
   Require(phase_portfolio.objective.reuse_cost == phase_optimum &&
+              phase_portfolio.solver_metrics.count("portfolio_method") != 0 &&
               phase_portfolio.solver_metrics.at("portfolio_method") == 1,
           "portfolio did not dispatch the span-one fixture correctly");
 
@@ -552,6 +837,8 @@ void TestDsaRpExactSolvers() {
   const dsa::DsaResult partition_result =
       SolveAndValidate(symmetric_colors, dsa::TreewidthPartitionDpSolver(partition_options));
   Require(partition_result.objective.reuse_cost == 0 &&
+              partition_result.solver_metrics.count("partition_state_dp") != 0 &&
+              partition_result.solver_metrics.count("dp_states") != 0 &&
               partition_result.solver_metrics.at("partition_state_dp") == 1 &&
               partition_result.solver_metrics.at("dp_states") <= 5,
           "treewidth solver did not quotient interchangeable address colors");
@@ -595,9 +882,22 @@ void TestDsaRpExactSolvers() {
   const dsa::DsaResult treewidth_portfolio =
       SolveAndValidate(treewidth_only, dsa::ReusePenaltyPortfolioSolver());
   Require(treewidth_portfolio.objective.reuse_cost == 0 &&
+              treewidth_portfolio.solver_metrics.count("portfolio_method") != 0 &&
               treewidth_portfolio.solver_metrics.at("portfolio_method") == 3,
           "portfolio did not dispatch the bounded-treewidth fixture "
           "correctly");
+
+  dsa::DsaProblem large_color_space = problem;
+  large_color_space.pools.front().capacity = 1'000;
+  dsa::TreewidthPartitionDpOptions large_partition_options;
+  large_partition_options.max_treewidth = 2;
+  large_partition_options.max_table_entries = 32;
+  const dsa::DsaResult large_partition_result = SolveAndValidate(
+      large_color_space, dsa::TreewidthPartitionDpSolver(large_partition_options));
+  Require(large_partition_result.objective.reuse_cost == 0 &&
+              large_partition_result.solver_metrics.count("dp_states") != 0 &&
+              large_partition_result.solver_metrics.at("dp_states") <= 32,
+          "treewidth DP enumerated explicit colors instead of canonical partitions");
 
   for (std::size_t instance = 0; instance < 16; ++instance) {
     dsa::DsaProblem generated;
@@ -676,6 +976,24 @@ void TestDsaRpPromotedSetLocalSearch() {
       SolveAndValidate(problem, dsa::ReusePenaltyLocalSearchSolver(options));
   Require(forced.objective.reuse_cost == 14,
           "promoted-set local search mishandled forced full reuse");
+
+  dsa::DsaProblem hard_capacity;
+  hard_capacity.buffers = {
+      MakeBuffer(0, {{0, 1}}, 1),
+      MakeBuffer(1, {{1, 2}}, 1),
+  };
+  hard_capacity.pools.front().capacity = 1;
+  hard_capacity.cost_model = dsa::CostModel{{
+      {0, 1, 10, dsa::ReusePenaltyReason::kCrossPipe},
+  }};
+  hard_capacity.objective = {
+      dsa::ObjectiveAggregation::kLexicographic,
+      {dsa::ObjectiveMetric::kReuseCost},
+  };
+  const dsa::DsaResult capacity_first =
+      SolveAndValidate(hard_capacity, dsa::ReusePenaltyLocalSearchSolver(options));
+  Require(capacity_first.objective.reuse_cost == 10 && capacity_first.objective.max_peak == 1,
+          "local search preferred a lower-cost over-capacity placement");
 }
 
 void TestDsaRpScaleSeparatedGridDp() {
@@ -868,6 +1186,98 @@ void TestPipelineIntentRelaxationPreservesNonPipelineReasons() {
       "pipeline relaxation did not select the fit-then-reuse objective");
   Require(dsa::ValidateStructuredProblemDocument(relaxation.document).empty(),
           "pipeline relaxation produced an invalid document");
+}
+
+void TestCrossPipeReuseVariantsPreserveOnlyTheSelectedPolicy() {
+  dsa::StructuredProblemDocument document;
+  document.profile = dsa::BenchmarkProfile::kPyptoResearchV1;
+  document.instance = "recognized_cross_pipe";
+  document.metadata = {
+      {"lifetime_ordering", "pypto_read_before_write"},
+      {"solver_input", "pre_memory_reuse"},
+      {"reuse_edge_construction_policy", "cross_resource_pair_v4"},
+      {"recognized_reuse_candidate_records_v3", "large diagnostic trace"},
+      {"recognized_reuse_edge_records_v1", "duplicated edge trace"},
+  };
+  document.problem.pools = {{dsa::kDefaultPool, "Vec", 16, {}, std::nullopt}};
+  document.problem.buffers = {
+      MakeBuffer(0, {{0, 2}}, 8),
+      MakeBuffer(1, {{2, 4}}, 8),
+      MakeBuffer(2, {{4, 6}}, 8),
+  };
+  document.problem.separations = {
+      {1, 2, {dsa::SeparationReason::kTargetHazard}},
+  };
+  document.problem.cost_model = dsa::CostModel{{
+      {0, 1, 7, dsa::ReusePenaltyReason::kCrossPipe},
+      {0, 2, 3, dsa::ReusePenaltyReason::kPipelineSerialization},
+  }};
+  document.problem.objective = dsa::FitThenMinimizeReuseCostObjective();
+
+  const dsa::CrossPipeReuseVariants variants = dsa::BuildCrossPipeReuseVariants(document);
+  Require(variants.edge_count == 1, "cross-pipe variant builder counted the wrong edges");
+  const auto metadata_omits = [](const dsa::StructuredProblemDocument& variant,
+                                 const std::string& key) {
+    return variant.metadata.find(key) == variant.metadata.end();
+  };
+  Require(metadata_omits(variants.soft, "recognized_reuse_candidate_records_v3") &&
+              metadata_omits(variants.soft, "recognized_reuse_edge_records_v1") &&
+              metadata_omits(variants.hard, "recognized_reuse_candidate_records_v3") &&
+              metadata_omits(variants.hard, "recognized_reuse_edge_records_v1"),
+          "cross-pipe variants retained redundant recognizer traces");
+  Require(variants.soft.problem.cost_model &&
+              variants.soft.problem.cost_model->reuse_penalties.size() == 2,
+          "soft cross-pipe variant did not preserve the source costs");
+  Require(variants.soft.problem.separations.size() == 1 &&
+              variants.soft.problem.separations.front().first == 1 &&
+              variants.soft.problem.separations.front().second == 2 &&
+              variants.soft.problem.separations.front().reasons ==
+                  std::vector<dsa::SeparationReason>{dsa::SeparationReason::kTargetHazard},
+          "soft cross-pipe variant changed hard constraints");
+  Require(variants.hard.problem.cost_model &&
+              variants.hard.problem.cost_model->reuse_penalties.size() == 1 &&
+              variants.hard.problem.cost_model->reuse_penalties.front().reason ==
+                  dsa::ReusePenaltyReason::kPipelineSerialization,
+          "hard cross-pipe variant did not preserve unrelated soft costs");
+  Require(variants.hard.problem.separations.size() == 2,
+          "hard cross-pipe variant did not add exactly one separation");
+  const auto hard_edge = std::find_if(
+      variants.hard.problem.separations.begin(), variants.hard.problem.separations.end(),
+      [](const dsa::Separation& separation) {
+        return separation.first == 0 && separation.second == 1 &&
+               separation.reasons ==
+                   std::vector<dsa::SeparationReason>{dsa::SeparationReason::kCrossPipe};
+      });
+  Require(hard_edge != variants.hard.problem.separations.end(),
+          "hard cross-pipe variant lost edge provenance");
+  Require(dsa::ValidateStructuredProblemDocument(variants.soft).empty() &&
+              dsa::ValidateStructuredProblemDocument(variants.hard).empty(),
+          "cross-pipe variant builder produced an invalid document");
+
+  dsa::DsaSolution overlapping;
+  overlapping.placements = {
+      {0, {dsa::kDefaultPool, 0}},
+      {1, {dsa::kDefaultPool, 0}},
+      {2, {dsa::kDefaultPool, 8}},
+  };
+  Require(dsa::ValidateSolution(variants.soft.problem, overlapping).empty(),
+          "soft cross-pipe edge unexpectedly forbids reuse");
+  Require(!dsa::ValidateSolution(variants.hard.problem, overlapping).empty(),
+          "hard cross-pipe edge did not forbid reuse");
+
+  std::stringstream encoded;
+  dsa::WriteStructuredProblemJson(encoded, variants.hard);
+  std::istringstream input(encoded.str());
+  const dsa::StructuredProblemDocument decoded = dsa::ReadStructuredProblemJson(input);
+  const auto decoded_hard_edge = std::find_if(
+      decoded.problem.separations.begin(), decoded.problem.separations.end(),
+      [](const dsa::Separation& separation) {
+        return separation.first == 0 && separation.second == 1 &&
+               separation.reasons ==
+                   std::vector<dsa::SeparationReason>{dsa::SeparationReason::kCrossPipe};
+      });
+  Require(decoded_hard_edge != decoded.problem.separations.end(),
+          "hard cross-pipe reason did not round-trip");
 }
 
 void TestLocalSearchClosesOrderingGap() {
@@ -1265,12 +1675,12 @@ void TestSolverCapabilityMatching() {
       dsa::CheckSolverCompatibility(document.problem, first_fit.Capabilities());
   Require(first_fit_match.StructurallyCompatible(),
           "first-fit should support the fixture's hard constraints");
-  Require(!first_fit_match.ObjectiveCompatible() &&
-              Contains(first_fit_match.unsupported_objectives, "metric:reuse_cost"),
-          "first-fit did not disclose its unsupported reuse objective");
+  Require(first_fit_match.ObjectiveCompatible(),
+          "first-fit rescoring should accept the reuse objective");
   const dsa::DsaResult baseline = first_fit.Solve(document.problem);
-  Require(baseline.status == dsa::SolveStatus::kFeasible && !baseline.diagnostics.empty(),
-          "first-fit did not provide a disclosed structural baseline");
+  Require(baseline.status == dsa::SolveStatus::kFeasible &&
+              baseline.solver_metrics.at("first_fit_orders_evaluated") >= 1,
+          "first-fit did not evaluate its rescored order portfolio");
 
   const dsa::LocalSearchSolver local_search;
   const dsa::SolverCompatibility local_match =
@@ -1617,19 +2027,24 @@ int main() {
   const std::vector<std::pair<std::string, void (*)()>> tests = {
       {"MiniMalloc CSV", TestMiniMallocCsv},
       {"first-fit #1908", TestFirstFitSubdividesFreedRegion},
+      {"penalty-edge derivation", TestPenaltyEdgesFollowMaximalAccessHappensBefore},
       {"multi-interval", TestMultiIntervalLiveness},
       {"hard constraints", TestHardConstraintsAndPinnedRanges},
       {"colocation", TestColocation},
+      {"colocation-class-extent", TestColocationClassUsesOnePhysicalExtent},
+      {"objective-saturation", TestObjectiveArithmeticSaturates},
       {"temporal exclusion", TestTemporalExclusionOverridesConservativeHulls},
       {"fixed pools", TestFixedPoolsAreIndependent},
       {"reuse cost", TestFitCostObjectiveAvoidsExpensiveReuse},
       {"DSA-RP constructive baselines", TestDsaRpConstructiveBaselines},
+      {"canonical greedy feasible incumbent", TestCanonicalGreedyRetainsFeasibleFirstFitIncumbent},
       {"DSA-RP exact solvers", TestDsaRpExactSolvers},
       {"DSA-RP promoted-set local search", TestDsaRpPromotedSetLocalSearch},
       {"DSA-RP scale-separated grid DP", TestDsaRpScaleSeparatedGridDp},
       {"sparse reference", TestSparseReferenceReducesPhysicalReuse},
       {"structured solution replay", TestStructuredSolutionRoundTripAndMismatchRejection},
       {"pipeline intent relaxation", TestPipelineIntentRelaxationPreservesNonPipelineReasons},
+      {"cross-pipe reuse variants", TestCrossPipeReuseVariantsPreserveOnlyTheSelectedPolicy},
       {"local search", TestLocalSearchClosesOrderingGap},
       {"local search budget", TestLocalSearchUsesGlobalEvaluationBudget},
       {"TVM hill climb", TestTvmHillClimbClosesOrderingGap},

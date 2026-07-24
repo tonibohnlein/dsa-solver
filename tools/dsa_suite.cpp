@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -22,6 +23,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -31,9 +33,15 @@
 #include "dsa/algorithms/local_search_solver.h"
 #include "dsa/algorithms/pypto_structured_search_solver.h"
 #include "dsa/algorithms/reuse_penalty_baseline_solvers.h"
+#include "dsa/algorithms/reuse_penalty_exact_solvers.h"
+#include "dsa/algorithms/reuse_penalty_local_search_solver.h"
+#include "dsa/algorithms/reuse_penalty_portfolio_solvers.h"
+#include "dsa/algorithms/reuse_penalty_scale_solver.h"
+#include "dsa/algorithms/reuse_penalty_treewidth_solver.h"
 #include "dsa/algorithms/tvm_hill_climb_solver.h"
 #include "dsa/algorithms/xla_heap_solver.h"
 #include "dsa/io/minimalloc_csv.h"
+#include "dsa/model/model.h"
 #include "dsa/model/structured_problem.h"
 #include "dsa/model/validator.h"
 
@@ -52,6 +60,17 @@ using Json = nlohmann::ordered_json;
 constexpr std::string_view kFirstFit = "first_fit";
 constexpr std::string_view kCanonicalGreedy = "canonical_greedy";
 constexpr std::string_view kPromoteRepair = "promote_repair";
+constexpr std::string_view kPromoteAll = "promote_all";
+constexpr std::string_view kUnitRandom = "unit_random_coloring";
+constexpr std::string_view kUnitLowRank = "unit_low_rank_rounding";
+constexpr std::string_view kCanonicalExact = "canonical_branch_and_bound";
+constexpr std::string_view kImplicitHittingSet = "implicit_hitting_set";
+constexpr std::string_view kCapacityTwo = "capacity_two_exact";
+constexpr std::string_view kSpanOne = "span_one_min_cost_flow";
+constexpr std::string_view kTreewidth = "treewidth_partition_dp";
+constexpr std::string_view kReusePortfolio = "reuse_penalty_portfolio";
+constexpr std::string_view kReuseLocalSearch = "reuse_penalty_local_search";
+constexpr std::string_view kScaleGrid = "scale_separated_grid_dp";
 constexpr std::string_view kCypressRelaxation = "cypress_relaxation";
 constexpr std::string_view kXlaHeap = "xla_heap";
 constexpr std::string_view kTvmHillClimb = "tvm_hill_climb";
@@ -61,10 +80,12 @@ constexpr std::string_view kMiniMalloc = "minimalloc_exact";
 
 struct Options {
   std::vector<fs::path> standard_roots;
+  std::vector<fs::path> dsa_rp_roots;
   std::vector<fs::path> pypto_roots;
   fs::path output_dir = "benchmark-results";
   std::optional<std::uint64_t> standard_capacity;
   std::vector<std::uint64_t> seeds{0, 1, 2};
+  std::set<std::string> methods;
   std::size_t iterations = 2'000;
   std::size_t restarts = 4;
   std::size_t stagnation_limit = 250;
@@ -74,6 +95,8 @@ struct Options {
   bool build_core_relaxations = true;
   bool standard_only = false;
   bool report_only = false;
+  bool features_only = false;
+  bool dsa_rp_variants_only = false;
   std::string run_label = "local";
 };
 
@@ -117,6 +140,7 @@ struct FeatureStats {
   std::size_t pipeline_separations = 0;
   std::size_t target_hazard_separations = 0;
   std::size_t semantic_no_alias_separations = 0;
+  std::size_t cross_pipe_separations = 0;
   std::size_t temporal_exclusions = 0;
   std::size_t pinned_allocations = 0;
   std::size_t reuse_penalties = 0;
@@ -219,17 +243,68 @@ std::vector<std::uint64_t> ParseSeeds(std::string_view text) {
   return seeds;
 }
 
+const std::set<std::string>& KnownMethods() {
+  static const std::set<std::string> methods = {
+      std::string(kFirstFit),
+      std::string(kCanonicalGreedy),
+      std::string(kPromoteRepair),
+      std::string(kPromoteAll),
+      std::string(kUnitRandom),
+      std::string(kUnitLowRank),
+      std::string(kCanonicalExact),
+      std::string(kImplicitHittingSet),
+      std::string(kCapacityTwo),
+      std::string(kSpanOne),
+      std::string(kTreewidth),
+      std::string(kReusePortfolio),
+      std::string(kReuseLocalSearch),
+      std::string(kScaleGrid),
+      std::string(kCypressRelaxation),
+      std::string(kXlaHeap),
+      std::string(kTvmHillClimb),
+      std::string(kLocalSearch),
+      std::string(kPyptoStructuredSearch),
+      std::string(kMiniMalloc),
+  };
+  return methods;
+}
+
+std::set<std::string> ParseMethods(std::string_view text) {
+  std::set<std::string> methods;
+  std::size_t begin = 0;
+  while (begin <= text.size()) {
+    const std::size_t comma = text.find(',', begin);
+    const std::size_t end = comma == std::string_view::npos ? text.size() : comma;
+    if (end == begin) UsageError("--methods contains an empty value");
+    std::string method(text.substr(begin, end - begin));
+    std::replace(method.begin(), method.end(), '-', '_');
+    if (KnownMethods().count(method) == 0) {
+      UsageError("--methods contains unknown method '" + method + "'");
+    }
+    methods.insert(std::move(method));
+    if (comma == std::string_view::npos) break;
+    begin = comma + 1;
+  }
+  return methods;
+}
+
+bool MethodEnabled(const Options& options, std::string_view method) {
+  return options.methods.empty() || options.methods.count(std::string(method)) != 0;
+}
+
 void PrintHelp() {
   std::cout
-      << "Usage: dsa-suite (--standard PATH | --pypto PATH)... [options]\n\n"
+      << "Usage: dsa-suite (--standard PATH | --dsa-rp PATH | --pypto PATH)... [options]\n\n"
       << "Inputs (repeatable; PATH may be a file or directory):\n"
       << "  --standard PATH                 MiniMalloc CSV or standard JSON corpus\n"
+      << "  --dsa-rp PATH                   Generic capacity-constrained DSA-RP JSON corpus\n"
       << "  --pypto PATH                    PyPTO structured JSON corpus\n\n"
       << "Output and budgets:\n"
       << "  --output-dir DIR                Write results, summary, features, and report files\n"
       << "  --run-label TEXT                Stable label stored in the report\n"
       << "  --standard-capacity BYTES       Capacity/upper bound for standard CSV inputs\n"
       << "  --seeds N[,N...]                Search seeds (default: 0,1,2)\n"
+      << "  --methods NAME[,NAME...]        Run only the selected solver methods\n"
       << "  --iterations N                  Local/TVM search budget (default: 2000)\n"
       << "  --restarts N                    Local-search restarts (default: 4)\n"
       << "  --stagnation N                  Local-search stagnation limit (default: 250)\n"
@@ -238,6 +313,8 @@ void PrintHelp() {
       << "  --no-minimalloc                 Do not execute the exact baseline\n"
       << "  --no-core-relaxations           Do not derive PyPTO lower-bound instances\n"
       << "  --standard-only                 Project PyPTO pools to capacity-free standard DSA\n"
+      << "  --features-only                 Write features.csv without running solvers\n"
+      << "  --dsa-rp-variants-only          Keep only paired cross-pipe hard/soft variants\n"
       << "  --report-only                   Rebuild the report from existing results.jsonl\n"
       << "  --help                           Show this help\n";
 }
@@ -257,6 +334,8 @@ Options ParseOptions(int argc, char** argv) {
       std::exit(0);
     } else if (option == "--standard") {
       options.standard_roots.emplace_back(next(&index, option));
+    } else if (option == "--dsa-rp") {
+      options.dsa_rp_roots.emplace_back(next(&index, option));
     } else if (option == "--pypto") {
       options.pypto_roots.emplace_back(next(&index, option));
     } else if (option == "--output-dir") {
@@ -267,6 +346,8 @@ Options ParseOptions(int argc, char** argv) {
       options.standard_capacity = ParseUnsigned(next(&index, option), option);
     } else if (option == "--seeds") {
       options.seeds = ParseSeeds(next(&index, option));
+    } else if (option == "--methods") {
+      options.methods = ParseMethods(next(&index, option));
     } else if (option == "--iterations") {
       options.iterations = ParseSize(next(&index, option), option);
     } else if (option == "--restarts") {
@@ -283,6 +364,10 @@ Options ParseOptions(int argc, char** argv) {
       options.build_core_relaxations = false;
     } else if (option == "--standard-only") {
       options.standard_only = true;
+    } else if (option == "--features-only") {
+      options.features_only = true;
+    } else if (option == "--dsa-rp-variants-only") {
+      options.dsa_rp_variants_only = true;
     } else if (option == "--report-only") {
       options.report_only = true;
     } else {
@@ -290,8 +375,9 @@ Options ParseOptions(int argc, char** argv) {
     }
   }
 
-  if (options.standard_roots.empty() && options.pypto_roots.empty()) {
-    UsageError("at least one --standard or --pypto input is required");
+  if (options.standard_roots.empty() && options.dsa_rp_roots.empty() &&
+      options.pypto_roots.empty()) {
+    UsageError("at least one --standard, --dsa-rp, or --pypto input is required");
   }
   if (options.output_dir.empty()) UsageError("--output-dir cannot be empty");
   if (options.run_label.empty()) UsageError("--run-label cannot be empty");
@@ -308,8 +394,13 @@ Options ParseOptions(int argc, char** argv) {
   if (options.standard_only && !options.build_core_relaxations && !options.pypto_roots.empty()) {
     UsageError("--standard-only requires core projections for --pypto inputs");
   }
-  if (options.report_only && !options.standard_only) {
-    UsageError("--report-only currently requires --standard-only");
+  if (options.features_only && (options.report_only || options.standard_only)) {
+    UsageError("--features-only cannot be combined with --report-only or --standard-only");
+  }
+  if (options.features_only) options.build_core_relaxations = false;
+  if (options.dsa_rp_variants_only &&
+      (!options.standard_roots.empty() || !options.dsa_rp_roots.empty())) {
+    UsageError("--dsa-rp-variants-only accepts only --pypto inputs");
   }
   return options;
 }
@@ -558,6 +649,9 @@ FeatureStats AnalyzeFeatures(const Instance& instance) {
         case dsa::SeparationReason::kSemanticNoAlias:
           ++stats.semantic_no_alias_separations;
           break;
+        case dsa::SeparationReason::kCrossPipe:
+          ++stats.cross_pipe_separations;
+          break;
         case dsa::SeparationReason::kGeneric:
           break;
       }
@@ -620,6 +714,20 @@ Instance LoadPyptoInstance(const fs::path& path) {
   const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(instance.document);
   if (!errors.empty()) {
     throw std::runtime_error("invalid PyPTO benchmark '" + path.string() + "': " + errors.front());
+  }
+  return instance;
+}
+
+Instance LoadDsaRpInstance(const fs::path& path) {
+  Instance instance;
+  instance.source = DisplayPath(path);
+  instance.document = dsa::ReadStructuredProblemJsonFile(path);
+  if (instance.document.profile != dsa::BenchmarkProfile::kDsaRpV1) {
+    throw std::runtime_error("--dsa-rp JSON does not use dsa_rp_v1: " + path.string());
+  }
+  const std::vector<std::string> errors = dsa::ValidateStructuredProblemDocument(instance.document);
+  if (!errors.empty()) {
+    throw std::runtime_error("invalid DSA-RP benchmark '" + path.string() + "': " + errors.front());
   }
   return instance;
 }
@@ -708,8 +816,15 @@ std::vector<Instance> LoadInstances(const Options& options) {
     }
     instances.push_back(std::move(standard));
   }
+  for (const fs::path& path : DiscoverFiles(options.dsa_rp_roots, {".json"})) {
+    instances.push_back(LoadDsaRpInstance(path));
+  }
   for (const fs::path& path : DiscoverFiles(options.pypto_roots, {".json"})) {
     Instance structured = LoadPyptoInstance(path);
+    if (options.dsa_rp_variants_only &&
+        MetadataValue(structured.document, "dsa_rp_edge_policy").empty()) {
+      continue;
+    }
     const std::string fingerprint =
         MetadataValue(structured.document, "corpus_problem_fingerprint_fnv1a64");
     if (!fingerprint.empty() && !compiler_problem_fingerprints.insert(fingerprint).second) {
@@ -769,6 +884,8 @@ std::string ComparisonScope(dsa::BenchmarkProfile profile) {
   switch (profile) {
     case dsa::BenchmarkProfile::kStandardDsa:
       return "direct_standard";
+    case dsa::BenchmarkProfile::kDsaRpV1:
+      return "direct_dsa_rp";
     case dsa::BenchmarkProfile::kPyptoStructured:
       return "pypto_legacy";
     case dsa::BenchmarkProfile::kPyptoHardV1:
@@ -850,9 +967,53 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   if (method == kFirstFit) {
     solver = std::make_unique<dsa::FirstFitSolver>();
   } else if (method == kCanonicalGreedy) {
-    solver = std::make_unique<dsa::CanonicalGreedySolver>();
+    dsa::CanonicalGreedyOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver_options.random_restarts = options.restarts;
+    solver = std::make_unique<dsa::CanonicalGreedySolver>(solver_options);
   } else if (method == kPromoteRepair) {
     solver = std::make_unique<dsa::PromoteRepairSolver>();
+  } else if (method == kPromoteAll) {
+    solver = std::make_unique<dsa::PromoteAllSolver>();
+  } else if (method == kUnitRandom) {
+    dsa::UnitRandomColoringOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver = std::make_unique<dsa::UnitRandomColoringSolver>(solver_options);
+  } else if (method == kUnitLowRank) {
+    dsa::UnitLowRankRoundingOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver = std::make_unique<dsa::UnitLowRankRoundingSolver>(solver_options);
+  } else if (method == kCanonicalExact) {
+    dsa::CanonicalBranchAndBoundOptions solver_options;
+    solver_options.max_search_nodes = options.iterations;
+    solver = std::make_unique<dsa::CanonicalBranchAndBoundSolver>(solver_options);
+  } else if (method == kImplicitHittingSet) {
+    dsa::ImplicitHittingSetOptions solver_options;
+    solver_options.max_oracle_nodes = options.iterations;
+    solver_options.max_master_nodes = options.iterations;
+    solver = std::make_unique<dsa::ImplicitHittingSetSolver>(solver_options);
+  } else if (method == kCapacityTwo) {
+    dsa::CapacityTwoExactOptions solver_options;
+    solver_options.max_search_nodes = options.iterations;
+    solver = std::make_unique<dsa::CapacityTwoExactSolver>(solver_options);
+  } else if (method == kSpanOne) {
+    solver = std::make_unique<dsa::SpanOneMinCostFlowSolver>();
+  } else if (method == kTreewidth) {
+    solver = std::make_unique<dsa::TreewidthPartitionDpSolver>();
+  } else if (method == kReusePortfolio) {
+    dsa::ReusePenaltyPortfolioOptions solver_options;
+    solver_options.capacity_two.max_search_nodes = options.iterations;
+    solver_options.general.max_search_nodes = options.iterations;
+    solver = std::make_unique<dsa::ReusePenaltyPortfolioSolver>(solver_options);
+  } else if (method == kReuseLocalSearch) {
+    dsa::ReusePenaltyLocalSearchOptions solver_options;
+    solver_options.seed = seed.value_or(0);
+    solver_options.max_evaluations = options.iterations;
+    solver_options.restarts = options.restarts;
+    solver_options.stagnation_limit = options.stagnation_limit;
+    solver = std::make_unique<dsa::ReusePenaltyLocalSearchSolver>(solver_options);
+  } else if (method == kScaleGrid) {
+    solver = std::make_unique<dsa::ScaleSeparatedGridDpSolver>();
   } else if (method == kCypressRelaxation) {
     solver = std::make_unique<dsa::CypressRelaxationSolver>();
   } else if (method == kXlaHeap) {
@@ -894,6 +1055,14 @@ RunRecord RunHeuristic(const Instance& instance, std::string_view method,
   record.status = dsa::ToString(result.status);
   record.diagnostics = result.diagnostics;
   record.solver_metrics = result.solver_metrics;
+  const auto metric_is_set = [&](std::string_view name) {
+    const auto metric = result.solver_metrics.find(std::string(name));
+    return metric != result.solver_metrics.end() && metric->second != 0;
+  };
+  record.certified_optimal = metric_is_set("optimality_proven") ||
+                             metric_is_set("optimal_reuse_cost_proven") ||
+                             (metric_is_set("zero_penalty_feasibility_proven") && result.solution &&
+                              result.objective.reuse_cost == 0);
   PopulateSolutionMetrics(instance.document.problem, result, &record);
   return record;
 }
@@ -1044,23 +1213,60 @@ std::vector<RunRecord> ExecuteSuite(const std::vector<Instance>& instances,
     const bool has_fixed_capacity =
         std::all_of(instance.document.problem.pools.begin(), instance.document.problem.pools.end(),
                     [](const dsa::Pool& pool) { return pool.capacity.has_value(); });
+    const bool has_reuse_penalties = instance.document.problem.cost_model.has_value() &&
+                                     !instance.document.problem.cost_model->reuse_penalties.empty();
     for (std::size_t repetition = 0; repetition < deterministic_runs; ++repetition) {
-      records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
-      if (has_fixed_capacity) {
-        records.push_back(RunHeuristic(instance, kCanonicalGreedy, std::nullopt, options));
-        records.push_back(RunHeuristic(instance, kPromoteRepair, std::nullopt, options));
-        records.push_back(RunHeuristic(instance, kCypressRelaxation, std::nullopt, options));
+      if (MethodEnabled(options, kFirstFit)) {
+        records.push_back(RunHeuristic(instance, kFirstFit, std::nullopt, options));
       }
-      records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
+      if (has_fixed_capacity) {
+        if (MethodEnabled(options, kCanonicalGreedy)) {
+          records.push_back(RunHeuristic(instance, kCanonicalGreedy, std::nullopt, options));
+        }
+        if (MethodEnabled(options, kPromoteRepair)) {
+          records.push_back(RunHeuristic(instance, kPromoteRepair, std::nullopt, options));
+        }
+        if (has_reuse_penalties && MethodEnabled(options, kPromoteAll)) {
+          records.push_back(RunHeuristic(instance, kPromoteAll, std::nullopt, options));
+        }
+        if (MethodEnabled(options, kCypressRelaxation)) {
+          records.push_back(RunHeuristic(instance, kCypressRelaxation, std::nullopt, options));
+        }
+      }
+      if (MethodEnabled(options, kXlaHeap)) {
+        records.push_back(RunHeuristic(instance, kXlaHeap, std::nullopt, options));
+      }
+    }
+    if (has_fixed_capacity && has_reuse_penalties) {
+      for (const std::string_view method : {kCanonicalExact, kImplicitHittingSet, kCapacityTwo,
+                                            kSpanOne, kTreewidth, kReusePortfolio, kScaleGrid}) {
+        if (MethodEnabled(options, method)) {
+          records.push_back(RunHeuristic(instance, method, std::nullopt, options));
+        }
+      }
     }
     for (std::uint64_t seed : options.seeds) {
-      records.push_back(RunHeuristic(instance, kTvmHillClimb, seed, options));
-      records.push_back(RunHeuristic(instance, kLocalSearch, seed, options));
-      if (dsa::IsPyptoProfile(instance.document.profile)) {
+      if (MethodEnabled(options, kTvmHillClimb)) {
+        records.push_back(RunHeuristic(instance, kTvmHillClimb, seed, options));
+      }
+      if (MethodEnabled(options, kLocalSearch)) {
+        records.push_back(RunHeuristic(instance, kLocalSearch, seed, options));
+      }
+      if (has_fixed_capacity && has_reuse_penalties) {
+        for (const std::string_view method : {kUnitRandom, kUnitLowRank, kReuseLocalSearch}) {
+          if (MethodEnabled(options, method)) {
+            records.push_back(RunHeuristic(instance, method, seed, options));
+          }
+        }
+      }
+      if (dsa::IsPyptoProfile(instance.document.profile) &&
+          MethodEnabled(options, kPyptoStructuredSearch)) {
         records.push_back(RunHeuristic(instance, kPyptoStructuredSearch, seed, options));
       }
     }
-    if (!dsa::IsPyptoProfile(instance.document.profile)) {
+    if (instance.document.profile == dsa::BenchmarkProfile::kStandardDsa ||
+        instance.document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
+      if (!MethodEnabled(options, kMiniMalloc)) continue;
       records.push_back(RunMiniMalloc(instance, options));
     }
   }
@@ -1318,7 +1524,7 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
             "max_live_capacity_ratio,aligned_buffers,multi_interval_buffers,"
             "flexible_pool_buffers,reserved_ranges,bank_geometries,colocations,separations,"
             "pipeline_separations,target_hazard_separations,semantic_no_alias_separations,"
-            "temporal_exclusions,pinned_allocations,reuse_penalties,"
+            "cross_pipe_separations,temporal_exclusions,pinned_allocations,reuse_penalties,"
             "alias_classes,nontrivial_alias_classes,pipeline_groups,depth_shed_pipeline_groups\n";
   std::vector<FeatureStats> rows;
   for (const Instance& instance : instances) {
@@ -1354,9 +1560,10 @@ void WriteFeaturesCsv(const fs::path& path, const std::vector<Instance>& instanc
            << stats.flexible_pool_buffers << ',' << stats.reserved_ranges << ','
            << stats.bank_geometries << ',' << stats.colocations << ',' << stats.separations << ','
            << stats.pipeline_separations << ',' << stats.target_hazard_separations << ','
-           << stats.semantic_no_alias_separations << ',' << stats.temporal_exclusions << ','
-           << stats.pinned_allocations << ',' << stats.reuse_penalties << ',' << stats.alias_classes
-           << ',' << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
+           << stats.semantic_no_alias_separations << ',' << stats.cross_pipe_separations << ','
+           << stats.temporal_exclusions << ',' << stats.pinned_allocations << ','
+           << stats.reuse_penalties << ',' << stats.alias_classes << ','
+           << stats.nontrivial_alias_classes << ',' << stats.pipeline_groups << ','
            << stats.depth_shed_pipeline_groups << '\n';
   }
 }
@@ -1509,6 +1716,7 @@ void WriteFeatureOccurrenceReport(std::ostream& output, const std::vector<Instan
   write_count("pipeline-stage separation reasons", &FeatureStats::pipeline_separations);
   write_count("target-hazard separation reasons", &FeatureStats::target_hazard_separations);
   write_count("semantic-no-alias separation reasons", &FeatureStats::semantic_no_alias_separations);
+  write_count("cross-pipe separation reasons", &FeatureStats::cross_pipe_separations);
   write_count("nontrivial alias provenance", &FeatureStats::nontrivial_alias_classes);
   write_count("pipeline groups", &FeatureStats::pipeline_groups);
   write_count("depth-shed pipeline groups", &FeatureStats::depth_shed_pipeline_groups);
@@ -1652,6 +1860,9 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
   for (const fs::path& root : options.standard_roots) {
     append_option("standard", root.generic_string());
   }
+  for (const fs::path& root : options.dsa_rp_roots) {
+    append_option("dsa-rp", root.generic_string());
+  }
   for (const fs::path& root : options.pypto_roots) {
     append_option("pypto", root.generic_string());
   }
@@ -1663,6 +1874,16 @@ void WriteStandardOnlyReport(const fs::path& path, const std::vector<Instance>& 
     seeds << options.seeds[index];
   }
   append_option("seeds", seeds.str());
+  if (!options.methods.empty()) {
+    std::ostringstream methods;
+    bool first = true;
+    for (const std::string& method : options.methods) {
+      if (!first) methods << ',';
+      first = false;
+      methods << method;
+    }
+    append_option("methods", methods.str());
+  }
   append_option("iterations", std::to_string(options.iterations));
   append_option("restarts", std::to_string(options.restarts));
   append_option("stagnation", std::to_string(options.stagnation_limit));
@@ -1813,6 +2034,9 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
   for (const fs::path& root : options.standard_roots) {
     append_option("standard", root.generic_string());
   }
+  for (const fs::path& root : options.dsa_rp_roots) {
+    append_option("dsa-rp", root.generic_string());
+  }
   for (const fs::path& root : options.pypto_roots) {
     append_option("pypto", root.generic_string());
   }
@@ -1827,105 +2051,274 @@ void WriteReport(const fs::path& path, const std::vector<Instance>& instances,
     seeds << options.seeds[index];
   }
   append_option("seeds", seeds.str());
+  if (!options.methods.empty()) {
+    std::ostringstream methods;
+    bool first = true;
+    for (const std::string& method : options.methods) {
+      if (!first) methods << ',';
+      first = false;
+      methods << method;
+    }
+    append_option("methods", methods.str());
+  }
   append_option("iterations", std::to_string(options.iterations));
   append_option("restarts", std::to_string(options.restarts));
   append_option("stagnation", std::to_string(options.stagnation_limit));
+  append_option("deterministic-repetitions", std::to_string(options.deterministic_repetitions));
   append_option("minimalloc-timeout-ms", std::to_string(options.minimalloc_timeout_ms));
   if (!options.run_minimalloc) output << " \\" << '\n' << "  --no-minimalloc";
   if (!options.build_core_relaxations) output << " \\" << '\n' << "  --no-core-relaxations";
-  output << "\n```\n\n"
-         << "MiniMalloc is compared directly only with standard DSA. For PyPTO instances it runs "
-            "only on explicitly recorded core relaxations, so those numbers are lower bounds—not "
-            "valid structured placements. Only certified relaxation optima are shown as bounds; a "
-            "timeout is never reported as a certified optimum.\n\n";
-  WriteFeatureOccurrenceReport(output, instances);
-  output
-      << "## Standard DSA\n\n"
-      << "Rows include public standard instances and compiler-derived per-pool core relaxations. "
-         "A relaxation is a standard DSA problem and supports direct algorithm comparison, but its "
-         "result is only a lower bound for the corresponding structured PyPTO instance.\n\n"
-      << "| Instance | Origin | Buffers | Capacity | MiniMalloc exact | First fit | XLA heap | TVM "
-         "hill climb | Local search |\n"
-      << "| --- | --- | ---: | ---: | --- | --- | --- | --- | --- |\n";
+  if (options.dsa_rp_variants_only) {
+    output << " \\" << '\n' << "  --dsa-rp-variants-only";
+  }
+  output << "\n```\n\n";
+  if (!options.standard_roots.empty() || !options.pypto_roots.empty()) {
+    output << "MiniMalloc is compared directly only with standard DSA. For PyPTO instances it "
+              "runs only on explicitly recorded core relaxations, so those numbers are lower "
+              "bounds—not valid structured placements. Only certified relaxation optima are "
+              "shown as bounds; a timeout is never reported as a certified optimum.\n\n";
+  }
+  const bool has_standard = std::any_of(instances.begin(), instances.end(), [](const auto& item) {
+    return item.document.profile == dsa::BenchmarkProfile::kStandardDsa ||
+           item.document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation;
+  });
+  const bool has_pypto = std::any_of(instances.begin(), instances.end(), [](const auto& item) {
+    return dsa::IsPyptoProfile(item.document.profile);
+  });
+  if (has_pypto) WriteFeatureOccurrenceReport(output, instances);
+  if (has_standard) {
+    output
+        << "## Standard DSA\n\n"
+        << "Rows include public standard instances and compiler-derived per-pool core relaxations. "
+           "A relaxation is a standard DSA problem and supports direct algorithm comparison, but "
+           "its result is only a lower bound for the corresponding structured PyPTO instance.\n\n"
+        << "| Instance | Origin | Buffers | Capacity | MiniMalloc exact | First fit | XLA heap | "
+           "TVM hill climb | Local search |\n"
+        << "| --- | --- | ---: | ---: | --- | --- | --- | --- | --- |\n";
 
+    for (const Instance& instance : instances) {
+      const dsa::StructuredProblemDocument& document = instance.document;
+      if (document.profile != dsa::BenchmarkProfile::kStandardDsa &&
+          document.profile != dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
+        continue;
+      }
+      const std::string profile = dsa::ToString(document.profile);
+      const Summary* exact = FindSummary(summaries, document.instance, profile, kMiniMalloc);
+      output << "| " << MarkdownEscape(document.instance) << " | ";
+      if (document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
+        output << "core relaxation of "
+               << MarkdownEscape(document.relaxed_from.value_or("unknown"));
+      } else {
+        output << "public standard";
+      }
+      output << " | " << document.problem.buffers.size() << " | ";
+      if (document.problem.pools.front().capacity) {
+        output << *document.problem.pools.front().capacity;
+      } else {
+        output << "—";
+      }
+      output << " | " << ExactCell(exact) << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), exact,
+                              false)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), exact,
+                              false)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kTvmHillClimb),
+                              exact, false)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kLocalSearch),
+                              exact, false)
+             << " |\n";
+    }
+    output << '\n';
+  }
+
+  if (has_pypto) {
+    output
+        << "## PyPTO structured DSA\n\n"
+        << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
+           "lower bound | First fit | Canonical greedy | Promote-repair | Cypress relaxation | XLA "
+           "heap | TVM hill climb | Local search | PyPTO structured search |\n"
+        << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- "
+           "| --- | --- |\n";
+    for (const Instance& instance : instances) {
+      const dsa::StructuredProblemDocument& document = instance.document;
+      if (!dsa::IsPyptoProfile(document.profile)) continue;
+      const std::string profile = dsa::ToString(document.profile);
+      output << "| " << MarkdownEscape(document.instance) << " | " << MarkdownEscape(profile)
+             << " | " << MarkdownEscape(MetadataValue(document, "corpus_family")) << " | "
+             << MarkdownEscape(MetadataValue(document, "corpus_source_path")) << " | "
+             << MarkdownEscape(MetadataValue(document, "target")) << " | "
+             << document.problem.buffers.size() << " | "
+             << MarkdownEscape(Join(ProblemFeatures(document.problem), "; ")) << " | "
+             << CoreLowerBoundCell(summaries, document.instance) << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit),
+                              nullptr, true)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kCanonicalGreedy),
+                              nullptr, true)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kPromoteRepair),
+                              nullptr, true)
+             << " | "
+             << HeuristicCell(
+                    FindSummary(summaries, document.instance, profile, kCypressRelaxation), nullptr,
+                    true)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), nullptr,
+                              true)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kTvmHillClimb),
+                              nullptr, true)
+             << " | "
+             << HeuristicCell(FindSummary(summaries, document.instance, profile, kLocalSearch),
+                              nullptr, true)
+             << " | "
+             << HeuristicCell(
+                    FindSummary(summaries, document.instance, profile, kPyptoStructuredSearch),
+                    nullptr, true)
+             << " |\n";
+    }
+    output << '\n';
+  }
+
+  std::vector<const Instance*> dsa_rp_instances;
+  std::set<std::string> dsa_rp_methods;
+  for (const Instance& instance : instances) {
+    if (instance.document.profile == dsa::BenchmarkProfile::kDsaRpV1) {
+      dsa_rp_instances.push_back(&instance);
+    }
+  }
+  for (const Summary& summary : summaries) {
+    if (summary.profile == dsa::ToString(dsa::BenchmarkProfile::kDsaRpV1)) {
+      dsa_rp_methods.insert(summary.method);
+    }
+  }
+  if (!dsa_rp_instances.empty()) {
+    const bool all_synthetic =
+        std::all_of(dsa_rp_instances.begin(), dsa_rp_instances.end(), [](const Instance* instance) {
+          return MetadataValue(instance->document, "synthetic_schedule") == "true";
+        });
+    output << "## Generic DSA-RP\n\n"
+           << "These are capacity-constrained DSA instances with weighted soft anti-alias edges; "
+              "they do not use PyPTO pipeline relaxation. Each cell reports `reuse_cost @ peak` "
+              "for the best validated run. Timeout incumbents are feasible placements, not "
+              "optimality certificates.\n\n";
+    if (all_synthetic) {
+      output << "All inputs in this snapshot use a deterministic synthetic access schedule. They "
+                "stress the DSA-RP algorithms; they are not evidence for hardware synchronization "
+                "cost.\n\n";
+    }
+    output << "### Aggregate quality\n\n"
+           << "For fitting instances, quality is the geometric mean of `(cost + 1) / (best "
+              "validated cost + 1)`; `1.000` is best. Runtime is normalized per instance to first "
+              "fit before taking the geometric mean. Inapplicable methods are retained in the raw "
+              "results but omitted here.\n\n"
+           << "| Method | Fits | Cost ratio | Wins | Runtime vs first fit |\n"
+           << "| --- | ---: | ---: | ---: | ---: |\n";
+    for (const std::string& method : dsa_rp_methods) {
+      std::size_t fitting = 0;
+      std::size_t quality_count = 0;
+      std::size_t wins = 0;
+      std::size_t runtime_count = 0;
+      long double log_quality = 0.0L;
+      long double log_runtime = 0.0L;
+      for (const Instance* instance : dsa_rp_instances) {
+        const std::string profile = dsa::ToString(instance->document.profile);
+        const Summary* candidate =
+            FindSummary(summaries, instance->document.instance, profile, method);
+        const Summary* first_fit =
+            FindSummary(summaries, instance->document.instance, profile, kFirstFit);
+        std::optional<std::uint64_t> best_cost;
+        for (const Summary& summary : summaries) {
+          if (summary.instance != instance->document.instance || summary.profile != profile ||
+              !summary.best || !summary.best->solution_valid || !summary.best->reuse_cost) {
+            continue;
+          }
+          if (!best_cost || *summary.best->reuse_cost < *best_cost) {
+            best_cost = summary.best->reuse_cost;
+          }
+        }
+        if (candidate && candidate->best && candidate->best->solution_valid &&
+            candidate->best->reuse_cost && best_cost) {
+          ++fitting;
+          ++quality_count;
+          if (*candidate->best->reuse_cost == *best_cost) ++wins;
+          log_quality += std::log((static_cast<long double>(*candidate->best->reuse_cost) + 1.0L) /
+                                  (static_cast<long double>(*best_cost) + 1.0L));
+        }
+        if (candidate && first_fit && candidate->median_runtime_us != 0 &&
+            first_fit->median_runtime_us != 0) {
+          ++runtime_count;
+          log_runtime += std::log(static_cast<long double>(candidate->median_runtime_us) /
+                                  static_cast<long double>(first_fit->median_runtime_us));
+        }
+      }
+      if (fitting == 0) continue;
+      output << "| `" << MarkdownEscape(method) << "` | " << fitting << '/'
+             << dsa_rp_instances.size() << " | ";
+      if (quality_count == 0) {
+        output << "—";
+      } else {
+        output << std::fixed << std::setprecision(3)
+               << std::exp(log_quality / static_cast<long double>(quality_count));
+      }
+      output << " | " << wins << " | ";
+      if (runtime_count == 0) {
+        output << "—";
+      } else {
+        output << std::fixed << std::setprecision(2)
+               << std::exp(log_runtime / static_cast<long double>(runtime_count)) << 'x';
+      }
+      output << " |\n";
+    }
+    output << '\n';
+  }
+
+  if (!dsa_rp_instances.empty()) {
+    output << "### Per-instance results\n\n"
+           << "| Instance | Buffers | Penalties | Capacity | First fit | Canonical greedy | "
+              "Promote-repair | Cypress relaxation | Exact/portfolio | Local search |\n"
+           << "| --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- |\n";
+  }
+  auto dsa_rp_cell = [&](const Summary* summary) {
+    if (summary == nullptr || !summary->best || !summary->best->solution_valid ||
+        !summary->best->reuse_cost.has_value() || !summary->best->peak.has_value()) {
+      return std::string("—");
+    }
+    std::string status;
+    if (!summary->best->objective_compatible) status += " [structural-only]";
+    if (summary->best->status != "feasible" && summary->best->status != "optimal") {
+      status += " [" + summary->best->status + "]";
+    }
+    return std::to_string(*summary->best->reuse_cost) + " @ " +
+           std::to_string(*summary->best->peak) + status;
+  };
   for (const Instance& instance : instances) {
     const dsa::StructuredProblemDocument& document = instance.document;
-    if (document.profile != dsa::BenchmarkProfile::kStandardDsa &&
-        document.profile != dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
-      continue;
-    }
+    if (document.profile != dsa::BenchmarkProfile::kDsaRpV1) continue;
     const std::string profile = dsa::ToString(document.profile);
-    const Summary* exact = FindSummary(summaries, document.instance, profile, kMiniMalloc);
-    output << "| " << MarkdownEscape(document.instance) << " | ";
-    if (document.profile == dsa::BenchmarkProfile::kPyptoCoreRelaxation) {
-      output << "core relaxation of " << MarkdownEscape(document.relaxed_from.value_or("unknown"));
-    } else {
-      output << "public standard";
-    }
-    output << " | " << document.problem.buffers.size() << " | ";
-    if (document.problem.pools.front().capacity) {
+    const std::size_t penalties =
+        document.problem.cost_model ? document.problem.cost_model->reuse_penalties.size() : 0;
+    output << "| " << MarkdownEscape(document.instance) << " | " << document.problem.buffers.size()
+           << " | " << penalties << " | ";
+    if (document.problem.pools.size() == 1 && document.problem.pools.front().capacity) {
       output << *document.problem.pools.front().capacity;
     } else {
       output << "—";
     }
-    output << " | " << ExactCell(exact) << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), exact,
-                            false)
+    output << " | " << dsa_rp_cell(FindSummary(summaries, document.instance, profile, kFirstFit))
            << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), exact,
-                            false)
+           << dsa_rp_cell(FindSummary(summaries, document.instance, profile, kCanonicalGreedy))
            << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kTvmHillClimb),
-                            exact, false)
+           << dsa_rp_cell(FindSummary(summaries, document.instance, profile, kPromoteRepair))
            << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kLocalSearch), exact,
-                            false)
-           << " |\n";
-  }
-
-  output
-      << "\n## PyPTO structured DSA\n\n"
-      << "| Instance | Profile | Family | Source | Target | Buffers | Structure | Exact core "
-         "lower bound | "
-         "First fit | Canonical greedy | Promote-repair | Cypress relaxation | XLA heap | TVM hill "
-         "climb | Local search | PyPTO structured search |\n"
-      << "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | "
-         "--- | --- |\n";
-  for (const Instance& instance : instances) {
-    const dsa::StructuredProblemDocument& document = instance.document;
-    if (!dsa::IsPyptoProfile(document.profile)) continue;
-    const std::string profile = dsa::ToString(document.profile);
-    output << "| " << MarkdownEscape(document.instance) << " | " << MarkdownEscape(profile) << " | "
-           << MarkdownEscape(MetadataValue(document, "corpus_family")) << " | "
-           << MarkdownEscape(MetadataValue(document, "corpus_source_path")) << " | "
-           << MarkdownEscape(MetadataValue(document, "target")) << " | "
-           << document.problem.buffers.size() << " | "
-           << MarkdownEscape(Join(ProblemFeatures(document.problem), "; ")) << " | "
-           << CoreLowerBoundCell(summaries, document.instance) << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kFirstFit), nullptr,
-                            true)
+           << dsa_rp_cell(FindSummary(summaries, document.instance, profile, kCypressRelaxation))
            << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kCanonicalGreedy),
-                            nullptr, true)
+           << dsa_rp_cell(FindSummary(summaries, document.instance, profile, kReusePortfolio))
            << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kPromoteRepair),
-                            nullptr, true)
-           << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kCypressRelaxation),
-                            nullptr, true)
-           << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kXlaHeap), nullptr,
-                            true)
-           << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kTvmHillClimb),
-                            nullptr, true)
-           << " | "
-           << HeuristicCell(FindSummary(summaries, document.instance, profile, kLocalSearch),
-                            nullptr, true)
-           << " | "
-           << HeuristicCell(
-                  FindSummary(summaries, document.instance, profile, kPyptoStructuredSearch),
-                  nullptr, true)
+           << dsa_rp_cell(FindSummary(summaries, document.instance, profile, kReuseLocalSearch))
            << " |\n";
   }
 }
@@ -1952,7 +2345,7 @@ void WriteOutputs(const Options& options, const std::vector<Instance>& instances
   }
 }
 
-void RewriteStandardReport(const Options& options, const std::vector<Instance>& instances) {
+void RewriteReport(const Options& options, const std::vector<Instance>& instances) {
   const fs::path raw_path = options.output_dir / "results.jsonl";
   const std::vector<RunRecord> records = ReadRawResults(raw_path);
   std::set<std::pair<std::string, std::string>> expected;
@@ -1961,7 +2354,7 @@ void RewriteStandardReport(const Options& options, const std::vector<Instance>& 
   }
   std::set<std::pair<std::string, std::string>> actual;
   for (const RunRecord& record : records) {
-    if (record.capacity) {
+    if (options.standard_only && record.capacity) {
       throw std::runtime_error("--report-only found a capacity-bearing result for " +
                                record.instance);
     }
@@ -1971,7 +2364,11 @@ void RewriteStandardReport(const Options& options, const std::vector<Instance>& 
     throw std::runtime_error("--report-only inputs do not match the instance set in results.jsonl");
   }
   const fs::path report_path = options.output_dir / "report.md";
-  WriteStandardOnlyReport(report_path, instances, Summarize(records), options);
+  if (options.standard_only) {
+    WriteStandardOnlyReport(report_path, instances, Summarize(records), options);
+  } else {
+    WriteReport(report_path, instances, Summarize(records), options);
+  }
   std::cout << "dsa-suite: rebuilt " << report_path << " from " << raw_path << '\n';
 }
 
@@ -1983,7 +2380,14 @@ int main(int argc, char** argv) {
     const std::vector<Instance> instances = LoadInstances(options);
     std::cout << "dsa-suite: loaded " << instances.size() << " benchmark documents" << std::endl;
     if (options.report_only) {
-      RewriteStandardReport(options, instances);
+      RewriteReport(options, instances);
+      return 0;
+    }
+    if (options.features_only) {
+      fs::create_directories(options.output_dir);
+      const fs::path features_path = options.output_dir / "features.csv";
+      WriteFeaturesCsv(features_path, instances);
+      std::cout << "dsa-suite: wrote " << features_path << '\n';
       return 0;
     }
     const std::vector<RunRecord> records = ExecuteSuite(instances, options);

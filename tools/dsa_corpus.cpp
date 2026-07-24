@@ -47,6 +47,7 @@ struct Options {
   std::string producer_repo;
   std::string producer_commit;
   std::string corpus_namespace;
+  bool cross_pipe_variants = false;
 };
 
 struct InputDocument {
@@ -99,6 +100,20 @@ struct Selection {
   std::string reason;
 };
 
+struct ImportVariant {
+  std::string suffix;
+  dsa::StructuredProblemDocument document;
+};
+
+std::size_t CountCrossPipePenalties(const dsa::StructuredProblemDocument& document) {
+  if (!document.problem.cost_model) return 0;
+  return static_cast<std::size_t>(std::count_if(
+      document.problem.cost_model->reuse_penalties.begin(),
+      document.problem.cost_model->reuse_penalties.end(), [](const dsa::ReusePenalty& penalty) {
+        return penalty.reason == dsa::ReusePenaltyReason::kCrossPipe;
+      }));
+}
+
 [[noreturn]] void UsageError(const std::string& message) {
   throw std::invalid_argument(message + "\nRun dsa-corpus --help for usage information.");
 }
@@ -117,6 +132,9 @@ void PrintHelp() {
       << "Optional producer provenance:\n"
       << "  --producer-repo TEXT            Compiler/exporter repository\n"
       << "  --producer-commit SHA           Exact compiler/exporter revision\n\n"
+      << "DSA-RP variants:\n"
+      << "  --cross-pipe-variants           Emit paired hard and soft documents for\n"
+      << "                                  recognized cross_pipe edges\n\n"
       << "Coverage:\n"
       << "  --coverage-targets FILE         TSV inventory of captured and excluded cases\n"
       << "  --help                          Show this help\n\n"
@@ -166,6 +184,8 @@ Options ParseOptions(int argc, char** argv) {
       options.producer_commit = next(&index, option);
     } else if (option == "--namespace") {
       options.corpus_namespace = next(&index, option);
+    } else if (option == "--cross-pipe-variants") {
+      options.cross_pipe_variants = true;
     } else {
       UsageError("unknown option '" + option + "'");
     }
@@ -397,6 +417,33 @@ void NormalizeNonSemanticProblemNames(dsa::StructuredProblemDocument* document) 
   }
 }
 
+std::string CanonicalProblem(const dsa::StructuredProblemDocument& document) {
+  dsa::StructuredProblemDocument shape = document;
+  shape.instance = "corpus_shape";
+  shape.metadata.clear();
+  for (const char* semantic_key : {"lifetime_ordering", "solver_input", "target"}) {
+    const auto semantic_metadata = document.metadata.find(semantic_key);
+    if (semantic_metadata != document.metadata.end()) {
+      shape.metadata.emplace(semantic_key, semantic_metadata->second);
+    }
+  }
+  NormalizeNonSemanticProblemNames(&shape);
+  std::ostringstream output;
+  dsa::WriteStructuredProblemJson(output, shape);
+  return output.str();
+}
+
+fs::path CorpusLayoutPath(const std::string& corpus_namespace, const fs::path& source_path) {
+  if (corpus_namespace != "pypto") return source_path;
+  auto component = source_path.begin();
+  if (component == source_path.end() || component->string() != "tests") return source_path;
+  ++component;
+  if (component == source_path.end() || component->string() != "st") return source_path;
+  fs::path layout = "system-tests";
+  for (++component; component != source_path.end(); ++component) layout /= *component;
+  return layout;
+}
+
 bool ShareAllowedPool(const dsa::Buffer& first, const dsa::Buffer& second) {
   for (dsa::PoolId first_pool : first.allowed_pools) {
     if (std::find(second.allowed_pools.begin(), second.allowed_pools.end(), first_pool) !=
@@ -454,6 +501,21 @@ Selection SelectProblem(const dsa::DsaProblem& problem, const ProblemStats& stat
     return {true, "core_reuse_search"};
   }
   return {false, "trivial_no_placement_choice"};
+}
+
+std::vector<ImportVariant> ExpandImportVariants(const dsa::StructuredProblemDocument& source,
+                                                bool cross_pipe_variants) {
+  if (!cross_pipe_variants) return {{"", source}};
+  if (CountCrossPipePenalties(source) == 0) return {};
+  const auto policy = source.metadata.find("reuse_edge_construction_policy");
+  if (policy == source.metadata.end() || policy->second != "cross_resource_pair_v4") {
+    throw std::invalid_argument(
+        "--cross-pipe-variants requires current mechanically recognized "
+        "cross_resource_pair_v4 edges");
+  }
+  dsa::CrossPipeReuseVariants variants = dsa::BuildCrossPipeReuseVariants(source);
+  return {{"-cross-pipe-hard", std::move(variants.hard)},
+          {"-cross-pipe-soft", std::move(variants.soft)}};
 }
 
 void RequireFreshOutputDirectory(const fs::path& output) {
@@ -539,11 +601,11 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
       target.family = "unclassified";
     }
 
-    dsa::StructuredProblemDocument document = dsa::ReadStructuredProblemJsonFile(input.path);
-    if (!dsa::IsPyptoProfile(document.profile)) {
+    dsa::StructuredProblemDocument source_document = dsa::ReadStructuredProblemJsonFile(input.path);
+    if (!dsa::IsPyptoProfile(source_document.profile)) {
       throw std::runtime_error("input export does not use a PyPTO profile: " + input.path.string());
     }
-    for (const auto& [key, value] : document.metadata) {
+    for (const auto& [key, value] : source_document.metadata) {
       static_cast<void>(value);
       if (key.rfind("corpus_", 0) == 0) {
         throw std::runtime_error("input export is already corpus-normalized (metadata key '" + key +
@@ -553,97 +615,145 @@ std::vector<ManifestRecord> ImportCorpus(const Options& options,
 
     const std::string raw = ReadFile(input.path);
     const std::string fingerprint = Fnv1a64(raw);
-    dsa::StructuredProblemDocument shape = document;
-    shape.instance = "corpus_shape";
-    shape.metadata.clear();
-    for (const char* semantic_key : {"lifetime_ordering", "solver_input", "target"}) {
-      const auto semantic_metadata = document.metadata.find(semantic_key);
-      if (semantic_metadata != document.metadata.end()) {
-        shape.metadata.emplace(semantic_key, semantic_metadata->second);
-      }
-    }
-    NormalizeNonSemanticProblemNames(&shape);
-    std::ostringstream canonical_output;
-    dsa::WriteStructuredProblemJson(canonical_output, shape);
-    const std::string canonical_problem = canonical_output.str();
-    const std::string problem_fingerprint = Fnv1a64(canonical_problem);
-    const ProblemStats stats = AnalyzeProblem(document.problem);
-    const Selection selection = SelectProblem(document.problem, stats);
-    const std::string export_stem = SanitizeComponent(StripDsaJsonSuffix(input.path));
-    const std::string original_instance = document.instance;
-    bool representative = false;
-    bool selected = false;
-    std::string normalized_instance;
-    fs::path relative_output;
-    const auto existing = representative_by_fingerprint.find(problem_fingerprint);
-    if (existing != representative_by_fingerprint.end()) {
-      if (existing->second.canonical_problem != canonical_problem) {
-        throw std::runtime_error("problem fingerprint collision for input: " + input.path.string());
-      }
-      normalized_instance = existing->second.instance;
-      relative_output = existing->second.relative_output;
-      selected = existing->second.selected;
-    } else {
-      representative = true;
-      selected = selection.selected;
-      const std::string instance_prefix =
-          options.corpus_namespace + "::" + SourceIdentity(target.source_path) + "::";
-      std::string normalized_stem = export_stem;
-      normalized_instance = instance_prefix + normalized_stem;
-      if (!normalized_instances.insert(normalized_instance).second) {
-        normalized_stem += "-" + problem_fingerprint;
+    const std::string original_instance = source_document.instance;
+    std::vector<ImportVariant> variants =
+        ExpandImportVariants(source_document, options.cross_pipe_variants);
+    if (variants.empty()) {
+      const std::string canonical_problem = CanonicalProblem(source_document);
+      const std::string problem_fingerprint = Fnv1a64(canonical_problem);
+      const ProblemStats stats = AnalyzeProblem(source_document.problem);
+      bool representative = false;
+      std::string normalized_instance;
+      const auto existing = representative_by_fingerprint.find(problem_fingerprint);
+      if (existing != representative_by_fingerprint.end()) {
+        if (existing->second.canonical_problem != canonical_problem) {
+          throw std::runtime_error("problem fingerprint collision for input: " +
+                                   input.path.string());
+        }
+        normalized_instance = existing->second.instance;
+      } else {
+        representative = true;
+        const std::string instance_prefix =
+            options.corpus_namespace + "::" + SourceIdentity(target.source_path) + "::";
+        std::string normalized_stem = SanitizeComponent(StripDsaJsonSuffix(input.path));
         normalized_instance = instance_prefix + normalized_stem;
         if (!normalized_instances.insert(normalized_instance).second) {
-          throw std::runtime_error("duplicate normalized corpus identity: " + normalized_instance);
+          normalized_stem += "-" + problem_fingerprint;
+          normalized_instance = instance_prefix + normalized_stem;
+          if (!normalized_instances.insert(normalized_instance).second) {
+            throw std::runtime_error("duplicate normalized corpus identity: " +
+                                     normalized_instance);
+          }
         }
+        representative_by_fingerprint.emplace(
+            problem_fingerprint,
+            RepresentativeDocument{canonical_problem, normalized_instance, {}, false});
       }
-      document.instance = normalized_instance;
-      document.metadata["corpus_case_id"] = input.case_id;
-      document.metadata["corpus_export_file"] = input.relative_path.generic_string();
-      document.metadata["corpus_family"] = target.family;
-      document.metadata["corpus_importer"] = "dsa-corpus-v1";
-      document.metadata["corpus_namespace"] = options.corpus_namespace;
-      document.metadata["corpus_original_instance"] = original_instance;
-      document.metadata["corpus_problem_fingerprint_fnv1a64"] = problem_fingerprint;
-      document.metadata["corpus_source_commit"] = options.source_commit;
-      document.metadata["corpus_source_fingerprint_fnv1a64"] = fingerprint;
-      document.metadata["corpus_source_path"] = target.source_path.generic_string();
-      document.metadata["corpus_source_repo"] = options.source_repo;
-      if (!options.producer_repo.empty()) {
-        document.metadata["corpus_producer_repo"] = options.producer_repo;
-        document.metadata["corpus_producer_commit"] = options.producer_commit;
-      }
-
-      if (selected) {
-        relative_output = fs::path("instances") / target.source_path;
-        relative_output.replace_extension();
-        relative_output /= normalized_stem + ".json";
-        ValidateRelativeSourcePath(relative_output, "normalized instance path");
-        const fs::path output_path = options.output / relative_output;
-        if (!output_paths.insert(relative_output).second) {
-          throw std::runtime_error("two exports map to the same output path: " +
-                                   relative_output.generic_string());
-        }
-        fs::create_directories(output_path.parent_path());
-        dsa::WriteStructuredProblemJsonFile(output_path, document);
-      }
-      representative_by_fingerprint.emplace(
-          problem_fingerprint, RepresentativeDocument{canonical_problem, normalized_instance,
-                                                      relative_output, selected});
+      const std::size_t alias_classes =
+          source_document.problem.pypto_structure
+              ? source_document.problem.pypto_structure->alias_classes.size()
+              : 0;
+      const std::size_t pipeline_groups =
+          source_document.problem.pypto_structure
+              ? source_document.problem.pypto_structure->pipeline_groups.size()
+              : 0;
+      records.push_back({normalized_instance, input.case_id, target.source_path.generic_string(),
+                         target.family, target.devices, input.relative_path.generic_string(), "",
+                         fingerprint, problem_fingerprint, representative,
+                         source_document.problem.pools.size(),
+                         source_document.problem.buffers.size(), alias_classes, pipeline_groups,
+                         stats.live_intervals, stats.temporal_conflicts, stats.reuse_candidates,
+                         false, "no_cross_pipe_edges"});
+      ++(*coverage_counts)[input.case_id];
+      continue;
     }
 
-    const std::size_t alias_classes = document.problem.pypto_structure
-                                          ? document.problem.pypto_structure->alias_classes.size()
-                                          : 0;
-    const std::size_t pipeline_groups =
-        document.problem.pypto_structure ? document.problem.pypto_structure->pipeline_groups.size()
-                                         : 0;
-    records.push_back(
-        {normalized_instance, input.case_id, target.source_path.generic_string(), target.family,
-         target.devices, input.relative_path.generic_string(), relative_output.generic_string(),
-         fingerprint, problem_fingerprint, representative, document.problem.pools.size(),
-         document.problem.buffers.size(), alias_classes, pipeline_groups, stats.live_intervals,
-         stats.temporal_conflicts, stats.reuse_candidates, selected, selection.reason});
+    for (ImportVariant& variant : variants) {
+      dsa::StructuredProblemDocument& document = variant.document;
+      const std::string canonical_problem = CanonicalProblem(document);
+      const std::string problem_fingerprint = Fnv1a64(canonical_problem);
+      const ProblemStats stats = AnalyzeProblem(document.problem);
+      const Selection selection = SelectProblem(document.problem, stats);
+      const std::string export_stem =
+          SanitizeComponent(StripDsaJsonSuffix(input.path)) + variant.suffix;
+      bool representative = false;
+      bool selected = false;
+      std::string normalized_instance;
+      fs::path relative_output;
+      const auto existing = representative_by_fingerprint.find(problem_fingerprint);
+      if (existing != representative_by_fingerprint.end()) {
+        if (existing->second.canonical_problem != canonical_problem) {
+          throw std::runtime_error("problem fingerprint collision for input: " +
+                                   input.path.string());
+        }
+        normalized_instance = existing->second.instance;
+        relative_output = existing->second.relative_output;
+        selected = existing->second.selected;
+      } else {
+        representative = true;
+        selected = selection.selected;
+        const std::string instance_prefix =
+            options.corpus_namespace + "::" + SourceIdentity(target.source_path) + "::";
+        std::string normalized_stem = export_stem;
+        normalized_instance = instance_prefix + normalized_stem;
+        if (!normalized_instances.insert(normalized_instance).second) {
+          normalized_stem += "-" + problem_fingerprint;
+          normalized_instance = instance_prefix + normalized_stem;
+          if (!normalized_instances.insert(normalized_instance).second) {
+            throw std::runtime_error("duplicate normalized corpus identity: " +
+                                     normalized_instance);
+          }
+        }
+        document.instance = normalized_instance;
+        document.metadata["corpus_case_id"] = input.case_id;
+        document.metadata["corpus_export_file"] = input.relative_path.generic_string();
+        document.metadata["corpus_family"] = target.family;
+        document.metadata["corpus_importer"] = "dsa-corpus-v1";
+        document.metadata["corpus_namespace"] = options.corpus_namespace;
+        document.metadata["corpus_original_instance"] = original_instance;
+        document.metadata["corpus_problem_fingerprint_fnv1a64"] = problem_fingerprint;
+        document.metadata["corpus_source_commit"] = options.source_commit;
+        document.metadata["corpus_source_fingerprint_fnv1a64"] = fingerprint;
+        document.metadata["corpus_source_path"] = target.source_path.generic_string();
+        document.metadata["corpus_source_repo"] = options.source_repo;
+        if (!options.producer_repo.empty()) {
+          document.metadata["corpus_producer_repo"] = options.producer_repo;
+          document.metadata["corpus_producer_commit"] = options.producer_commit;
+        }
+
+        if (selected) {
+          relative_output = fs::path("instances") /
+                            CorpusLayoutPath(options.corpus_namespace, target.source_path);
+          relative_output.replace_extension();
+          relative_output /= normalized_stem + ".json";
+          ValidateRelativeSourcePath(relative_output, "normalized instance path");
+          const fs::path output_path = options.output / relative_output;
+          if (!output_paths.insert(relative_output).second) {
+            throw std::runtime_error("two exports map to the same output path: " +
+                                     relative_output.generic_string());
+          }
+          fs::create_directories(output_path.parent_path());
+          dsa::WriteStructuredProblemJsonFile(output_path, document);
+        }
+        representative_by_fingerprint.emplace(
+            problem_fingerprint, RepresentativeDocument{canonical_problem, normalized_instance,
+                                                        relative_output, selected});
+      }
+
+      const std::size_t alias_classes = document.problem.pypto_structure
+                                            ? document.problem.pypto_structure->alias_classes.size()
+                                            : 0;
+      const std::size_t pipeline_groups =
+          document.problem.pypto_structure
+              ? document.problem.pypto_structure->pipeline_groups.size()
+              : 0;
+      records.push_back(
+          {normalized_instance, input.case_id, target.source_path.generic_string(), target.family,
+           target.devices, input.relative_path.generic_string(), relative_output.generic_string(),
+           fingerprint, problem_fingerprint, representative, document.problem.pools.size(),
+           document.problem.buffers.size(), alias_classes, pipeline_groups, stats.live_intervals,
+           stats.temporal_conflicts, stats.reuse_candidates, selected, selection.reason});
+    }
     ++(*coverage_counts)[input.case_id];
   }
   std::sort(records.begin(), records.end(), [](const auto& first, const auto& second) {

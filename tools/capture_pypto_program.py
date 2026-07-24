@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--platform", default="a2a3sim", choices=("a2a3sim", "a5sim"))
     parser.add_argument(
+        "--reuse-penalty-recognizer",
+        default="disabled",
+        choices=("disabled", "quadratic"),
+        help="Experimental PyPTO reuse-hazard recognizer used during DSA export",
+    )
+    parser.add_argument(
         "--direct-pass-context",
         action="store_true",
         help="Capture an entry point that compiles directly instead of using the golden harness",
@@ -64,12 +70,18 @@ def main() -> int:
     # JIT compilation probes PTOAS_ROOT before invoking ptoas.  Point it at a
     # deliberately missing path; non-JIT golden.run receives skip_ptoas=True.
     os.environ["PTOAS_ROOT"] = str(build_root / "missing-ptoas")
+    os.environ["PYPTO_PROG_BUILD_DIR"] = str(build_root)
     sys.path.insert(0, str(source_root))
     sys.path.insert(0, str(script.parent))
 
     import golden  # noqa: PLC0415
     import golden.runner as golden_runner  # noqa: PLC0415
     from pypto import passes  # noqa: PLC0415
+
+    reuse_penalty_recognizer = {
+        "disabled": passes.DsaReusePenaltyRecognizer.DISABLED,
+        "quadratic": passes.DsaReusePenaltyRecognizer.QUADRATIC,
+    }[args.reuse_penalty_recognizer]
 
     original_jit = golden_runner.run_jit
     original_run = golden_runner.run
@@ -90,6 +102,7 @@ def main() -> int:
         compile_cfg.update(
             memory_planner=passes.MemoryPlanner.DSA,
             dsa_export_dir=str(export_dir),
+            dsa_reuse_penalty_recognizer=reuse_penalty_recognizer,
             save_kernels=True,
             save_kernels_dir=str(build_dir),
         )
@@ -106,6 +119,7 @@ def main() -> int:
         compile_cfg.update(
             memory_planner=passes.MemoryPlanner.DSA,
             dsa_export_dir=str(export_dir),
+            dsa_reuse_penalty_recognizer=reuse_penalty_recognizer,
             output_dir=str(build_dir),
             skip_ptoas=True,
         )
@@ -119,24 +133,37 @@ def main() -> int:
     if not args.direct_pass_context:
         golden.run_jit = golden_runner.run_jit = capture_jit
         golden.run = golden_runner.run = capture_run
+    else:
+        # Direct entry points compile before calling CompiledProgram. Suppress
+        # only the final device dispatch so this mode remains host-only.
+        import pypto.runtime.runner as runtime_runner  # noqa: PLC0415
+
+        def skip_execute_compiled(*call_args: Any, **call_kwargs: Any) -> None:
+            del call_args, call_kwargs
+
+        runtime_runner.execute_compiled = skip_execute_compiled
     script_args = (
         args.script_args[1:] if args.script_args[:1] == ["--"] else args.script_args
     )
     sys.argv = [str(script), *script_args]
     if args.direct_pass_context:
         with passes.PassContext(
-            [], memory_planner=passes.MemoryPlanner.DSA, dsa_export_dir=str(export_root)
+            [],
+            memory_planner=passes.MemoryPlanner.DSA,
+            dsa_export_dir=str(export_root),
+            dsa_reuse_penalty_recognizer=reuse_penalty_recognizer,
         ):
             runpy.run_path(str(script), run_name="__main__")
     else:
         runpy.run_path(str(script), run_name="__main__")
 
-    documents = sorted(export_root.rglob("*.json"))
+    documents = sorted(export_root.rglob("*.dsa.json"))
     summary = {
         "script": script.relative_to(source_root).as_posix(),
         "compile_calls": call_count,
         "documents": len(documents),
         "platform": args.platform,
+        "reuse_penalty_recognizer": args.reuse_penalty_recognizer,
         "device_executed": False,
         "capture_mode": "pass_context"
         if args.direct_pass_context

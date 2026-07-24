@@ -30,7 +30,7 @@ and the dependency removed.
 | `reuse_penalty_local_search` | joint order and promoted-soft-set search | DSA-RP heuristic |
 | `canonical_branch_and_bound`, `implicit_hitting_set` | canonical search and logic-based decomposition | DSA-RP exact engines |
 | `reuse_penalty_portfolio` | span-one, capacity-two, treewidth, then branch-and-bound dispatch | DSA-RP exact portfolio |
-| `scale_separated_grid_dp` | rounded large-buffer sweep DP plus harmonic small-buffer band | DSA-RP bicriteria baseline |
+| `scale_separated_grid_dp` | rounded large-buffer sweep DP plus harmonic small-buffer band | DSA-RP penalty heuristic with reported, but unbounded, augmented height |
 | `minimalloc_exact` | pinned Google MiniMalloc solver | optional exact standard-DSA baseline |
 
 Most heuristics decode a buffer order with the shared placement engine. The XLA

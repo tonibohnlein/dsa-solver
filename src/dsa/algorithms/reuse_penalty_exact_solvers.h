@@ -32,6 +32,8 @@ class CanonicalBranchAndBoundSolver final : public DsaSolver {
 struct ImplicitHittingSetOptions {
   // Per canonical feasibility-oracle call. Zero means unlimited.
   std::uint64_t max_oracle_nodes = 2'000'000;
+  // Per exact master solve. Zero means unlimited.
+  std::uint64_t max_master_nodes = 2'000'000;
   std::size_t max_iterations = 1'000;
   bool shrink_cores = true;
 };

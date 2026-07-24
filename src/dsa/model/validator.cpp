@@ -16,6 +16,10 @@ bool AddOverflows(std::uint64_t first, std::uint64_t second) {
   return first > std::numeric_limits<std::uint64_t>::max() - second;
 }
 
+std::uint64_t SaturatingAdd(std::uint64_t first, std::uint64_t second) {
+  return AddOverflows(first, second) ? std::numeric_limits<std::uint64_t>::max() : first + second;
+}
+
 class DisjointSet {
  public:
   explicit DisjointSet(std::size_t size) : parent_(size) {
@@ -43,6 +47,30 @@ std::unordered_map<BufferId, std::size_t> BufferIndices(const DsaProblem& proble
     result.emplace(problem.buffers[i].id, i);
   }
   return result;
+}
+
+std::vector<std::uint64_t> AllocationClassExtents(
+    const DsaProblem& problem, const std::unordered_map<BufferId, std::size_t>& indices,
+    DisjointSet* colocations) {
+  for (const Colocation& constraint : problem.colocations) {
+    const auto first = indices.find(constraint.first);
+    const auto second = indices.find(constraint.second);
+    if (first != indices.end() && second != indices.end()) {
+      colocations->Union(first->second, second->second);
+    }
+  }
+
+  std::vector<std::uint64_t> extent_by_root(problem.buffers.size(), 0);
+  for (std::size_t index = 0; index < problem.buffers.size(); ++index) {
+    const std::size_t root = colocations->Find(index);
+    extent_by_root[root] = std::max(extent_by_root[root], problem.buffers[index].size);
+  }
+
+  std::vector<std::uint64_t> extent_by_buffer(problem.buffers.size(), 0);
+  for (std::size_t index = 0; index < problem.buffers.size(); ++index) {
+    extent_by_buffer[index] = extent_by_root[colocations->Find(index)];
+  }
+  return extent_by_buffer;
 }
 
 bool PoolAllowed(const Buffer& buffer, PoolId pool) {
@@ -328,9 +356,8 @@ std::vector<std::string> ValidateSolution(const DsaProblem& problem, const DsaSo
 
   const auto indices = BufferIndices(problem);
   DisjointSet colocations(problem.buffers.size());
-  for (const Colocation& constraint : problem.colocations) {
-    colocations.Union(indices.at(constraint.first), indices.at(constraint.second));
-  }
+  const std::vector<std::uint64_t> allocation_extents =
+      AllocationClassExtents(problem, indices, &colocations);
   std::set<BufferId> exclusive_pins;
   for (const PinnedAllocation& pinned : problem.pinned_allocations) {
     if (pinned.exclusive_for_all_time) exclusive_pins.insert(pinned.buffer);
@@ -395,8 +422,8 @@ std::vector<std::string> ValidateSolution(const DsaProblem& problem, const DsaSo
       const Placement* first = solution.Find(first_buffer.id);
       const Placement* second = solution.Find(second_buffer.id);
       if (first && second && first->pool == second->pool &&
-          AddressRangesOverlap(first->offset, first_buffer.size, second->offset,
-                               second_buffer.size)) {
+          AddressRangesOverlap(first->offset, allocation_extents[i], second->offset,
+                               allocation_extents[j])) {
         errors.push_back("lifetime-overlapping buffers " +
                          PairName(first_buffer.id, second_buffer.id) + " overlap in address");
       }
@@ -408,9 +435,12 @@ std::vector<std::string> ValidateSolution(const DsaProblem& problem, const DsaSo
     const Buffer* second_buffer = problem.FindBuffer(constraint.second);
     const Placement* first = solution.Find(constraint.first);
     const Placement* second = solution.Find(constraint.second);
+    const auto first_index = indices.find(constraint.first);
+    const auto second_index = indices.find(constraint.second);
     if (first_buffer && second_buffer && first && second && first->pool == second->pool &&
-        AddressRangesOverlap(first->offset, first_buffer->size, second->offset,
-                             second_buffer->size)) {
+        first_index != indices.end() && second_index != indices.end() &&
+        AddressRangesOverlap(first->offset, allocation_extents[first_index->second], second->offset,
+                             allocation_extents[second_index->second])) {
       errors.push_back("separated buffers " + PairName(constraint.first, constraint.second) +
                        " overlap in address");
     }
@@ -442,20 +472,15 @@ ObjectiveValue EvaluateObjective(const DsaProblem& problem, const DsaSolution& s
   }
   for (const auto& [pool, peak] : objective.peak_by_pool) {
     static_cast<void>(pool);
-    objective.total_peak += peak;
+    objective.total_peak = SaturatingAdd(objective.total_peak, peak);
     objective.max_peak = std::max(objective.max_peak, peak);
   }
 
   if (problem.cost_model) {
     const auto indices = BufferIndices(problem);
     DisjointSet colocations(problem.buffers.size());
-    for (const Colocation& constraint : problem.colocations) {
-      const auto first = indices.find(constraint.first);
-      const auto second = indices.find(constraint.second);
-      if (first != indices.end() && second != indices.end()) {
-        colocations.Union(first->second, second->second);
-      }
-    }
+    const std::vector<std::uint64_t> allocation_extents =
+        AllocationClassExtents(problem, indices, &colocations);
     for (const ReusePenalty& penalty : problem.cost_model->reuse_penalties) {
       const Buffer* first_buffer = problem.FindBuffer(penalty.first);
       const Buffer* second_buffer = problem.FindBuffer(penalty.second);
@@ -469,9 +494,9 @@ ObjectiveValue EvaluateObjective(const DsaProblem& problem, const DsaSolution& s
       if (first_buffer && second_buffer && first && second && first->pool == second->pool &&
           !intentionally_colocated &&
           !HaveTemporalConflict(problem, *first_buffer, *second_buffer) &&
-          AddressRangesOverlap(first->offset, first_buffer->size, second->offset,
-                               second_buffer->size)) {
-        objective.reuse_cost += penalty.cost;
+          AddressRangesOverlap(first->offset, allocation_extents[first_index->second],
+                               second->offset, allocation_extents[second_index->second])) {
+        objective.reuse_cost = SaturatingAdd(objective.reuse_cost, penalty.cost);
       }
     }
   }

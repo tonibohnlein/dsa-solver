@@ -1,9 +1,12 @@
 #include "dsa/model/structured_problem.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iomanip>
 #include <limits>
+#include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -12,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "dsa/model/model.h"
 #include "dsa/model/validator.h"
 
 namespace dsa {
@@ -78,6 +82,28 @@ std::vector<std::string> ValidateStandardProblem(const DsaProblem& problem) {
 bool ObjectiveIsMinimizePeak(const ObjectiveSpec& objective) {
   const ObjectiveSpec expected = MinimizePeakObjective();
   return objective.aggregation == expected.aggregation && objective.terms == expected.terms;
+}
+
+bool ObjectiveIsFitThenMinimizeReuseCost(const ObjectiveSpec& objective) {
+  const ObjectiveSpec expected = FitThenMinimizeReuseCostObjective();
+  return objective.aggregation == expected.aggregation && objective.terms == expected.terms;
+}
+
+std::vector<std::string> ValidateDsaRpV1(const DsaProblem& problem) {
+  DsaProblem standard_geometry = problem;
+  standard_geometry.cost_model.reset();
+  standard_geometry.objective = MinimizePeakObjective();
+  std::vector<std::string> errors = ValidateStandardProblem(standard_geometry);
+  if (problem.pools.size() == 1 && !problem.pools.front().capacity) {
+    errors.emplace_back("dsa_rp_v1 requires a fixed capacity");
+  }
+  if (!problem.cost_model) {
+    errors.emplace_back("dsa_rp_v1 requires an explicit reuse-cost model");
+  }
+  if (!ObjectiveIsFitThenMinimizeReuseCost(problem.objective)) {
+    errors.emplace_back("dsa_rp_v1 requires the fit-then-minimize-reuse-cost objective");
+  }
+  return errors;
 }
 
 void RequireMetadataValue(const StructuredProblemDocument& document, const std::string& key,
@@ -172,6 +198,8 @@ const char* ToString(BenchmarkProfile profile) noexcept {
   switch (profile) {
     case BenchmarkProfile::kStandardDsa:
       return "standard_dsa";
+    case BenchmarkProfile::kDsaRpV1:
+      return "dsa_rp_v1";
     case BenchmarkProfile::kPyptoStructured:
       return "pypto_structured";
     case BenchmarkProfile::kPyptoHardV1:
@@ -261,6 +289,18 @@ std::vector<std::string> ValidateStructuredProblemDocument(
       }
       if (!document.relaxed_features.empty()) {
         errors.push_back("standard DSA document cannot declare relaxed_features");
+      }
+      break;
+    case BenchmarkProfile::kDsaRpV1:
+      if (document.relaxed_from) {
+        errors.emplace_back("dsa_rp_v1 document cannot declare relaxed_from");
+      }
+      if (!document.relaxed_features.empty()) {
+        errors.emplace_back("dsa_rp_v1 document cannot declare relaxed_features");
+      }
+      {
+        std::vector<std::string> dsa_rp_errors = ValidateDsaRpV1(document.problem);
+        errors.insert(errors.end(), dsa_rp_errors.begin(), dsa_rp_errors.end());
       }
       break;
     case BenchmarkProfile::kPyptoStructured:
@@ -514,6 +554,84 @@ PipelineIntentRelaxation BuildPipelineIntentRelaxation(const StructuredProblemDo
                            relaxed_errors.front());
   }
   return relaxation;
+}
+
+CrossPipeReuseVariants BuildCrossPipeReuseVariants(const StructuredProblemDocument& source) {
+  const std::vector<std::string> source_errors = ValidateStructuredProblemDocument(source);
+  if (!source_errors.empty()) {
+    throw std::invalid_argument("cross-pipe reuse variants require a valid source document: " +
+                                source_errors.front());
+  }
+  if (!IsPyptoProfile(source.profile)) {
+    throw std::invalid_argument("cross-pipe reuse variants require a PyPTO source document");
+  }
+  if (!source.problem.cost_model) {
+    throw std::invalid_argument("cross-pipe reuse variants require recognized reuse penalties");
+  }
+
+  CrossPipeReuseVariants variants;
+  variants.soft = source;
+  variants.hard = source;
+  variants.soft.profile = BenchmarkProfile::kPyptoResearchV1;
+  variants.hard.profile = BenchmarkProfile::kPyptoResearchV1;
+  variants.soft.problem.objective = FitThenMinimizeReuseCostObjective();
+  variants.hard.problem.objective = FitThenMinimizeReuseCostObjective();
+
+  std::vector<ReusePenalty> retained_penalties;
+  retained_penalties.reserve(source.problem.cost_model->reuse_penalties.size());
+  std::map<std::pair<BufferId, BufferId>, std::set<SeparationReason>> separation_reasons;
+  for (const Separation& separation : source.problem.separations) {
+    const auto pair = std::minmax(separation.first, separation.second);
+    auto& reasons = separation_reasons[pair];
+    reasons.insert(separation.reasons.begin(), separation.reasons.end());
+  }
+  for (const ReusePenalty& penalty : source.problem.cost_model->reuse_penalties) {
+    if (penalty.reason != ReusePenaltyReason::kCrossPipe) {
+      retained_penalties.push_back(penalty);
+      continue;
+    }
+    ++variants.edge_count;
+    separation_reasons[std::minmax(penalty.first, penalty.second)].insert(
+        SeparationReason::kCrossPipe);
+  }
+  if (variants.edge_count == 0) {
+    throw std::invalid_argument("cross-pipe reuse variants require at least one cross_pipe edge");
+  }
+
+  variants.hard.problem.separations.clear();
+  variants.hard.problem.separations.reserve(separation_reasons.size());
+  for (const auto& [pair, reasons] : separation_reasons) {
+    variants.hard.problem.separations.emplace_back(
+        pair.first, pair.second, std::vector<SeparationReason>(reasons.begin(), reasons.end()));
+  }
+  variants.hard.problem.cost_model->reuse_penalties = std::move(retained_penalties);
+  if (variants.hard.problem.cost_model->reuse_penalties.empty()) {
+    variants.hard.problem.cost_model.reset();
+  }
+
+  variants.soft.instance = source.instance + "::cross-pipe-soft";
+  variants.hard.instance = source.instance + "::cross-pipe-hard";
+  for (StructuredProblemDocument* document : {&variants.soft, &variants.hard}) {
+    // Raw recognizer traces are useful compiler diagnostics, but duplicate the
+    // modeled edges and can dominate checked-in corpus size. Keep the compact
+    // policy, counters, and edge records that define the benchmark.
+    document->metadata.erase("recognized_reuse_candidate_records_v1");
+    document->metadata.erase("recognized_reuse_candidate_records_v3");
+    document->metadata.erase("recognized_reuse_edge_records_v1");
+    document->metadata["dsa_rp_source_instance"] = source.instance;
+    document->metadata["dsa_rp_cross_pipe_edges"] = std::to_string(variants.edge_count);
+    document->metadata["experimental_features"] = "recognized_cross_pipe_reuse";
+  }
+  variants.soft.metadata["dsa_rp_edge_policy"] = "soft_v1";
+  variants.hard.metadata["dsa_rp_edge_policy"] = "hard_v1";
+
+  for (const StructuredProblemDocument* document : {&variants.soft, &variants.hard}) {
+    const std::vector<std::string> errors = ValidateStructuredProblemDocument(*document);
+    if (!errors.empty()) {
+      throw std::logic_error("generated an invalid cross-pipe reuse variant: " + errors.front());
+    }
+  }
+  return variants;
 }
 
 }  // namespace dsa

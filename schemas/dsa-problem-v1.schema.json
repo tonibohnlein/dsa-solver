@@ -17,6 +17,7 @@
     "profile": {
       "enum": [
         "standard_dsa",
+        "dsa_rp_v1",
         "pypto_structured",
         "pypto_hard_v1",
         "pypto_research_v1",
@@ -133,7 +134,8 @@
               "generic",
               "pipeline_stage",
               "target_hazard",
-              "semantic_no_alias"
+              "semantic_no_alias",
+              "cross_pipe"
             ]
           }
         }
